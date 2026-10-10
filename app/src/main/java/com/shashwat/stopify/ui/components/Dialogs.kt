@@ -757,16 +757,17 @@ fun SpotifyWebView(
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
 
-                val cookiesToSeed = initialCookies.ifEmpty { "sp_dc=${SpotifyWebClient.SP_DC}; sp_key=${SpotifyWebClient.SP_KEY}; sp_t=${SpotifyWebClient.SP_T}" }
-                for (pair in cookiesToSeed.split(";")) {
-                    val p = pair.trim()
-                    if (p.isNotEmpty()) {
-                        cookieManager.setCookie("https://open.spotify.com", p)
-                        cookieManager.setCookie("https://accounts.spotify.com", p)
-                        cookieManager.setCookie(".spotify.com", p)
+                if (initialCookies.isNotEmpty()) {
+                    for (pair in initialCookies.split(";")) {
+                        val p = pair.trim()
+                        if (p.isNotEmpty()) {
+                            cookieManager.setCookie("https://open.spotify.com", p)
+                            cookieManager.setCookie("https://accounts.spotify.com", p)
+                            cookieManager.setCookie(".spotify.com", p)
+                        }
                     }
+                    cookieManager.flush()
                 }
-                cookieManager.flush()
 
                 class StopifyBridge {
                     @android.webkit.JavascriptInterface

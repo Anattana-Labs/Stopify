@@ -21,8 +21,8 @@ class SpotifyClientTest {
 
     @Test
     fun testTokenFetchFromCookies() {
-        val spDc = "AQBe8fsMFlG6CliFEY2OcaX6JoMM7PceOn-NpEEgpZzzNUDEmnVeR1beSeurfqH2I5SZX9JDXorfKFFvDGZkJ37QkX72k1sVWnnN0JzpFOGR0OGfBpj6kVgatFLPfi8xDDNQ4G8v2VtZOCWt0HK_o3ru6muOgoKMsPlUNQFjt4oFJf5uckaNl33QQ5_OoTv3GIq2Xg55UjR2vKYm9VY"
-        val cookie = "sp_dc=$spDc; sp_key=f164460a-a740-48da-9169-4ba4b8fbb4d0; sp_t=9167488b53cb6529d696cc87a46a8235"
+        val spDc = "MOCK_SP_DC_COOKIE"
+        val cookie = "sp_dc=$spDc; sp_key=00000000-0000-0000-0000-000000000000; sp_t=00000000000000000000000000000000"
         
         val url = URL("https://open.spotify.com/get_access_token?reason=transport&productType=web_player")
         val conn = (url.openConnection() as java.net.HttpURLConnection).apply {

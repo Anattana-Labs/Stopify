@@ -123,10 +123,10 @@ class SpotifyWebClient {
     companion object {
         private const val TAG = "SpotifyWebClient"
 
-        // Hardcoded session cookies from cookies.txt
-        const val SP_DC = "AQBe8fsMFlG6CliFEY2OcaX6JoMM7PceOn-NpEEgpZzzNUDEmnVeR1beSeurfqH2I5SZX9JDXorfKFFvDGZkJ37QkX72k1sVWnnN0JzpFOGR0OGfBpj6kVgatFLPfi8xDDNQ4G8v2VtZOCWt0HK_o3ru6muOgoKMsPlUNQFjt4oFJf5uckaNl33QQ5_OoTv3GIq2Xg55UjR2vKYm9VY"
-        const val SP_KEY = "f164460a-a740-48da-9169-4ba4b8fbb4d0"
-        const val SP_T = "9167488b53cb6529d696cc87a46a8235"
+        // Default session cookies (empty; loaded dynamically via user login / settings)
+        const val SP_DC = ""
+        const val SP_KEY = ""
+        const val SP_T = ""
 
         // Client token captured from webplayer in open.spotify.com
         const val CLIENT_TOKEN = "AAGCCRiw7WlW3Oy33uN5L1dI2knSs986nqFaI1YTbq66MFLs0oeinjyYUbv2zo9+9kleXdls6EnujpM6OElxp5zJtj+0ZP9RU9I0ApWvFeXJwZRYmCVMWBngB3AN6Ux1imVm+8ImYf9OvVc3mJJBjxLH4S3k77qOsXB6EekBL9hZQgx8umkPOLZZEfolSOP8wURVuQX5sZjnwIfPmLf/8ydY/LeeqBGTvkyZwV4InPyVxMlOI7DQViCkvmXQ2ZkpQASm2NrJ40wdF+BcpIDZV0YA+czHR2bx2K+tTKIaNMa7GUTB/By4+ls8IO6TL4zLlLoKGWnXa8N0xzthzHW9B2zdsW/kTD7JttelP1GHt/1lDuiRvvqtp2WGx6ZeArHvStJTLeO+sZHGs6IxJBY="
@@ -213,7 +213,15 @@ class SpotifyWebClient {
         private set
 
     val cookieHeaderString: String
-        get() = customCookies ?: "sp_dc=$SP_DC; sp_key=$SP_KEY; sp_t=$SP_T"
+        get() {
+            customCookies?.let { if (it.isNotEmpty()) return it }
+            val defaults = listOfNotNull(
+                if (SP_DC.isNotEmpty()) "sp_dc=$SP_DC" else null,
+                if (SP_KEY.isNotEmpty()) "sp_key=$SP_KEY" else null,
+                if (SP_T.isNotEmpty()) "sp_t=$SP_T" else null
+            ).joinToString("; ")
+            return defaults
+        }
 
     fun setAccessToken(token: String) {
         val clean = token.removePrefix("Bearer ").trim()
@@ -1453,8 +1461,8 @@ class SpotifyWebClient {
                 put("variables", JSONObject().apply {
                     put("includeHomeChapterVideoCards", false)
                     put("homeEndUserIntegration", "INTEGRATION_WEB_PLAYER")
-                    put("timeZone", "Asia/Calcutta")
-                    put("sp_t", SP_T)
+                    val sptVal = Regex("""sp_t=([^;]+)""").find(cookieHeaderString)?.groupValues?.get(1) ?: SP_T
+                    put("sp_t", sptVal)
                     put("facet", "")
                     put("sectionItemsLimit", 10)
                     put("includeEpisodeContentRatingsV2", true)

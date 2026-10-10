@@ -72,7 +72,7 @@ With the resolved `file_id`, Stopify calls Spotify's storage resolution service:
 
 ### 6. Seamless In-App Session & Token Harvesting
 Because raw HTTP calls to `/get_access_token` are protected by Spotify's edge bot detection (Akamai / Cloudflare), Stopify features an embedded Chromium `WebView` authentication engine:
-- Pre-seeds active session cookies (`sp_dc`, `sp_key`, `sp_t`).
+- Supports authenticated session cookies (`sp_dc`, `sp_key`, `sp_t`) entered via in-app login or settings.
 - Intercepts authentic `authorization: Bearer BQ...` headers and `client-token` in real-time from outgoing requests.
 - Executes safe in-origin token fetching via JavaScript bridge (`StopifyBridge`) directly inside Spotify's authentic browser context.
 
