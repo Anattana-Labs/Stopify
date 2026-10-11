@@ -264,18 +264,15 @@ fun SimpMusicApp(
     var favoriteTrackIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var userProfile by remember { mutableStateOf<SpotifyUserProfile?>(null) }
 
-    // Initialize playback history and favorites
+    // Initialize playback history and favorites purely from live Spotify data
     LaunchedEffect(Unit) {
         prefs?.let {
-            client.loadHistoryFromPrefs(it)
             client.loadFavoritesFromPrefs(it)
             favoriteTrackIds = it.getStringSet("favorite_tracks_set", emptySet())?.toSet() ?: emptySet()
         }
-        val initialHistory = client.playbackHistory
         playbackHistory.clear()
-        playbackHistory.addAll(initialHistory)
 
-        // Proactively fetch account profile and remote recents
+        // Proactively fetch account profile and live remote recents directly from Spotify
         coroutineScope.launch {
             val uRes = client.fetchCurrentUserProfile(prefs)
             if (uRes.isSuccess) {
@@ -286,9 +283,8 @@ fun SimpMusicApp(
             val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
             if (recentsRes.isSuccess) {
                 val list = recentsRes.getOrThrow()
-                val merged = (playbackHistory + list).distinctBy { it.uri }
                 playbackHistory.clear()
-                playbackHistory.addAll(merged)
+                playbackHistory.addAll(list.distinctBy { it.uri })
             }
         }
     }

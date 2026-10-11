@@ -828,31 +828,8 @@ class SpotifyWebClient {
                             if (c > 0) c else itemData.optJSONObject("tracks")?.optInt("total", 0) ?: 0
                         }
 
-                        // Check if we have local added tracks for this playlist to augment track count
-                        var resolvedTotal = total
-                        if (prefs != null) {
-                            try {
-                                val localJson = prefs.getString("local_user_playlists_json", null)
-                                if (!localJson.isNullOrEmpty()) {
-                                    val array = JSONArray(localJson)
-                                    for (j in 0 until array.length()) {
-                                        val p = array.getJSONObject(j)
-                                        if (p.optString("id") == id || p.optString("uri") == uri) {
-                                            val tArr = p.optJSONArray("tracks") ?: JSONArray()
-                                            if (tArr.length() > resolvedTotal) {
-                                                resolvedTotal = tArr.length()
-                                            }
-                                            break
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Error checking local tracks for count", e)
-                            }
-                        }
-
                         if (results.none { it.uri == uri || it.id == id }) {
-                            results.add(SpotifyPlaylistSummary(id, uri, name, ownerName, coverUrl, resolvedTotal))
+                            results.add(SpotifyPlaylistSummary(id, uri, name, ownerName, coverUrl, total))
                         }
                     }
                 }
@@ -940,29 +917,6 @@ class SpotifyWebClient {
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Error reading rootlist", e)
-            }
-        }
-
-        // 4. Merge any locally cached playlists
-        if (prefs != null) {
-            try {
-                val localJson = prefs.getString("local_user_playlists_json", null)
-                if (!localJson.isNullOrEmpty()) {
-                    val array = JSONArray(localJson)
-                    for (i in 0 until array.length()) {
-                        val pObj = array.getJSONObject(i)
-                        val id = pObj.optString("id")
-                        val uri = pObj.optString("uri", "spotify:playlist:$id")
-                        val name = pObj.optString("name", "My Playlist")
-                        val cover = pObj.optString("coverUrl", null)
-                        val tracksArr = pObj.optJSONArray("tracks") ?: JSONArray()
-                        if (results.none { it.id == id || it.uri == uri }) {
-                            results.add(SpotifyPlaylistSummary(id, uri, name, "You", cover, tracksArr.length()))
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error loading local playlists", e)
             }
         }
 

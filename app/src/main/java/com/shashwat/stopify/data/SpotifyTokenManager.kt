@@ -52,10 +52,20 @@ object SpotifyTokenManager {
                 return@post
             }
 
-            isRefreshing = true
-            _isRefreshingState.value = true
             val appContext = context.applicationContext
             val prefs = appContext.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
+            val cookies = client.cookieHeaderString.ifEmpty { prefs.getString("spotify_cookies", "") ?: "" }
+
+            if (!cookies.contains("sp_dc")) {
+                Log.d(TAG, "No active session cookies to refresh, skipping background refresh")
+                val callbacks = ArrayList(pendingCallbacks)
+                pendingCallbacks.clear()
+                callbacks.forEach { it(null) }
+                return@post
+            }
+
+            isRefreshing = true
+            _isRefreshingState.value = true
 
             val webView = headlessWebView ?: WebView(appContext).also {
                 it.settings.javaScriptEnabled = true
@@ -117,7 +127,7 @@ object SpotifyTokenManager {
                         if (auth != null && auth.startsWith("Bearer BQ")) {
                             val token = auth.removePrefix("Bearer ").trim()
                             Log.d(TAG, "Captured token via HTTP intercept: ${token.take(20)}...")
-                            view?.post {
+                            mainHandler.post {
                                 notifyTokenFound(appContext, client, token)
                             }
                         }
@@ -165,8 +175,8 @@ object SpotifyTokenManager {
                 }
             }
 
-            // Safety timeout after 18 seconds
-            mainHandler.postDelayed({
+            // Safety timeout after 10 seconds
+            val timeoutRunnable = Runnable {
                 if (isRefreshing) {
                     Log.w(TAG, "Background token refresh timed out")
                     isRefreshing = false
@@ -175,14 +185,15 @@ object SpotifyTokenManager {
                     pendingCallbacks.clear()
                     callbacks.forEach { it(null) }
                 }
-            }, 18000)
+            }
+            mainHandler.postDelayed(timeoutRunnable, 10000)
 
             webView.loadUrl("https://open.spotify.com")
         }
     }
 
     private fun notifyTokenFound(context: Context, client: SpotifyWebClient, token: String) {
-        if (!isRefreshing && client.customAccessToken == token) return
+        val wasRefreshing = isRefreshing
         isRefreshing = false
         _isRefreshingState.value = false
 
@@ -192,9 +203,11 @@ object SpotifyTokenManager {
 
         Log.d(TAG, "Persisted new Spotify Bearer Access Token successfully")
 
-        val callbacks = ArrayList(pendingCallbacks)
-        pendingCallbacks.clear()
-        callbacks.forEach { it(token) }
+        if (wasRefreshing || pendingCallbacks.isNotEmpty()) {
+            val callbacks = ArrayList(pendingCallbacks)
+            pendingCallbacks.clear()
+            callbacks.forEach { it(token) }
+        }
     }
 
     suspend fun awaitTokenRefresh(context: Context, client: SpotifyWebClient): String? {
