@@ -159,7 +159,7 @@ fun SimpBottomNavigationBar(
                             Icon(
                                 imageVector = tab.icon,
                                 contentDescription = tab.title,
-                                tint = if (isSelected) Color(0xFF1ED760) else Color.White.copy(alpha = 0.65f),
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.65f),
                                 modifier = Modifier.size(23.dp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))

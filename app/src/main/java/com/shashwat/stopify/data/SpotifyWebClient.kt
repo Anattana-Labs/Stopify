@@ -155,9 +155,12 @@ class SpotifyWebClient {
         const val FETCH_PLAYLIST_HASH = "8964e8eafb21aa992a7d951d256d83285c04be2105d209262901de70cb97584a"
         const val GET_ALBUM_HASH = "11c9cad9cb24c4f9e25ef9456f68621cfd6006a90f679e729c1d2f2fd70dfe16"
         const val HOME_HASH = "5fb7da7a03ee2776c0670856609cb85a189a3cecc36cc160b91cde79063b9cf1"
-        const val LIBRARY_HASH = "390c78e5b951029bad359785e69b07b536a509c581cbcd0aded5e5067f187455"
+        const val LIBRARY_HASH = "973e511ca44261fda7eebac8b653155e7caee3675abb4fb110cc1b8c78b091c3"
         const val EDITABLE_PLAYLISTS_HASH = "d5c4b8096437dcc2ac9528c91dfcd299e35b747cda2f8f75d28f41f49c5092ba"
-        const val ADD_TO_PLAYLIST_HASH = "b907ad6b088d5bf7680fa81198996d58398c2d55dfcdf59fcc959e0be98a418a"
+        const val ADD_TO_PLAYLIST_HASH = "47b2a1234b17748d332dd0431534f22450e9ecbb3d5ddcdacbd83368636a0990"
+        const val ADD_TO_LIBRARY_HASH = "7c5a69420e2bfae3da5cc4e14cbc8bb3f6090f80afc00ffc179177f19be3f33d"
+        const val REMOVE_FROM_LIBRARY_HASH = "7c5a69420e2bfae3da5cc4e14cbc8bb3f6090f80afc00ffc179177f19be3f33d"
+        const val PROFILE_ATTRIBUTES_HASH = "53bcb064f6cd18c23f752bc324a791194d20df612d8e1239c735144ab0399ced"
 
         // Working fallback Bearer token from web session
         const val FALLBACK_BEARER_TOKEN = "BQDyP_PgW1Uj_1SVWN4PgYEDZ1wgIj2Dohsrx8jXZiXpxofEgaAqyImnIFyRCJ9_MtAWm2bUUyMFbpUaf_X1KCa9YnP24UgtRNzoU6q21uytBgXaKbMKISMlWGBkRwuG4QACxXbnaHkm-gBm8VPIVyopxU6GYPxxRtyuVxRk1yDBE27cNQJNdsETLt0dAGvTzB36iWQR8YFBSoLsvRGmvOSMHcxXad0fD8zg_Zt6muogKnlHAnIn0Q9kQN_lqwb3o7ipmbOqrMQ-7TVJaz4nkIF0GI5kIIHd8AdOaO9foLcF3RyjhKfI9r6yDcv5LR1iLqpgluuBasbhIObAGhUhrSpBYltpzTtKCGuBq_7n4_6H03ysecKrUEe2UVD8w3SfA_dJ8tN9RRajljHIbu-K"
@@ -358,6 +361,69 @@ class SpotifyWebClient {
 
     suspend fun fetchCurrentUserProfile(prefs: android.content.SharedPreferences? = null): Result<SpotifyUserProfile> = withContext(Dispatchers.IO) {
         val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
+        val clientToken = customClientToken ?: CLIENT_TOKEN
+
+        // 1. Primary: GraphQL profileAttributes query
+        try {
+            val gqlUrl = URL("https://api-partner.spotify.com/pathfinder/v2/query")
+            val conn = (gqlUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("User-Agent", USER_AGENT)
+                setRequestProperty("Origin", "https://open.spotify.com")
+                setRequestProperty("Referer", "https://open.spotify.com/")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+            }
+            val payload = JSONObject().apply {
+                put("variables", JSONObject())
+                put("operationName", "profileAttributes")
+                put("extensions", JSONObject().apply {
+                    put("persistedQuery", JSONObject().apply {
+                        put("version", 1)
+                        put("sha256Hash", PROFILE_ATTRIBUTES_HASH)
+                    })
+                })
+            }
+            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+            if (conn.responseCode in 200..299) {
+                val text = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+                conn.disconnect()
+                val json = JSONObject(text)
+                val prof = json.optJSONObject("data")?.optJSONObject("me")?.optJSONObject("profile")
+                if (prof != null) {
+                    val username = prof.optString("username", prof.optString("uri").substringAfterLast(":"))
+                    val name = prof.optString("name", username)
+                    val avatar = prof.optJSONObject("avatar")?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")
+                    val profile = SpotifyUserProfile(
+                        id = username,
+                        displayName = name.ifEmpty { "Spotify User" },
+                        email = null,
+                        avatarUrl = avatar,
+                        product = "Premium"
+                    )
+                    if (prefs != null) {
+                        prefs.edit()
+                            .putString("user_profile_id", username)
+                            .putString("user_profile_name", name)
+                            .putString("user_profile_avatar", avatar ?: "")
+                            .putString("user_profile_product", "Premium")
+                            .apply()
+                    }
+                    return@withContext Result.success(profile)
+                }
+            } else {
+                conn.disconnect()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "GraphQL profileAttributes failed, falling back to Web API", e)
+        }
+
         try {
             val url = URL("https://api.spotify.com/v1/me")
             val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -817,22 +883,21 @@ class SpotifyWebClient {
             }
             val payload = JSONObject().apply {
                 put("variables", JSONObject().apply {
+                    put("filters", JSONArray().apply { put("Playlists") })
                     put("order", JSONObject.NULL)
                     put("textFilter", "")
                     put("features", JSONArray().apply {
                         put("LIKED_SONGS")
                         put("YOUR_EPISODES_V2")
                         put("PRERELEASES")
-                        put("PRERELEASES_V2")
-                        put("CLIPS")
                         put("EVENTS")
                     })
                     put("limit", 50)
                     put("offset", 0)
-                    put("flatten", false)
+                    put("flatten", true)
                     put("expandedFolders", JSONArray())
                     put("folderUri", JSONObject.NULL)
-                    put("includeFoldersWhenFlattening", true)
+                    put("includeFoldersWhenFlattening", false)
                 })
                 put("operationName", "libraryV3")
                 put("extensions", JSONObject().apply {
@@ -1005,6 +1070,7 @@ class SpotifyWebClient {
                 readTimeout = 8000
                 setRequestProperty("authorization", "Bearer $token")
                 setRequestProperty("client-token", clientToken)
+                setRequestProperty("accept", "application/json")
                 setRequestProperty("content-type", "application/json;charset=UTF-8")
                 setRequestProperty("app-platform", APP_PLATFORM)
                 setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
@@ -1053,6 +1119,7 @@ class SpotifyWebClient {
                         readTimeout = 8000
                         setRequestProperty("authorization", "Bearer $token")
                         setRequestProperty("client-token", clientToken)
+                        setRequestProperty("accept", "application/json")
                         setRequestProperty("content-type", "application/json;charset=UTF-8")
                         setRequestProperty("app-platform", APP_PLATFORM)
                         setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
@@ -1186,9 +1253,9 @@ class SpotifyWebClient {
                     setRequestProperty("client-token", clientToken)
                     setRequestProperty("content-type", "application/json;charset=UTF-8")
                     setRequestProperty("app-platform", APP_PLATFORM)
-                    setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
                     setRequestProperty("origin", "https://open.spotify.com")
                     setRequestProperty("referer", "https://open.spotify.com/")
+                    setRequestProperty("accept", "application/json")
                     setRequestProperty("user-agent", USER_AGENT)
                 }
                 val pfBody = JSONObject().apply {
@@ -1199,7 +1266,6 @@ class SpotifyWebClient {
                             put("moveType", "BOTTOM_OF_PLAYLIST")
                             put("fromUid", JSONObject.NULL)
                         })
-                        put("interactionId", UUID.randomUUID().toString())
                     })
                     put("operationName", "addToPlaylist")
                     put("extensions", JSONObject().apply {
@@ -1454,24 +1520,77 @@ class SpotifyWebClient {
             }
         }
 
-        // 2. Sync with Spotify Web API
+        // 2. Sync with Spotify Account using GraphQL mutation (Spotui flow - works reliably with web tokens)
+        var onlineSynced = false
         try {
             val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
-            val method = if (isFavorite) "PUT" else "DELETE"
-            val url = URL("https://api.spotify.com/v1/me/tracks?ids=${track.id}")
+            val clientToken = customClientToken ?: CLIENT_TOKEN
+            val operation = if (isFavorite) "addToLibrary" else "removeFromLibrary"
+            val hash = if (isFavorite) ADD_TO_LIBRARY_HASH else REMOVE_FROM_LIBRARY_HASH
+
+            val url = URL("https://api-partner.spotify.com/pathfinder/v2/query")
             val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = method
+                requestMethod = "POST"
+                doOutput = true
                 connectTimeout = 8000
                 readTimeout = 8000
-                setRequestProperty("authorization", "Bearer $token")
-                setRequestProperty("content-length", "0")
-                setRequestProperty("user-agent", USER_AGENT)
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("User-Agent", USER_AGENT)
+                setRequestProperty("Origin", "https://open.spotify.com")
+                setRequestProperty("Referer", "https://open.spotify.com/")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
             }
+
+            val body = JSONObject().apply {
+                put("variables", JSONObject().apply {
+                    put("libraryItemUris", JSONArray().apply { put(track.uri) })
+                })
+                put("operationName", operation)
+                put("extensions", JSONObject().apply {
+                    put("persistedQuery", JSONObject().apply {
+                        put("version", 1)
+                        put("sha256Hash", hash)
+                    })
+                })
+            }
+
+            OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
             val code = conn.responseCode
+            if (code in 200..299) {
+                val resBody = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+                if (!resBody.contains("errors")) {
+                    onlineSynced = true
+                    Log.d(TAG, "Successfully synced favorite to Spotify via GraphQL $operation: ${track.name}")
+                }
+            }
             conn.disconnect()
-            Log.d(TAG, "Spotify favorite sync status: $code ($method ${track.id})")
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to sync favorite with Spotify API", e)
+            Log.w(TAG, "Failed syncing favorite via GraphQL", e)
+        }
+
+        // 3. Fallback to Spotify Web API v1/me/tracks
+        if (!onlineSynced) {
+            try {
+                val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
+                val method = if (isFavorite) "PUT" else "DELETE"
+                val url = URL("https://api.spotify.com/v1/me/tracks?ids=${track.id}")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = method
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    setRequestProperty("authorization", "Bearer $token")
+                    setRequestProperty("content-length", "0")
+                    setRequestProperty("user-agent", USER_AGENT)
+                }
+                val code = conn.responseCode
+                conn.disconnect()
+                Log.d(TAG, "Spotify favorite sync status: $code ($method ${track.id})")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to sync favorite with Spotify API", e)
+            }
         }
 
         Result.success(true)
@@ -1529,7 +1648,93 @@ class SpotifyWebClient {
 
     suspend fun fetchLikedSongs(prefs: android.content.SharedPreferences? = null): Result<List<SpotifyTrack>> = withContext(Dispatchers.IO) {
         val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
+        val clientToken = customClientToken ?: CLIENT_TOKEN
         val onlineList = mutableListOf<SpotifyTrack>()
+
+        // 1. Primary: GraphQL fetchLibraryTracks query (matches Spotui, avoids Web API 429)
+        try {
+            val gqlUrl = URL("https://api-partner.spotify.com/pathfinder/v2/query")
+            val conn = (gqlUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("User-Agent", USER_AGENT)
+                setRequestProperty("Origin", "https://open.spotify.com")
+                setRequestProperty("Referer", "https://open.spotify.com/")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+            }
+            val payload = JSONObject().apply {
+                put("variables", JSONObject().apply {
+                    put("offset", 0)
+                    put("limit", 50)
+                })
+                put("operationName", "fetchLibraryTracks")
+                put("extensions", JSONObject().apply {
+                    put("persistedQuery", JSONObject().apply {
+                        put("version", 1)
+                        put("sha256Hash", "087278b20b743578a6262c2b0b4bcd20d879c503cc359a2285baf083ef944240")
+                    })
+                })
+            }
+            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+            if (conn.responseCode in 200..299) {
+                val resBody = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+                conn.disconnect()
+                val json = JSONObject(resBody)
+                val items = json.optJSONObject("data")?.optJSONObject("me")?.optJSONObject("library")?.optJSONObject("tracks")?.optJSONArray("items")
+                if (items != null) {
+                    for (i in 0 until items.length()) {
+                        val elem = items.getJSONObject(i)
+                        val trackWrapper = elem.optJSONObject("track") ?: continue
+                        val trackData = trackWrapper.optJSONObject("data") ?: continue
+                        val id = trackWrapper.optString("id", trackData.optString("id", ""))
+                        val uri = trackWrapper.optString("_uri", trackWrapper.optString("uri", "spotify:track:$id"))
+                        val name = trackData.optString("name", "Track")
+                        val dur = trackData.optLong("duration", 0L)
+                        val artistsList = trackData.optJSONObject("artists")?.optJSONArray("items")
+                        val artistNames = mutableListOf<String>()
+                        var artistUri: String? = null
+                        if (artistsList != null) {
+                            for (a in 0 until artistsList.length()) {
+                                val aObj = artistsList.getJSONObject(a)
+                                val aName = aObj.optJSONObject("profile")?.optString("name") ?: aObj.optString("name")
+                                if (aName.isNotEmpty()) artistNames.add(aName)
+                                if (artistUri == null) artistUri = aObj.optString("uri")
+                            }
+                        }
+                        val albumObj = trackData.optJSONObject("albumOfTrack")
+                        val albName = albumObj?.optString("name", "") ?: ""
+                        val albUri = albumObj?.optString("uri")
+                        val cover = albumObj?.optJSONObject("coverArt")?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")
+
+                        onlineList.add(
+                            SpotifyTrack(
+                                id = id.ifEmpty { uri.substringAfterLast(":") },
+                                uri = uri,
+                                name = name,
+                                artist = artistNames.joinToString(", ").ifEmpty { "Artist" },
+                                album = albName,
+                                coverUrl = cover,
+                                durationMs = dur,
+                                albumUri = albUri,
+                                artistUri = artistUri
+                            )
+                        )
+                    }
+                }
+            } else {
+                conn.disconnect()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "GraphQL fetchLibraryTracks error, falling back to Web API", e)
+        }
+
+        // 2. Secondary: Spotify Web API v1/me/tracks
         try {
             val url = URL("https://api.spotify.com/v1/me/tracks?limit=50")
             val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -1674,6 +1879,19 @@ class SpotifyWebClient {
             }
         }
 
+        // 1. Fetch fresh web-player access token via TOTP & sp_dc cookie (Spotui auth engine)
+        try {
+            val tokenViaTotp = fetchTokenViaTotp()
+            if (tokenViaTotp != null) {
+                cachedAccessToken = tokenViaTotp
+                customAccessToken = tokenViaTotp
+                Log.d(TAG, "Access token fetched successfully via TOTP! Expires in: ${(tokenExpiryMs - System.currentTimeMillis()) / 1000}s")
+                return@withContext Result.success(tokenViaTotp)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "TOTP token fetch error, falling back to direct endpoint", e)
+        }
+
         try {
             val urlString = "https://open.spotify.com/get_access_token?reason=transport&productType=web_player"
             Log.d(TAG, "Requesting Access Token from: $urlString")
@@ -1717,6 +1935,140 @@ class SpotifyWebClient {
             tokenExpiryMs = System.currentTimeMillis() + 86400000L
             Result.success(FALLBACK_BEARER_TOKEN)
         }
+    }
+
+    private fun fetchTokenViaTotp(): String? {
+        val spDc = extractCookieValue("sp_dc")
+        if (spDc.isEmpty()) return null
+        val spKey = extractCookieValue("sp_key")
+
+        try {
+            // Step 1: fetch nuance from community gist
+            val gistUrl = URL("https://api.github.com/gists/22ed9c6ba463899e933427f7de1f0eef")
+            val gistConn = (gistUrl.openConnection() as HttpURLConnection).apply {
+                setRequestProperty("User-Agent", USER_AGENT)
+                connectTimeout = 8000
+                readTimeout = 8000
+            }
+            if (gistConn.responseCode !in 200..299) {
+                gistConn.disconnect()
+                return null
+            }
+            val gistText = BufferedReader(InputStreamReader(gistConn.inputStream)).readText()
+            gistConn.disconnect()
+
+            val gistObj = JSONObject(gistText)
+            val files = gistObj.optJSONObject("files") ?: return null
+            val fileKey = files.keys().asSequence().firstOrNull() ?: return null
+            val content = files.getJSONObject(fileKey).getString("content")
+            val nuancesArr = JSONArray(content)
+
+            var bestSecret = ""
+            var bestVer = 0
+            for (i in 0 until nuancesArr.length()) {
+                val nObj = nuancesArr.getJSONObject(i)
+                val v = nObj.optInt("v", 0)
+                if (v >= bestVer) {
+                    bestVer = v
+                    bestSecret = nObj.getString("s")
+                }
+            }
+            if (bestSecret.isEmpty()) return null
+
+            // Step 2: Server time
+            val timeUrl = URL("https://open.spotify.com/api/server-time")
+            val timeConn = (timeUrl.openConnection() as HttpURLConnection).apply {
+                setRequestProperty("User-Agent", USER_AGENT)
+                connectTimeout = 6000
+                readTimeout = 6000
+            }
+            val serverTimeSec = if (timeConn.responseCode in 200..299) {
+                val tBody = BufferedReader(InputStreamReader(timeConn.inputStream)).readText()
+                timeConn.disconnect()
+                JSONObject(tBody).getLong("serverTime")
+            } else {
+                timeConn.disconnect()
+                System.currentTimeMillis() / 1000L
+            }
+
+            // Step 3: Compute TOTP
+            val totp = generateTotpString(bestSecret, serverTimeSec)
+
+            // Step 4: Call Spotify internal token endpoint
+            val tokenUrlStr = "https://open.spotify.com/api/token?reason=transport&productType=web-player&totp=$totp&totpServer=$totp&totpVer=$bestVer"
+            val tokenConn = (URL(tokenUrlStr).openConnection() as HttpURLConnection).apply {
+                setRequestProperty("User-Agent", USER_AGENT)
+                val cHeader = if (spKey.isNotEmpty()) "sp_dc=$spDc; sp_key=$spKey" else "sp_dc=$spDc"
+                setRequestProperty("Cookie", cHeader)
+                connectTimeout = 8000
+                readTimeout = 8000
+            }
+            if (tokenConn.responseCode in 200..299) {
+                val tBody = BufferedReader(InputStreamReader(tokenConn.inputStream)).readText()
+                tokenConn.disconnect()
+                val tObj = JSONObject(tBody)
+                val token = tObj.optString("accessToken")
+                if (token.isNotEmpty() && !tObj.optBoolean("isAnonymous", false)) {
+                    tokenExpiryMs = tObj.optLong("accessTokenExpirationTimestampMs", System.currentTimeMillis() + 3600000L)
+                    return token
+                }
+            } else {
+                tokenConn.disconnect()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error generating TOTP token", e)
+        }
+        return null
+    }
+
+    private fun extractCookieValue(name: String): String {
+        for (part in cookieHeaderString.split(";")) {
+            val p = part.trim()
+            if (p.startsWith("$name=")) {
+                return p.substringAfter("=").trim()
+            }
+        }
+        return if (name == "sp_dc") SP_DC else if (name == "sp_key") SP_KEY else ""
+    }
+
+    private fun generateTotpString(secret: String, serverTimeSec: Long): String {
+        val key = base32Decode(secret)
+        val timeStep = serverTimeSec / 30L
+        val timeBytes = ByteArray(8)
+        var value = timeStep
+        for (i in 7 downTo 0) {
+            timeBytes[i] = (value and 0xFF).toByte()
+            value = value shr 8
+        }
+        val mac = javax.crypto.Mac.getInstance("HmacSHA1")
+        mac.init(javax.crypto.spec.SecretKeySpec(key, "HmacSHA1"))
+        val hash = mac.doFinal(timeBytes)
+        val offset = hash[hash.size - 1].toInt() and 0x0F
+        val code = ((hash[offset].toInt() and 0x7F) shl 24) or
+                ((hash[offset + 1].toInt() and 0xFF) shl 16) or
+                ((hash[offset + 2].toInt() and 0xFF) shl 8) or
+                (hash[offset + 3].toInt() and 0xFF)
+        val otp = code % 1000000
+        return String.format(java.util.Locale.US, "%06d", otp)
+    }
+
+    private fun base32Decode(input: String): ByteArray {
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+        val cleaned = input.uppercase().replace("=", "")
+        val output = mutableListOf<Byte>()
+        var buffer = 0
+        var bitsLeft = 0
+        for (c in cleaned) {
+            val value = alphabet.indexOf(c)
+            if (value < 0) continue
+            buffer = (buffer shl 5) or value
+            bitsLeft += 5
+            if (bitsLeft >= 8) {
+                bitsLeft -= 8
+                output.add(((buffer shr bitsLeft) and 0xFF).toByte())
+            }
+        }
+        return output.toByteArray()
     }
 
     private fun connectDealer(token: String) {

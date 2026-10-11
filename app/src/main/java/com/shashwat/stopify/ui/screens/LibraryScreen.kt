@@ -220,6 +220,7 @@ fun SimpLibraryScreen(
 
             // Spotify Filter Chips
             item {
+                val libPrimary = MaterialTheme.colorScheme.primary
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 2.dp)
@@ -228,7 +229,7 @@ fun SimpLibraryScreen(
                         val isSelected = selectedFilter == filter
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) Color(0xFF1ED760) else Color.White.copy(alpha = 0.1f),
+                            color = if (isSelected) libPrimary else Color.White.copy(alpha = 0.1f),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
                                 .clickable { selectedFilter = filter }
@@ -248,6 +249,7 @@ fun SimpLibraryScreen(
             // Liked Songs Banner (Show if ALL or LIKED)
             if (selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.LIKED) {
                 item {
+                    val libPrimary = MaterialTheme.colorScheme.primary
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = Color(0xFF1E1E1E),
@@ -272,7 +274,7 @@ fun SimpLibraryScreen(
                                             colors = listOf(
                                                 Color(0xFF450AF5),
                                                 Color(0xFF8E8EE5),
-                                                Color(0xFF1ED760)
+                                                libPrimary
                                             )
                                         )
                                     ),
@@ -307,7 +309,7 @@ fun SimpLibraryScreen(
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF1ED760)),
+                                    .background(libPrimary),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -325,6 +327,7 @@ fun SimpLibraryScreen(
             // Playlists Section
             if (selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.PLAYLISTS) {
                 item {
+                    val libPrimary = MaterialTheme.colorScheme.primary
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -341,13 +344,13 @@ fun SimpLibraryScreen(
                             Icon(
                                 imageVector = Icons.Rounded.Add,
                                 contentDescription = null,
-                                tint = Color(0xFF1ED760),
+                                tint = libPrimary,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "New",
-                                color = Color(0xFF1ED760),
+                                color = libPrimary,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -356,6 +359,7 @@ fun SimpLibraryScreen(
 
                 if (isLoadingPlaylists) {
                     item {
+                        val libPrimary = MaterialTheme.colorScheme.primary
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -364,7 +368,7 @@ fun SimpLibraryScreen(
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(24.dp),
-                                color = Color(0xFF1ED760)
+                                color = libPrimary
                             )
                         }
                     }
@@ -477,6 +481,7 @@ fun SimpLibraryScreen(
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(Color(0xFF242424))
                                     ) {
+                                        val plPrimary = MaterialTheme.colorScheme.primary
                                         if (!pl.coverUrl.isNullOrEmpty()) {
                                             AsyncImage(
                                                 model = pl.coverUrl,
@@ -492,7 +497,7 @@ fun SimpLibraryScreen(
                                                 Icon(
                                                     imageVector = Icons.Rounded.MusicNote,
                                                     contentDescription = null,
-                                                    tint = Color(0xFF1ED760),
+                                                    tint = plPrimary,
                                                     modifier = Modifier.size(36.dp)
                                                 )
                                             }
@@ -505,7 +510,7 @@ fun SimpLibraryScreen(
                                                 .padding(6.dp)
                                                 .size(32.dp)
                                                 .clip(CircleShape)
-                                                .background(Color(0xFF1ED760)),
+                                                .background(plPrimary),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(

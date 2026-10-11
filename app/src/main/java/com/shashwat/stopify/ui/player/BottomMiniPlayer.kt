@@ -259,6 +259,7 @@ fun SimpBottomMiniPlayer(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
+                val accentColor = MaterialTheme.colorScheme.primary
                 // Favorite / Heart Button
                 IconButton(
                     onClick = onToggleFavorite,
@@ -267,7 +268,7 @@ fun SimpBottomMiniPlayer(
                     Icon(
                         imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = if (isFavorite) "Unlike" else "Like",
-                        tint = if (isFavorite) Color(0xFF1ED760) else Color.White.copy(alpha = 0.75f),
+                        tint = if (isFavorite) accentColor else Color.White.copy(alpha = 0.75f),
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -286,7 +287,7 @@ fun SimpBottomMiniPlayer(
                         if (isBuffering) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                color = Color(0xFF1ED760),
+                                color = accentColor,
                                 strokeWidth = 2.dp
                             )
                         } else {

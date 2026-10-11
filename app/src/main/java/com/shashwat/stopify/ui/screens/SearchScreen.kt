@@ -133,7 +133,7 @@ fun SimpSearchScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = Color(0xFF242424),
                     unfocusedContainerColor = Color(0xFF1E1E1E),
-                    focusedBorderColor = Color(0xFF1ED760),
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
@@ -143,6 +143,7 @@ fun SimpSearchScreen(
 
             // Filter Chips Row (when results available)
             if (searchResults.isNotEmpty()) {
+                val searchPrimary = MaterialTheme.colorScheme.primary
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
@@ -153,7 +154,7 @@ fun SimpSearchScreen(
                         val isSelected = selectedFilter == filter
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) Color(0xFF1ED760) else Color.White.copy(alpha = 0.08f),
+                            color = if (isSelected) searchPrimary else Color.White.copy(alpha = 0.08f),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
                                 .clickable { selectedFilter = filter }

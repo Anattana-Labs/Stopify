@@ -86,17 +86,18 @@ fun SimpHomeScreen(
                         .padding(top = 10.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val primaryAccent = MaterialTheme.colorScheme.primary
                     // Profile Avatar / Logo with subtle liquid glass border
                     Box(
                         modifier = Modifier
                             .size(42.dp)
-                            .shadow(6.dp, CircleShape, spotColor = Color(0xFF1ED760).copy(alpha = 0.4f))
+                            .shadow(6.dp, CircleShape, spotColor = primaryAccent.copy(alpha = 0.4f))
                             .clip(CircleShape)
                             .background(Color(0xFF242424))
                             .border(
                                 1.5.dp,
                                 Brush.linearGradient(
-                                    listOf(Color(0xFF1ED760), Color(0xFF1DB954).copy(alpha = 0.5f))
+                                    listOf(primaryAccent, primaryAccent.copy(alpha = 0.5f))
                                 ),
                                 CircleShape
                             )
@@ -180,17 +181,18 @@ fun SimpHomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    val primaryColor = MaterialTheme.colorScheme.primary
                     filterTabs.forEachIndexed { idx, tab ->
                         val isSelected = selectedFilterIndex == idx
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) Color(0xFF1ED760) else Color.White.copy(alpha = 0.08f),
+                            color = if (isSelected) primaryColor else Color.White.copy(alpha = 0.08f),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
                                 .border(
                                     width = 0.75.dp,
                                     brush = if (isSelected) {
-                                        Brush.linearGradient(listOf(Color(0xFF1ED760), Color(0xFF1DB954)))
+                                        Brush.linearGradient(listOf(primaryColor, primaryColor.copy(alpha = 0.8f)))
                                     } else {
                                         Brush.linearGradient(listOf(Color.White.copy(0.2f), Color.White.copy(0.06f)))
                                     },
@@ -312,15 +314,16 @@ fun SimpHomeScreen(
                                             }
                                         }
 
-                                        // Spotify Green Play Button
+                                        // Dynamic Play Button
+                                        val cardPrimary = MaterialTheme.colorScheme.primary
                                         Box(
                                             modifier = Modifier
                                                 .align(Alignment.BottomEnd)
                                                 .padding(6.dp)
                                                 .size(34.dp)
-                                                .shadow(6.dp, CircleShape, spotColor = Color(0xFF1ED760).copy(alpha = 0.5f))
+                                                .shadow(6.dp, CircleShape, spotColor = cardPrimary.copy(alpha = 0.5f))
                                                 .clip(CircleShape)
-                                                .background(Color(0xFF1ED760)),
+                                                .background(cardPrimary),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
@@ -483,14 +486,15 @@ private fun QuickPlayCard(
                     .padding(end = 4.dp)
             )
 
-            // Spotify Green play circle on right edge of quick play card
+            // Dynamic play circle on right edge of quick play card
+            val qpPrimary = MaterialTheme.colorScheme.primary
             Box(
                 modifier = Modifier
                     .padding(end = 8.dp)
                     .size(30.dp)
-                    .shadow(4.dp, CircleShape, spotColor = Color(0xFF1ED760).copy(alpha = 0.5f))
+                    .shadow(4.dp, CircleShape, spotColor = qpPrimary.copy(alpha = 0.5f))
                     .clip(CircleShape)
-                    .background(Color(0xFF1ED760)),
+                    .background(qpPrimary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
