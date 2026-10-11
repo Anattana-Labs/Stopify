@@ -79,7 +79,7 @@ fun SimpBottomMiniPlayer(
         label = "play_pause_scale"
     )
 
-    val targetBgColor = backgroundColor ?: Color(0xFF2A2A2A)
+    val targetBgColor = backgroundColor ?: MaterialTheme.colorScheme.surfaceContainerHigh
     val animatedBgColor by animateColorAsState(
         targetValue = targetBgColor,
         animationSpec = tween(durationMillis = 400),
@@ -87,6 +87,7 @@ fun SimpBottomMiniPlayer(
     )
 
     val shape = RoundedCornerShape(8.dp)
+    val accentColor = MaterialTheme.colorScheme.primary
 
     Box(
         modifier = modifier
@@ -180,7 +181,7 @@ fun SimpBottomMiniPlayer(
                             Icon(
                                 imageVector = Icons.Rounded.Album,
                                 contentDescription = null,
-                                tint = Color(0xFF1ED760),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -228,7 +229,6 @@ fun SimpBottomMiniPlayer(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                val accentColor = MaterialTheme.colorScheme.primary
                 // Favorite / Heart Button
                 IconButton(
                     onClick = onToggleFavorite,
@@ -282,6 +282,24 @@ fun SimpBottomMiniPlayer(
                         modifier = Modifier.size(26.dp)
                     )
                 }
+            }
+
+            // Slim dynamic progress line
+            val progressFraction = if (playbackState.durationMs > 0) {
+                (playbackState.currentPositionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
+            } else 0f
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.5.dp)
+                    .background(Color.White.copy(alpha = 0.15f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progressFraction)
+                        .fillMaxHeight()
+                        .background(accentColor)
+                )
             }
         }
     }

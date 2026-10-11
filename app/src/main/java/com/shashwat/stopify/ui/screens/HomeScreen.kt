@@ -67,7 +67,7 @@ fun SimpHomeScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0B0F))
+            .background(MaterialTheme.colorScheme.background)
     ) {
 
         LazyColumn(
@@ -90,7 +90,7 @@ fun SimpHomeScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFE8622C))
+                            .background(primaryColor)
                             .clickable { onOpenSettings() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -105,7 +105,7 @@ fun SimpHomeScreen(
                             Text(
                                 text = (userProfile?.displayName?.firstOrNull() ?: 'S').uppercase(),
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 fontSize = 16.sp
                             )
                         }
@@ -123,7 +123,10 @@ fun SimpHomeScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(50))
-                                    .background(if (isSelected) Color(0xFF1ED760) else Color(0xFF2A2A2A))
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    )
                                     .clickable { selectedFilterIndex = idx }
                                     .padding(horizontal = 14.dp, vertical = 6.dp)
                             ) {
@@ -131,7 +134,7 @@ fun SimpHomeScreen(
                                     text = tab,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.Black else Color.White,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 13.sp
                                 )
                             }
@@ -248,7 +251,7 @@ fun SimpHomeScreen(
                                                 Icon(
                                                     imageVector = Icons.Rounded.Album,
                                                     contentDescription = null,
-                                                    tint = Color(0xFF1ED760),
+                                                    tint = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.size(36.dp)
                                                 )
                                             }
@@ -395,7 +398,7 @@ private fun QuickPlayCard(
                     Icon(
                         imageVector = Icons.Rounded.Album,
                         contentDescription = null,
-                        tint = Color(0xFF1ED760),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
                 }

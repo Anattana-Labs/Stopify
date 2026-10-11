@@ -114,6 +114,16 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
+            val savedColorModeStr = prefs.getString("stopify_color_mode", ThemeColorMode.SYSTEM.name) ?: ThemeColorMode.SYSTEM.name
+            var currentColorMode by remember {
+                mutableStateOf(
+                    try {
+                        ThemeColorMode.valueOf(savedColorModeStr)
+                    } catch (e: Exception) {
+                        ThemeColorMode.SYSTEM
+                    }
+                )
+            }
 
             // Dynamic color extraction from active track artwork
             LaunchedEffect(playbackState.currentTrack?.coverUrl) {
@@ -151,6 +161,7 @@ class MainActivity : ComponentActivity() {
 
             StopifyTheme(
                 themeMode = currentThemeMode,
+                colorMode = currentColorMode,
                 seedColor = artworkSeedColor
             ) {
                 Box(
@@ -165,6 +176,11 @@ class MainActivity : ComponentActivity() {
                         onThemeChange = { newMode ->
                             currentThemeMode = newMode
                             prefs.edit().putString("stopify_theme_mode", newMode.name).apply()
+                        },
+                        colorMode = currentColorMode,
+                        onColorModeChange = { newColorMode ->
+                            currentColorMode = newColorMode
+                            prefs.edit().putString("stopify_color_mode", newColorMode.name).apply()
                         },
                         prefs = prefs
                     )
@@ -253,6 +269,8 @@ fun SimpMusicApp(
     player: SpotifyAudioPlayer,
     themeMode: AppThemeMode = AppThemeMode.DYNAMIC,
     onThemeChange: (AppThemeMode) -> Unit = {},
+    colorMode: ThemeColorMode = ThemeColorMode.SYSTEM,
+    onColorModeChange: (ThemeColorMode) -> Unit = {},
     prefs: android.content.SharedPreferences? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -763,6 +781,8 @@ fun SimpMusicApp(
                 client = client,
                 currentThemeMode = themeMode,
                 onThemeChange = onThemeChange,
+                currentColorMode = colorMode,
+                onColorModeChange = onColorModeChange,
                 onOpenCookieManager = { showCookieDialog = true },
                 onPlayTrack = { playTrackInternal(it) },
                 onPlayNext = { track ->
@@ -790,7 +810,16 @@ fun SimpMusicApp(
     Column(
         modifier = Modifier
             .align(Alignment.BottomCenter)
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .background(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        MaterialTheme.colorScheme.background.copy(alpha = 0.98f)
+                    )
+                )
+            ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Mini Player
@@ -833,7 +862,7 @@ fun SimpMusicApp(
             visible = showFullPlayer && playbackState.currentTrack != null,
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF121212)),
+                .background(MaterialTheme.colorScheme.background),
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
         ) {
@@ -885,6 +914,7 @@ fun SimpMusicApp(
                         showFullPlayer = false
                         viewingArtistUri = artistUri
                         viewingArtistName = artistName
+                        viewingArtistCover = playbackState.currentTrack?.coverUrl
                     },
                     onToggleFavorite = onToggleFavoriteLambda,
                     isFavoriteTrack = playbackState.currentTrack?.id?.let { favoriteTrackIds.contains(it) } ?: false,

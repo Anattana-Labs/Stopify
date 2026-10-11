@@ -214,7 +214,7 @@ fun SimpLibraryScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF09090D))
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
     ) {
         LazyColumn(

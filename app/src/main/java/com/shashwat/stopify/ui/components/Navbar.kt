@@ -45,6 +45,11 @@ fun SimpBottomNavigationBar(
         NavigationTab.LIBRARY
     )
 
+    val navSurface = MaterialTheme.colorScheme.surface
+    val navPrimary = MaterialTheme.colorScheme.primary
+    val navOnSurface = MaterialTheme.colorScheme.onSurface
+    val navUnselected = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+
     Box(
         contentAlignment = Alignment.BottomCenter,
         modifier = modifier
@@ -53,17 +58,19 @@ fun SimpBottomNavigationBar(
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        Color(0xFF0B0B0F).copy(alpha = 0.95f),
-                        Color(0xFF0B0B0F)
+                        navSurface.copy(alpha = 0.65f),
+                        navSurface.copy(alpha = 0.95f),
+                        navSurface
                     ),
                     startY = 0f
                 )
             )
+            .padding(top = 16.dp)
     ) {
         NavigationBar(
             modifier = Modifier
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = 20.dp)
                 .fillMaxWidth(),
             containerColor = Color.Transparent,
             windowInsets = WindowInsets(0, 0, 0, 0)
@@ -83,16 +90,17 @@ fun SimpBottomNavigationBar(
                         Text(
                             text = item.title,
                             fontSize = 11.sp,
-                            color = if (isSelected) Color.White else Color(0xFF888888)
+                            fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
+                            color = if (isSelected) navPrimary else navUnselected
                         )
                     },
                     onClick = { onTabSelect(item) },
                     alwaysShowLabel = true,
                     interactionSource = NoRippleInteractionSource(),
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.White,
-                        unselectedIconColor = Color(0xFF888888),
-                        indicatorColor = Color.Transparent
+                        selectedIconColor = navPrimary,
+                        unselectedIconColor = navUnselected,
+                        indicatorColor = navPrimary.copy(alpha = 0.12f)
                     )
                 )
             }

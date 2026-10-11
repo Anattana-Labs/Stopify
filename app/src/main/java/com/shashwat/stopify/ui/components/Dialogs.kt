@@ -161,7 +161,7 @@ fun TrackOptionsMenu(
                 TrackOptionRow(
                     title = if (isFavorite) "Remove from Favourite" else "Add to Favourite",
                     icon = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    iconTint = if (isFavorite) androidx.compose.ui.graphics.Color(0xFF1DB954) else MaterialTheme.colorScheme.primary,
+                    iconTint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = {
                         onDismissRequest()
                         onToggleFavorite()

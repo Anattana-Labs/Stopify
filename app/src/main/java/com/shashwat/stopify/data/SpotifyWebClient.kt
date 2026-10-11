@@ -2083,6 +2083,39 @@ class SpotifyWebClient {
         searchTracks(q)
     }
 
+    suspend fun fetchArtistAvatar(artistUri: String, artistName: String): Result<String?> = withContext(Dispatchers.IO) {
+        try {
+            val cleanName = artistName.trim().removeSurrounding("\"")
+            if (cleanName.isNotBlank()) {
+                val res = searchMulti(cleanName, SpotifyItemType.ARTIST)
+                if (res.isSuccess) {
+                    val list = res.getOrThrow()
+                    val match = list.firstOrNull { 
+                        it.type == SpotifyItemType.ARTIST && 
+                        (it.uri == artistUri || it.name.equals(cleanName, ignoreCase = true)) &&
+                        !it.coverUrl.isNullOrEmpty()
+                    } ?: list.firstOrNull { it.type == SpotifyItemType.ARTIST && !it.coverUrl.isNullOrEmpty() }
+                    
+                    if (!match?.coverUrl.isNullOrEmpty()) {
+                        return@withContext Result.success(match.coverUrl)
+                    }
+                }
+            }
+            // Fallback: search tracks of this artist and use top track album art
+            val id = artistUri.substringAfterLast(":")
+            val tracksRes = searchTracks("artist:$id")
+            if (tracksRes.isSuccess) {
+                val trackCover = tracksRes.getOrThrow().firstOrNull()?.coverUrl
+                if (!trackCover.isNullOrEmpty()) {
+                    return@withContext Result.success(trackCover)
+                }
+            }
+            Result.success(null)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun fetchClientToken(): Result<String> = withContext(Dispatchers.IO) {
         if (!customClientToken.isNullOrEmpty()) {
             return@withContext Result.success(customClientToken!!)

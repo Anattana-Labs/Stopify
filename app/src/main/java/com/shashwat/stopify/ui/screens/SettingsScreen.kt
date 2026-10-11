@@ -37,6 +37,7 @@ import com.shashwat.stopify.data.SpotifyUserProfile
 import com.shashwat.stopify.data.SpotifyWebClient
 import com.shashwat.stopify.ui.components.TrackOptionsMenu
 import com.shashwat.stopify.ui.theme.AppThemeMode
+import com.shashwat.stopify.ui.theme.ThemeColorMode
 import kotlinx.coroutines.launch
 
 @Composable
@@ -44,6 +45,8 @@ fun SimpSettingsScreen(
     client: SpotifyWebClient,
     currentThemeMode: AppThemeMode = AppThemeMode.DYNAMIC,
     onThemeChange: (AppThemeMode) -> Unit = {},
+    currentColorMode: ThemeColorMode = ThemeColorMode.SYSTEM,
+    onColorModeChange: (ThemeColorMode) -> Unit = {},
     onOpenCookieManager: () -> Unit,
     onPlayTrack: (SpotifyTrack) -> Unit,
     onPlayNext: (SpotifyTrack) -> Unit = {},
@@ -88,10 +91,12 @@ fun SimpSettingsScreen(
         reloadRecents()
     }
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0F0F13))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -112,12 +117,12 @@ fun SimpSettingsScreen(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1E1E24))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -128,7 +133,7 @@ fun SimpSettingsScreen(
                         text = "Settings",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -138,15 +143,15 @@ fun SimpSettingsScreen(
                 val hasActiveUser = userProfile != null || !tokenDisplay.isNullOrEmpty()
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF18181F),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
                     modifier = Modifier
                         .fillMaxWidth()
                         .border(
                             1.dp,
                             Brush.linearGradient(
                                 listOf(
-                                    Color(0xFF1ED760).copy(alpha = 0.4f),
-                                    Color.White.copy(alpha = 0.05f)
+                                    primaryColor.copy(alpha = 0.4f),
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
                                 )
                             ),
                             RoundedCornerShape(16.dp)
@@ -162,8 +167,8 @@ fun SimpSettingsScreen(
                                 modifier = Modifier
                                     .size(56.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF282832))
-                                    .border(2.dp, Color(0xFF1ED760), CircleShape),
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                    .border(2.dp, primaryColor, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (!userProfile?.avatarUrl.isNullOrEmpty()) {
@@ -177,7 +182,7 @@ fun SimpSettingsScreen(
                                     Icon(
                                         imageVector = Icons.Rounded.Person,
                                         contentDescription = null,
-                                        tint = Color(0xFF1ED760),
+                                        tint = primaryColor,
                                         modifier = Modifier.size(32.dp)
                                     )
                                 }
@@ -191,7 +196,7 @@ fun SimpSettingsScreen(
                                         text = userProfile?.displayName ?: "Spotify Connected",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -200,14 +205,14 @@ fun SimpSettingsScreen(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(if (hasActiveUser) Color(0xFF1ED760) else Color.Gray)
+                                            .background(if (hasActiveUser) primaryColor else Color.Gray)
                                     )
                                 }
 
                                 Text(
                                     text = userProfile?.email ?: (if (hasActiveUser) "Active Web Session" else "Not signed in"),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.6f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -216,13 +221,13 @@ fun SimpSettingsScreen(
 
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFF1ED760).copy(alpha = 0.15f)
+                                    color = primaryColor.copy(alpha = 0.15f)
                                 ) {
                                     Text(
                                         text = (userProfile?.product ?: if (hasActiveUser) "PREMIUM ACCESS" else "FREE TIER").uppercase(),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1ED760),
+                                        color = primaryColor,
                                         fontSize = 10.sp,
                                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                                     )
@@ -240,7 +245,7 @@ fun SimpSettingsScreen(
                                 onClick = onOpenCookieManager,
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF1ED760),
+                                    containerColor = primaryColor,
                                     contentColor = Color.Black
                                 ),
                                 modifier = Modifier.weight(1f)
@@ -278,14 +283,57 @@ fun SimpSettingsScreen(
             // ── APPEARANCE & THEME ────────────────────────────────────
             item {
                 SettingsSection(title = "Appearance & Themes", icon = Icons.Rounded.Palette) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Display Mode",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ThemeCard(
+                                title = "Auto",
+                                subtitle = "Device system",
+                                icon = Icons.Rounded.BrightnessAuto,
+                                isSelected = currentColorMode == ThemeColorMode.SYSTEM,
+                                onClick = { onColorModeChange(ThemeColorMode.SYSTEM) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            ThemeCard(
+                                title = "Dark",
+                                subtitle = "Always dark",
+                                icon = Icons.Rounded.DarkMode,
+                                isSelected = currentColorMode == ThemeColorMode.DARK,
+                                onClick = { onColorModeChange(ThemeColorMode.DARK) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            ThemeCard(
+                                title = "Light",
+                                subtitle = "Clean light",
+                                icon = Icons.Rounded.LightMode,
+                                isSelected = currentColorMode == ThemeColorMode.LIGHT,
+                                onClick = { onColorModeChange(ThemeColorMode.LIGHT) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Accent & Palette",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             ThemeCard(
                                 title = "Dynamic",
-                                subtitle = "Album artwork colors",
+                                subtitle = "Luxury Orange & Artwork",
                                 icon = Icons.Rounded.AutoAwesome,
                                 isSelected = currentThemeMode == AppThemeMode.DYNAMIC,
                                 onClick = { onThemeChange(AppThemeMode.DYNAMIC) },
@@ -293,8 +341,8 @@ fun SimpSettingsScreen(
                             )
                             ThemeCard(
                                 title = "Monochrome",
-                                subtitle = "Spotify gray & white",
-                                icon = Icons.Rounded.DarkMode,
+                                subtitle = "Minimal Slate",
+                                icon = Icons.Rounded.Contrast,
                                 isSelected = currentThemeMode == AppThemeMode.MONOCHROME,
                                 onClick = { onThemeChange(AppThemeMode.MONOCHROME) },
                                 modifier = Modifier.weight(1f)
@@ -303,7 +351,7 @@ fun SimpSettingsScreen(
 
                         ThemeCard(
                             title = "Pitch Black (AMOLED)",
-                            subtitle = "Pure black #000000 saves battery",
+                            subtitle = "Pure black #000000 with luxury orange",
                             icon = Icons.Rounded.Contrast,
                             isSelected = currentThemeMode == AppThemeMode.AMOLED,
                             onClick = { onThemeChange(AppThemeMode.AMOLED) },
@@ -364,24 +412,24 @@ fun SimpSettingsScreen(
                                     text = "Bearer Access Token",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = if (!tokenDisplay.isNullOrEmpty()) "Live in background" else "Not yet generated",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (!tokenDisplay.isNullOrEmpty()) Color(0xFF1ED760) else Color.White.copy(alpha = 0.5f)
+                                    color = if (!tokenDisplay.isNullOrEmpty()) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                 )
                             }
 
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = if (!tokenDisplay.isNullOrEmpty()) Color(0xFF1ED760).copy(alpha = 0.2f) else Color(0xFF282832)
+                                color = if (!tokenDisplay.isNullOrEmpty()) primaryColor.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
                                 Text(
                                     text = if (!tokenDisplay.isNullOrEmpty()) "ACTIVE" else "IDLE",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (!tokenDisplay.isNullOrEmpty()) Color(0xFF1ED760) else Color.Gray,
+                                    color = if (!tokenDisplay.isNullOrEmpty()) primaryColor else Color.Gray,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                 )
                             }
@@ -390,14 +438,14 @@ fun SimpSettingsScreen(
                         if (!tokenDisplay.isNullOrEmpty()) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF121217),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
                                     text = "${tokenDisplay!!.take(16)}...${tokenDisplay!!.takeLast(8)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                    color = Color.White.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     modifier = Modifier.padding(10.dp)
                                 )
                             }
@@ -407,7 +455,7 @@ fun SimpSettingsScreen(
                             Text(
                                 text = tokenStatusMsg,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF1ED760)
+                                color = primaryColor
                             )
                         }
 
@@ -617,7 +665,7 @@ private fun SettingsSection(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color(0xFF1ED760),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -625,13 +673,13 @@ private fun SettingsSection(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
 
         Surface(
             shape = RoundedCornerShape(14.dp),
-            color = Color(0xFF18181F),
+            color = MaterialTheme.colorScheme.surfaceContainer,
             modifier = Modifier.fillMaxWidth()
         ) {
             Box(modifier = Modifier.padding(14.dp)) {
@@ -650,11 +698,12 @@ private fun ThemeCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val primaryColor = MaterialTheme.colorScheme.primary
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) Color(0xFF1ED760).copy(alpha = 0.12f) else Color(0xFF202028),
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF1ED760)) else null,
+        color = if (isSelected) primaryColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, primaryColor) else null,
         modifier = modifier
     ) {
         Row(
@@ -664,7 +713,7 @@ private fun ThemeCard(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isSelected) Color(0xFF1ED760) else Color.White.copy(alpha = 0.6f),
+                tint = if (isSelected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -673,12 +722,12 @@ private fun ThemeCard(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                    color = if (isSelected) Color(0xFF1ED760) else Color.White
+                    color = if (isSelected) primaryColor else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

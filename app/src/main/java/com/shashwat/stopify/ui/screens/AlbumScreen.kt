@@ -24,7 +24,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.drawable.BitmapDrawable
+import androidx.compose.ui.platform.LocalContext
+import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.shashwat.stopify.data.SpotifyAlbumDetails
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
@@ -48,10 +54,12 @@ fun SimpAlbumScreen(
     isFavorite: (SpotifyTrack) -> Boolean = { false },
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var albumDetail by remember { mutableStateOf<SpotifyAlbumDetails?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedOptionTrack by remember { mutableStateOf<SpotifyTrack?>(null) }
     var isLiked by remember { mutableStateOf(false) }
+    var coverTint by remember(albumUri) { mutableStateOf<Color?>(null) }
 
     LaunchedEffect(albumUri) {
         isLoading = true
@@ -62,6 +70,34 @@ fun SimpAlbumScreen(
         isLoading = false
     }
 
+    LaunchedEffect(albumDetail?.coverUrl) {
+        val coverUrl = albumDetail?.coverUrl
+        if (!coverUrl.isNullOrEmpty()) {
+            try {
+                val req = ImageRequest.Builder(context)
+                    .data(coverUrl)
+                    .allowHardware(false)
+                    .build()
+                val result = context.imageLoader.execute(req)
+                if (result is SuccessResult) {
+                    val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                    if (bitmap != null) {
+                        val palette = Palette.from(bitmap).generate()
+                        val rgb = palette.vibrantSwatch?.rgb
+                            ?: palette.dominantSwatch?.rgb
+                            ?: palette.mutedSwatch?.rgb
+                        if (rgb != null) {
+                            coverTint = Color(rgb)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Fallback to theme primary
+            }
+        }
+    }
+
+    val dynamicTint = coverTint ?: MaterialTheme.colorScheme.primary
     val isThisPlaying = albumDetail?.tracks?.any { it.uri == playbackState.currentTrack?.uri } == true && playbackState.isPlaying
 
     Box(
@@ -102,16 +138,16 @@ fun SimpAlbumScreen(
         } else if (albumDetail != null) {
             val album = albumDetail!!
 
-            // Ambient background glow
+            // Ambient background glow using extracted cover tint
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(380.dp)
+                    .height(400.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                                dynamicTint.copy(alpha = 0.45f),
+                                dynamicTint.copy(alpha = 0.15f),
                                 MaterialTheme.colorScheme.background
                             )
                         )
@@ -151,7 +187,7 @@ fun SimpAlbumScreen(
                                 Icon(
                                     imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                     contentDescription = "Favorite",
-                                    tint = if (isLiked) MaterialTheme.colorScheme.primary else Color.White,
+                                    tint = if (isLiked) dynamicTint else Color.White,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -172,7 +208,7 @@ fun SimpAlbumScreen(
                             modifier = Modifier
                                 .padding(vertical = 12.dp)
                                 .size(240.dp)
-                                .shadow(24.dp, RoundedCornerShape(16.dp), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f))
+                                .shadow(24.dp, RoundedCornerShape(16.dp), spotColor = dynamicTint.copy(alpha = 0.45f))
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                         ) {
@@ -206,7 +242,7 @@ fun SimpAlbumScreen(
                             text = album.artist,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = dynamicTint,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.clickable {
                                 onViewArtist("spotify:artist:${album.artist}", album.artist)
@@ -256,7 +292,7 @@ fun SimpAlbumScreen(
                                     .height(48.dp)
                                     .widthIn(min = 125.dp)
                                     .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
+                                    .background(dynamicTint)
                                     .clickable {
                                         album.tracks.firstOrNull()?.let { onPlayTrack(it) }
                                     }
@@ -267,13 +303,13 @@ fun SimpAlbumScreen(
                                     Icon(
                                         imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        tint = Color.Black,
                                         modifier = Modifier.size(24.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = if (isThisPlaying) "Pause" else "Play",
-                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        color = Color.Black,
                                         style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.Bold
                                     )

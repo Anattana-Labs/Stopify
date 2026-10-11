@@ -310,10 +310,11 @@ fun SimpFullPlayer(
                         onClick = { onToggleFavorite(track) },
                         modifier = Modifier.size(44.dp)
                     ) {
+                        val accentColor = MaterialTheme.colorScheme.primary
                         Icon(
                             imageVector = if (currentIsFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                             contentDescription = "Save",
-                            tint = if (currentIsFav) Color(0xFF1DB954) else Color.White,
+                            tint = if (currentIsFav) accentColor else Color.White,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -373,7 +374,7 @@ fun SimpFullPlayer(
                     onToggleShuffle = { isShuffle = !isShuffle },
                     onToggleRepeat = { isRepeat = !isRepeat },
                     isLoading = playbackState.isBuffering,
-                    activeColor = Color(0xFF1DB954),
+                    activeColor = MaterialTheme.colorScheme.primary,
                     contentColor = Color.White,
                     horizontalPadding = 20.dp
                 )

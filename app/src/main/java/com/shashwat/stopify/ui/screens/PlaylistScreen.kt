@@ -27,6 +27,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import android.graphics.drawable.BitmapDrawable
+import androidx.palette.graphics.Palette
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.shashwat.stopify.data.SpotifyPlaylistDetails
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
@@ -62,6 +67,7 @@ fun SimpPlaylistScreen(
     var selectedOptionTrack by remember { mutableStateOf<SpotifyTrack?>(null) }
     var showAddSongsDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var coverTint by remember(playlistUri) { mutableStateOf<Color?>(null) }
 
     val isCustomPlaylist = remember(playlistUri) { playlistUri.contains("local_") }
 
@@ -83,12 +89,40 @@ fun SimpPlaylistScreen(
         isLoading = false
     }
 
+    LaunchedEffect(playlistDetail?.coverUrl) {
+        val coverUrl = playlistDetail?.coverUrl
+        if (!coverUrl.isNullOrEmpty()) {
+            try {
+                val req = ImageRequest.Builder(context)
+                    .data(coverUrl)
+                    .allowHardware(false)
+                    .build()
+                val result = context.imageLoader.execute(req)
+                if (result is SuccessResult) {
+                    val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                    if (bitmap != null) {
+                        val palette = Palette.from(bitmap).generate()
+                        val rgb = palette.vibrantSwatch?.rgb
+                            ?: palette.dominantSwatch?.rgb
+                            ?: palette.mutedSwatch?.rgb
+                        if (rgb != null) {
+                            coverTint = Color(rgb)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Fallback to theme primary
+            }
+        }
+    }
+
+    val dynamicTint = coverTint ?: MaterialTheme.colorScheme.primary
     val isThisPlaying = playlistDetail?.tracks?.any { it.uri == playbackState.currentTrack?.uri } == true && playbackState.isPlaying
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
     ) {
         if (isLoading) {
@@ -114,7 +148,7 @@ fun SimpPlaylistScreen(
                         .size(240.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .align(Alignment.CenterHorizontally)
-                        .background(Color(0xFF282828))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                 )
                 repeat(5) {
                     M3ExpressiveShimmerTrack()
@@ -123,17 +157,17 @@ fun SimpPlaylistScreen(
         } else if (playlistDetail != null) {
             val playlist = playlistDetail!!
 
-            // Ambient background glow
+            // Ambient background glow using cover tint
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(380.dp)
+                    .height(400.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xFF1ED760).copy(alpha = 0.25f),
-                                Color(0xFF181818).copy(alpha = 0.5f),
-                                Color(0xFF121212)
+                                dynamicTint.copy(alpha = 0.45f),
+                                dynamicTint.copy(alpha = 0.15f),
+                                MaterialTheme.colorScheme.background
                             )
                         )
                     )
@@ -217,7 +251,7 @@ fun SimpPlaylistScreen(
                                     Icon(
                                         imageVector = Icons.Rounded.MusicNote,
                                         contentDescription = null,
-                                        tint = Color(0xFF1ED760),
+                                        tint = dynamicTint,
                                         modifier = Modifier.size(64.dp)
                                     )
                                 }
@@ -231,7 +265,7 @@ fun SimpPlaylistScreen(
                             text = playlist.name,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -245,7 +279,7 @@ fun SimpPlaylistScreen(
                         Text(
                             text = if (descText.isNotBlank()) descText else "By $ownerText",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -257,7 +291,7 @@ fun SimpPlaylistScreen(
                         Text(
                             text = "${playlist.tracks.size} songs",
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color(0xFF1ED760),
+                            color = dynamicTint,
                             fontWeight = FontWeight.SemiBold
                         )
 
@@ -274,7 +308,7 @@ fun SimpPlaylistScreen(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.1f))
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                                     .clickable {
                                         playlist.tracks.shuffled().firstOrNull()?.let { onPlayTrack(it) }
                                     },
@@ -283,18 +317,18 @@ fun SimpPlaylistScreen(
                                 Icon(
                                     imageVector = Icons.Rounded.Shuffle,
                                     contentDescription = "Shuffle",
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
 
-                            // Big Spotify Green Play Button
+                            // Big Tinted Play Button
                             Box(
                                 modifier = Modifier
                                     .height(48.dp)
                                     .widthIn(min = 130.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF1ED760))
+                                    .background(dynamicTint)
                                     .clickable {
                                         playlist.tracks.firstOrNull()?.let { onPlayTrack(it) }
                                     }

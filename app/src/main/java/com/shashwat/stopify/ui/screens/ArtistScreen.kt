@@ -25,7 +25,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.graphics.drawable.BitmapDrawable
+import androidx.compose.ui.platform.LocalContext
+import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.shashwat.stopify.data.SpotifyItemType
 import com.shashwat.stopify.data.SpotifyMediaItem
 import com.shashwat.stopify.data.SpotifyTrack
@@ -53,20 +59,34 @@ fun SimpArtistScreen(
     isFavorite: (SpotifyTrack) -> Boolean = { false },
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var topTracks by remember { mutableStateOf<List<SpotifyTrack>>(emptyList()) }
     var albums by remember { mutableStateOf<List<SpotifyMediaItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedOptionTrack by remember { mutableStateOf<SpotifyTrack?>(null) }
+    var currentCoverUrl by remember(artistUri, artistCoverUrl) { mutableStateOf(artistCoverUrl) }
+    var coverTint by remember(artistUri) { mutableStateOf<Color?>(null) }
 
-    LaunchedEffect(artistUri) {
+    LaunchedEffect(artistUri, artistName) {
         isLoading = true
-        // Fetch popular tracks
+        // 1. Fetch avatar if not provided
+        if (currentCoverUrl.isNullOrEmpty()) {
+            val avatarRes = client.fetchArtistAvatar(artistUri, artistName)
+            if (avatarRes.isSuccess && !avatarRes.getOrNull().isNullOrEmpty()) {
+                currentCoverUrl = avatarRes.getOrNull()
+            }
+        }
+
+        // 2. Fetch popular tracks
         val tracksRes = client.fetchArtistTopTracks(artistUri, artistName)
         if (tracksRes.isSuccess) {
             topTracks = tracksRes.getOrThrow()
+            if (currentCoverUrl.isNullOrEmpty() && topTracks.isNotEmpty()) {
+                currentCoverUrl = topTracks.firstOrNull()?.coverUrl
+            }
         }
 
-        // Fetch albums
+        // 3. Fetch albums
         val albumsRes = client.searchMulti(artistName, SpotifyItemType.ALBUM)
         if (albumsRes.isSuccess) {
             albums = albumsRes.getOrThrow().filter { it.type == SpotifyItemType.ALBUM }
@@ -74,6 +94,34 @@ fun SimpArtistScreen(
         isLoading = false
     }
 
+    // Palette extraction for tint
+    LaunchedEffect(currentCoverUrl) {
+        if (!currentCoverUrl.isNullOrEmpty()) {
+            try {
+                val req = ImageRequest.Builder(context)
+                    .data(currentCoverUrl)
+                    .allowHardware(false)
+                    .build()
+                val result = context.imageLoader.execute(req)
+                if (result is SuccessResult) {
+                    val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                    if (bitmap != null) {
+                        val palette = Palette.from(bitmap).generate()
+                        val rgb = palette.vibrantSwatch?.rgb
+                            ?: palette.dominantSwatch?.rgb
+                            ?: palette.mutedSwatch?.rgb
+                        if (rgb != null) {
+                            coverTint = Color(rgb)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Fallback to theme primary
+            }
+        }
+    }
+
+    val dynamicTint = coverTint ?: MaterialTheme.colorScheme.primary
     val isThisPlaying = topTracks.any { it.uri == playbackState.currentTrack?.uri } && playbackState.isPlaying
 
     Box(
@@ -82,16 +130,16 @@ fun SimpArtistScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
     ) {
-        // Ambient background glow
+        // Ambient background glow using cover tint
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(380.dp)
+                .height(400.dp)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                            dynamicTint.copy(alpha = 0.45f),
+                            dynamicTint.copy(alpha = 0.15f),
                             MaterialTheme.colorScheme.background
                         )
                     )
@@ -130,13 +178,13 @@ fun SimpArtistScreen(
                         modifier = Modifier
                             .padding(vertical = 12.dp)
                             .size(180.dp)
-                            .shadow(24.dp, CircleShape, spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f))
+                            .shadow(24.dp, CircleShape, spotColor = dynamicTint.copy(alpha = 0.45f))
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                     ) {
-                        if (!artistCoverUrl.isNullOrEmpty()) {
+                        if (!currentCoverUrl.isNullOrEmpty()) {
                             AsyncImage(
-                                model = artistCoverUrl,
+                                model = currentCoverUrl,
                                 contentDescription = artistName,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
@@ -160,14 +208,14 @@ fun SimpArtistScreen(
                         Icon(
                             imageVector = Icons.Rounded.CheckCircle,
                             contentDescription = "Verified",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = dynamicTint,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Verified Artist",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            color = dynamicTint
                         )
                     }
 
@@ -213,27 +261,27 @@ fun SimpArtistScreen(
                         // Play Pill Button
                         Box(
                             modifier = Modifier
-                                .height(48.dp)
-                                .widthIn(min = 130.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                                .clickable {
-                                    topTracks.firstOrNull()?.let { onPlayTrack(it) }
-                                }
-                                .padding(horizontal = 24.dp),
+                                 .height(48.dp)
+                                 .widthIn(min = 130.dp)
+                                 .clip(CircleShape)
+                                 .background(dynamicTint)
+                                 .clickable {
+                                     topTracks.firstOrNull()?.let { onPlayTrack(it) }
+                                 }
+                                 .padding(horizontal = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    tint = Color.Black,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (isThisPlaying) "Pause" else "Play",
-                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    color = Color.Black,
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.Bold
                                 )
