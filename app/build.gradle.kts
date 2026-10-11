@@ -8,7 +8,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.aistudio.stopify.app"
+        applicationId = "com.shashwat.stopify"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
