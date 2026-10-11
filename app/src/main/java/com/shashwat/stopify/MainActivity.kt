@@ -69,8 +69,12 @@ class MainActivity : ComponentActivity() {
             spotifyClient.setAccessToken(savedAccessToken)
         }
         
-        // Always trigger automatic token and cookie refresh in background webview on app open
-        SpotifyTokenManager.refreshAccessTokenInBackground(this, spotifyClient)
+        // Trigger token and cookie refresh in background webview (showing blocker only if no token is saved yet)
+        SpotifyTokenManager.refreshAccessTokenInBackground(
+            this,
+            spotifyClient,
+            showLoadingModal = savedAccessToken.isNullOrEmpty()
+        )
 
         // Load persisted playback history from SharedPreferences
         spotifyClient.loadHistoryFromPrefs(prefs)

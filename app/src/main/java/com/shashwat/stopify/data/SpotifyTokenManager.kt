@@ -40,6 +40,7 @@ object SpotifyTokenManager {
     fun refreshAccessTokenInBackground(
         context: Context,
         client: SpotifyWebClient,
+        showLoadingModal: Boolean = false,
         onComplete: ((String?) -> Unit)? = null
     ) {
         mainHandler.post {
@@ -49,6 +50,9 @@ object SpotifyTokenManager {
 
             if (isRefreshing) {
                 Log.d(TAG, "Token refresh already in progress, registered listener")
+                if (showLoadingModal) {
+                    _isRefreshingState.value = true
+                }
                 return@post
             }
 
@@ -65,7 +69,7 @@ object SpotifyTokenManager {
             }
 
             isRefreshing = true
-            _isRefreshingState.value = true
+            _isRefreshingState.value = showLoadingModal
 
             val webView = headlessWebView ?: WebView(appContext).also {
                 it.settings.javaScriptEnabled = true
@@ -98,7 +102,7 @@ object SpotifyTokenManager {
             cookieManager.setAcceptThirdPartyCookies(webView, true)
 
             // Seed active session cookies
-            val cookiesToSeed = client.cookieHeaderString
+            val cookiesToSeed = cookies
             for (pair in cookiesToSeed.split(";")) {
                 val p = pair.trim()
                 if (p.isNotEmpty()) {
@@ -212,7 +216,7 @@ object SpotifyTokenManager {
 
     suspend fun awaitTokenRefresh(context: Context, client: SpotifyWebClient): String? {
         val deferred = CompletableDeferred<String?>()
-        refreshAccessTokenInBackground(context, client) { token ->
+        refreshAccessTokenInBackground(context, client, showLoadingModal = true) { token ->
             deferred.complete(token)
         }
         return withTimeoutOrNull(20000) { deferred.await() }
