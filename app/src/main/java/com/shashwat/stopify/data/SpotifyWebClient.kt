@@ -64,13 +64,6 @@ class SpotifyWebClient {
         const val DEVICE_ID = "af6fd454eccef1714bc99a09a10c119366e8da1c"
 
         fun getDeviceId(prefs: android.content.SharedPreferences? = null): String {
-            if (prefs != null) {
-                val saved = prefs.getString("spotify_device_id", null)
-                if (!saved.isNullOrEmpty()) return saved
-                val generated = UUID.randomUUID().toString().replace("-", "") + "00000000"
-                prefs.edit().putString("spotify_device_id", generated).apply()
-                return generated
-            }
             return DEVICE_ID
         }
 
@@ -192,6 +185,12 @@ class SpotifyWebClient {
 
     private val audioFileMap = ConcurrentHashMap<String, String>()
     private val pendingTrackResolutions = ConcurrentHashMap<String, CompletableDeferred<String>>()
+    @Volatile
+    private var activeStateMachineId: String? = null
+    @Volatile
+    private var activeStateId: String = "4afaf822d8624b5fb4d2f9ffe5b1fe79"
+    @Volatile
+    private var stateSeqNum: Int = 3
 
     @Volatile
     var tokenRefreshHook: (suspend () -> Boolean)? = null
@@ -384,6 +383,8 @@ class SpotifyWebClient {
             val reportedPosition = if (isFinished) trackDuration else if (positionMs > 0) positionMs else 1002L
 
             // 1. Report playback state to Spotify Connect / device track-playback endpoint
+            val currentSmId = activeStateMachineId ?: "ChTYh8P7GXEaL9SXQ9jMrnbW_sLlYQ"
+            val seq = ++stateSeqNum
             val trackPlaybackEndpoints = listOf(
                 "https://gae2-spclient.spotify.com/track-playback/v1/devices/$currentDeviceId/state",
                 "https://spclient.wg.spotify.com/track-playback/v1/devices/$currentDeviceId/state"
@@ -408,10 +409,10 @@ class SpotifyWebClient {
                     }
 
                     val body = JSONObject().apply {
-                        put("seq_num", if (isFinished || positionMs >= 30000L) 6 else 4)
+                        put("seq_num", seq)
                         put("state_ref", JSONObject().apply {
-                            put("state_machine_id", "ChTYh8P7GXEaL9SXQ9jMrnbW_sLlYQ")
-                            put("state_id", "4afaf822d8624b5fb4d2f9ffe5b1fe79")
+                            put("state_machine_id", currentSmId)
+                            put("state_id", activeStateId)
                             put("paused", false)
                         })
                         put("sub_state", JSONObject().apply {
@@ -430,7 +431,22 @@ class SpotifyWebClient {
 
                     OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
                     val code = conn.responseCode
+                    val respBody = try {
+                        val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                        stream?.bufferedReader()?.readText() ?: ""
+                    } catch (e: Exception) { "" }
                     conn.disconnect()
+
+                    if (code in 200..299 && respBody.isNotEmpty()) {
+                        try {
+                            val respJson = JSONObject(respBody)
+                            val newSm = respJson.optJSONObject("state_machine")?.optString("state_machine_id")
+                            if (!newSm.isNullOrEmpty()) {
+                                activeStateMachineId = newSm
+                            }
+                        } catch (e: Exception) {}
+                    }
+
                     Log.d(TAG, "Report playback to track-playback API status: $code ($stateUrlStr) for '${track.name}' (pos: ${reportedPosition}ms, finished: $isFinished)")
                 } catch (e: Exception) {
                     Log.w(TAG, "Error reporting track-playback state to $stateUrlStr", e)
@@ -726,8 +742,13 @@ class SpotifyWebClient {
             } else {
                 conn.disconnect()
             }
+            Log.d(TAG, "Fetched ${list.size} tracks for recently played (online + local)")
         } catch (e: Exception) {
             Log.w(TAG, "Error fetching online recents, returning local recents", e)
+        }
+
+        if (prefs != null && list.isNotEmpty()) {
+            historyManager.mergeRemoteHistory(list, prefs)
         }
 
         Result.success(playbackHistory.ifEmpty { list })
@@ -1790,6 +1811,16 @@ class SpotifyWebClient {
                         if (payloads != null) {
                             for (p in 0 until payloads.length()) {
                                 val sm = payloads.getJSONObject(p).optJSONObject("state_machine")
+                                val smId = sm?.optString("state_machine_id")
+                                if (!smId.isNullOrEmpty()) {
+                                    activeStateMachineId = smId
+                                    Log.d(TAG, "Captured active state_machine_id: $smId")
+                                }
+                                val states = sm?.optJSONArray("states")
+                                if (states != null && states.length() > 0) {
+                                    val sId = states.getJSONObject(0).optString("state_id")
+                                    if (sId.isNotEmpty()) activeStateId = sId
+                                }
                                 val tracks = sm?.optJSONArray("tracks") ?: continue
                                 for (i in 0 until tracks.length()) {
                                     val tObj = tracks.getJSONObject(i)
