@@ -584,8 +584,8 @@ class SpotifyWebClient {
                 }
                 messagesList.add(melodyCmdPayload)
             } else {
-                // Playback stats event (scrobble trigger when played >= 30s or finished)
-                val playedMs = if (isFinished) trackDuration else positionMs.coerceAtLeast(30000L)
+                // Playback stats event (scrobble trigger when played >= 30s, periodic progress, or finished)
+                val playedMs = if (isFinished) trackDuration else if (positionMs >= 30000L) positionMs else positionMs.coerceAtLeast(1002L)
                 val now = System.currentTimeMillis()
                 val startTime = now - playedMs
                 val melodyStatsPayload = JSONObject().apply {
@@ -710,25 +710,34 @@ class SpotifyWebClient {
 
         // 2. Fetch from Spotify recently-played endpoint to merge account plays from other devices
         try {
+            val clientToken = customClientToken ?: CLIENT_TOKEN
             val url = URL("https://api.spotify.com/v1/me/player/recently-played?limit=50")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 8000
                 readTimeout = 8000
                 setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("User-Agent", USER_AGENT)
+                setRequestProperty("Origin", "https://open.spotify.com")
+                setRequestProperty("Referer", "https://open.spotify.com/")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
             }
             val responseCode = conn.responseCode
+            val respBody = try {
+                val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+                stream?.bufferedReader()?.readText() ?: ""
+            } catch (e: Exception) { "" }
+            conn.disconnect()
+
+            Log.d(TAG, "Spotify recently-played HTTP Status: $responseCode, length: ${respBody.length}")
+
             if (responseCode == 401) {
                 invalidateTokens()
-                conn.disconnect()
-            } else if (responseCode in 200..299) {
-                val stream = conn.inputStream
-                val responseBody = BufferedReader(InputStreamReader(stream)).readText()
-                conn.disconnect()
-
-                val json = JSONObject(responseBody)
+            } else if (responseCode in 200..299 && respBody.isNotEmpty()) {
+                val json = JSONObject(respBody)
                 val items = json.optJSONArray("items") ?: JSONArray()
                 for (i in 0 until items.length()) {
                     val item = items.getJSONObject(i)
@@ -763,10 +772,32 @@ class SpotifyWebClient {
                         )
                     }
                 }
-                // Merge fetched remote history into persistent history cache
                 historyManager.mergeRemoteHistory(list, prefs)
-            } else {
-                conn.disconnect()
+            } else if (responseCode == 429) {
+                // Rate limited on REST API: Extract recently played / jump back in tracks directly from the live GQL Home feed
+                try {
+                    val homeRes = fetchHomeSections()
+                    if (homeRes.isSuccess) {
+                        val homeData = homeRes.getOrThrow()
+                        Log.d(TAG, "Home sections for recents: ${homeData.sections.map { it.title }}")
+                        val recentSection = homeData.sections.firstOrNull { 
+                            val t = it.title.lowercase()
+                            t.contains("recently") || t.contains("jump back") || t.contains("recent") || t.contains("played") || t.contains("mix")
+                        } ?: homeData.sections.firstOrNull()
+
+                        recentSection?.items?.forEach { item ->
+                            if (list.none { it.uri == item.uri }) {
+                                list.add(item.toTrack())
+                            }
+                        }
+                        if (list.isNotEmpty()) {
+                            historyManager.mergeRemoteHistory(list, prefs)
+                            Log.d(TAG, "Extracted ${list.size} recently played items from Home GQL feed section '${recentSection?.title}'")
+                        }
+                    }
+                } catch (he: Exception) {
+                    Log.w(TAG, "Failed extracting recents from Home fallback", he)
+                }
             }
             Log.d(TAG, "Fetched ${list.size} tracks for recently played (online + local)")
         } catch (e: Exception) {
