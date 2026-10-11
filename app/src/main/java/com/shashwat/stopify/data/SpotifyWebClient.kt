@@ -929,10 +929,35 @@ class SpotifyWebClient {
                         val imagesArr = itemData.optJSONObject("images")?.optJSONArray("items")
                         val coverUrl = imagesArr?.optJSONObject(0)?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")
                             ?: itemData.optJSONArray("images")?.optJSONObject(0)?.optString("url")
-                        val total = itemData.optInt("count", itemData.optJSONObject("tracks")?.optInt("total") ?: 0)
+                        val total = itemData.optInt("count", 0).let { c ->
+                            if (c > 0) c else itemData.optJSONObject("tracks")?.optInt("total", 0) ?: 0
+                        }
+
+                        // Check if we have local added tracks for this playlist to augment track count
+                        var resolvedTotal = total
+                        if (prefs != null) {
+                            try {
+                                val localJson = prefs.getString("local_user_playlists_json", null)
+                                if (!localJson.isNullOrEmpty()) {
+                                    val array = JSONArray(localJson)
+                                    for (j in 0 until array.length()) {
+                                        val p = array.getJSONObject(j)
+                                        if (p.optString("id") == id || p.optString("uri") == uri) {
+                                            val tArr = p.optJSONArray("tracks") ?: JSONArray()
+                                            if (tArr.length() > resolvedTotal) {
+                                                resolvedTotal = tArr.length()
+                                            }
+                                            break
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Error checking local tracks for count", e)
+                            }
+                        }
 
                         if (results.none { it.uri == uri || it.id == id }) {
-                            results.add(SpotifyPlaylistSummary(id, uri, name, ownerName, coverUrl, total))
+                            results.add(SpotifyPlaylistSummary(id, uri, name, ownerName, coverUrl, resolvedTotal))
                         }
                     }
                 }
@@ -2954,13 +2979,58 @@ class SpotifyWebClient {
                         )
                     }
                 }
-
                 Result.success(trackList)
             } else {
                 Result.failure(Exception("HTTP $responseCode: $responseBody"))
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }.let { res ->
+        // Augment with locally stored tracks if playlist is newly created or remote is propagation-lagged
+        if (res.isFailure || (res.isSuccess && res.getOrNull().isNullOrEmpty())) {
+            val cleanId = playlistUri.substringAfterLast(":")
+            val localTracks = mutableListOf<SpotifyTrack>()
+            val prefs = com.shashwat.stopify.MainActivity.globalPrefs
+            if (prefs != null) {
+                try {
+                    val localJson = prefs.getString("local_user_playlists_json", null)
+                    if (!localJson.isNullOrEmpty()) {
+                        val array = org.json.JSONArray(localJson)
+                        for (i in 0 until array.length()) {
+                            val p = array.getJSONObject(i)
+                            if (p.optString("id") == cleanId || p.optString("uri") == playlistUri) {
+                                val tArr = p.optJSONArray("tracks") ?: org.json.JSONArray()
+                                for (j in 0 until tArr.length()) {
+                                    val tObj = tArr.getJSONObject(j)
+                                    val uri = tObj.optString("uri")
+                                    localTracks.add(
+                                        SpotifyTrack(
+                                            id = uri.substringAfterLast(":"),
+                                            uri = uri,
+                                            name = tObj.optString("name", "Track"),
+                                            artist = tObj.optString("artist", "Artist"),
+                                            album = tObj.optString("album", "Album"),
+                                            coverUrl = tObj.optString("coverUrl", null),
+                                            durationMs = tObj.optLong("durationMs", 0L)
+                                        )
+                                    )
+                                }
+                                break
+                            }
+                        }
+                    }
+                } catch (ex: Exception) {
+                    Log.w(TAG, "Error fallback local playlist tracks", ex)
+                }
+            }
+            if (localTracks.isNotEmpty()) {
+                Result.success(localTracks)
+            } else {
+                res
+            }
+        } else {
+            res
         }
     }
 

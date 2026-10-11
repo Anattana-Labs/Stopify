@@ -31,7 +31,6 @@ import com.shashwat.stopify.data.SpotifyMediaItem
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
 import com.shashwat.stopify.player.PlaybackState
-import com.shashwat.stopify.ui.components.LiquidGlassIconButton
 import com.shashwat.stopify.ui.components.M3ExpressiveShimmerTrack
 import com.shashwat.stopify.ui.components.SimpSquareCard
 import com.shashwat.stopify.ui.components.SimpTrackItem
@@ -105,18 +104,17 @@ fun SimpArtistScreen(
         ) {
             // Top App Bar
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LiquidGlassIconButton(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        onClick = onBack
-                    )
-                }
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
             }
 
             // Hero Circular Avatar & Info Header

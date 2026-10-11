@@ -67,40 +67,30 @@ fun SimpHomeScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
+            .background(Color(0xFF0B0B0F))
     ) {
-        // Spotify Ambient Theme Glow at the top of Home
-        AmbientThemeGlow()
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // App Header (Spotify style with profile avatar and quick actions)
+            // Spotify-style top row: profile avatar on left (opens Settings), then filter pills inline
             item {
                 Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(top = 10.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(top = 16.dp, bottom = 4.dp)
                 ) {
-                    val primaryAccent = MaterialTheme.colorScheme.primary
-                    // Profile Avatar / Logo with subtle liquid glass border
+                    val primaryColor = MaterialTheme.colorScheme.primary
+                    // Profile Avatar
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
-                            .shadow(6.dp, CircleShape, spotColor = primaryAccent.copy(alpha = 0.4f))
+                            .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF242424))
-                            .border(
-                                1.5.dp,
-                                Brush.linearGradient(
-                                    listOf(primaryAccent, primaryAccent.copy(alpha = 0.5f))
-                                ),
-                                CircleShape
-                            )
+                            .background(Color(0xFFE8622C))
                             .clickable { onOpenSettings() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -115,99 +105,49 @@ fun SimpHomeScreen(
                             Text(
                                 text = (userProfile?.displayName?.firstOrNull() ?: 'S').uppercase(),
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1ED760),
-                                fontSize = 18.sp
+                                color = Color.White,
+                                fontSize = 16.sp
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = greeting,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = if (userProfile != null) "${userProfile.displayName} • ${userProfile.product}" else "Stopify Stream",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(filterTabs.size) { idx ->
+                            val tab = filterTabs[idx]
+                            val isSelected = selectedFilterIndex == idx
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(if (isSelected) Color(0xFF1ED760) else Color(0xFF2A2A2A))
+                                    .clickable { selectedFilterIndex = idx }
+                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = tab,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.Black else Color.White,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
                     }
 
                     IconButton(
                         onClick = onRefresh,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .border(0.7.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = "Refresh",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(18.dp)
                         )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .border(0.7.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Settings,
-                            contentDescription = "Settings",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-
-            // Quick Category Filter Pills (Spotify style)
-            item {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val primaryColor = MaterialTheme.colorScheme.primary
-                    filterTabs.forEachIndexed { idx, tab ->
-                        val isSelected = selectedFilterIndex == idx
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) primaryColor else Color.White.copy(alpha = 0.08f),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .border(
-                                    width = 0.75.dp,
-                                    brush = if (isSelected) {
-                                        Brush.linearGradient(listOf(primaryColor, primaryColor.copy(alpha = 0.8f)))
-                                    } else {
-                                        Brush.linearGradient(listOf(Color.White.copy(0.2f), Color.White.copy(0.06f)))
-                                    },
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .clickable { selectedFilterIndex = idx }
-                        ) {
-                            Text(
-                                text = tab,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.Black else Color.White,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
-                            )
-                        }
                     }
                 }
             }
@@ -427,21 +367,11 @@ private fun QuickPlayCard(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF242424).copy(alpha = 0.85f),
+        shape = RoundedCornerShape(4.dp),
+        color = Color(0xFF2A2A2A),
         modifier = modifier
-            .height(58.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                width = 0.75.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.22f),
-                        Color.White.copy(alpha = 0.06f)
-                    )
-                ),
-                shape = RoundedCornerShape(8.dp)
-            )
+            .height(52.dp)
+            .clip(RoundedCornerShape(4.dp))
             .clickable { onClick() }
     ) {
         Row(

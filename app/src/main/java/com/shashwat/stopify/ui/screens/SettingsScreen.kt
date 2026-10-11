@@ -28,7 +28,6 @@ import coil.compose.AsyncImage
 import com.shashwat.stopify.data.SpotifyTokenManager
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
-import com.shashwat.stopify.ui.components.LiquidGlassIconButton
 import com.shashwat.stopify.ui.components.TrackOptionsMenu
 import com.shashwat.stopify.ui.theme.AppThemeMode
 import com.shashwat.stopify.ui.theme.ShapeExtraLargeIncreased
@@ -97,11 +96,17 @@ fun SimpSettingsScreen(
                     .statusBarsPadding(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LiquidGlassIconButton(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    onClick = onBack
-                )
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(14.dp))
 

@@ -33,7 +33,6 @@ import com.shashwat.stopify.data.SpotifyColorLyrics
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
 import com.shashwat.stopify.player.PlaybackState
-import com.shashwat.stopify.ui.components.LiquidGlassIconButton
 import com.shashwat.stopify.ui.components.SimpPlayerControlLayout
 import com.shashwat.stopify.ui.components.TrackOptionsMenu
 import kotlinx.coroutines.launch
@@ -180,22 +179,30 @@ fun SimpFullPlayer(
                         }
                     },
                     navigationIcon = {
-                        LiquidGlassIconButton(
-                            imageVector = Icons.Rounded.KeyboardArrowDown,
-                            contentDescription = "Collapse",
-                            tint = Color.White,
+                        IconButton(
                             onClick = onCollapse,
                             modifier = Modifier.padding(start = 12.dp).size(40.dp)
-                        )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = "Collapse",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     },
                     actions = {
-                        LiquidGlassIconButton(
-                            imageVector = Icons.Rounded.MoreVert,
-                            contentDescription = "Options",
-                            tint = Color.White,
+                        IconButton(
                             onClick = { showTrackOptionsMenu = true },
                             modifier = Modifier.padding(end = 12.dp).size(40.dp)
-                        )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreVert,
+                                contentDescription = "Options",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 )
 

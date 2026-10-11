@@ -84,7 +84,7 @@ fun SimpSearchScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
+            .background(Color(0xFF0B0B0F))
             .statusBarsPadding()
     ) {
         Column(

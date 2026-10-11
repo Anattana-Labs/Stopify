@@ -45,11 +45,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.colorControls
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.player.PlaybackState
 import com.shashwat.stopify.ui.components.PlatformBackdrop
@@ -65,7 +60,7 @@ fun SimpBottomMiniPlayer(
     onSeekTo: (Long) -> Unit,
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
-    backdrop: PlatformBackdrop? = null,
+    backdrop: Any? = null,
     onPreviousTrack: (() -> Unit)? = null,
     onDismiss: (() -> Unit)? = null,
     isFavorite: Boolean = false,
@@ -81,50 +76,14 @@ fun SimpBottomMiniPlayer(
         label = "play_pause_scale"
     )
 
-
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(8.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .offset { IntOffset(0, offsetY.value.roundToInt()) }
-            .shadow(18.dp, shape, spotColor = Color.Black.copy(alpha = 0.55f))
-            .border(
-                width = 0.8.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.22f),
-                        Color.White.copy(alpha = 0.06f)
-                    )
-                ),
-                shape = shape
-            )
-            .then(
-                if (backdrop != null) {
-                    Modifier.drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { shape },
-                        effects = {
-                            vibrancy()
-                            colorControls(
-                                brightness = 0.05f,
-                                contrast = 1.05f,
-                                saturation = 1.4f
-                            )
-                            blur(18f.dp.toPx())
-                            lens(size.minDimension / 4f, size.minDimension / 2f, false)
-                        },
-                        onDrawSurface = {
-                            drawRect(Color(0xFF141816).copy(alpha = 0.78f))
-                        }
-                    )
-                } else {
-                    Modifier
-                        .clip(shape)
-                        .background(Color(0xFF181C1A).copy(alpha = 0.94f))
-                }
-            )
             .clip(shape)
+            .background(Color(0xFF2A2A2A))
             .clickable { onExpand() }
             .pointerInput(Unit) {
                 detectVerticalDragGestures(

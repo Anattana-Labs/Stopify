@@ -29,8 +29,6 @@ import com.shashwat.stopify.data.SpotifyAlbumDetails
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
 import com.shashwat.stopify.player.PlaybackState
-import com.shashwat.stopify.ui.components.LiquidGlassContainer
-import com.shashwat.stopify.ui.components.LiquidGlassIconButton
 import com.shashwat.stopify.ui.components.M3ExpressiveShimmerTrack
 import com.shashwat.stopify.ui.components.SimpTrackItem
 import com.shashwat.stopify.ui.components.TrackOptionsMenu
@@ -79,11 +77,17 @@ fun SimpAlbumScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                LiquidGlassIconButton(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    onClick = onBack
-                )
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .size(240.dp)
@@ -127,19 +131,30 @@ fun SimpAlbumScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        LiquidGlassIconButton(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                            onClick = onBack
-                        )
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            LiquidGlassIconButton(
-                                imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                contentDescription = "Favorite",
-                                tint = if (isLiked) MaterialTheme.colorScheme.primary else Color.White,
-                                onClick = { isLiked = !isLiked }
-                            )
+                            IconButton(
+                                onClick = { isLiked = !isLiked },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                    contentDescription = "Favorite",
+                                    tint = if (isLiked) MaterialTheme.colorScheme.primary else Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
                 }

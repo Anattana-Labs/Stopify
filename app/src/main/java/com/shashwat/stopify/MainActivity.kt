@@ -36,6 +36,10 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        var globalPrefs: android.content.SharedPreferences? = null
+    }
+
     private val spotifyClient = SpotifyWebClient()
     private lateinit var audioPlayer: SpotifyAudioPlayer
 
@@ -46,6 +50,7 @@ class MainActivity : ComponentActivity() {
 
         // Restore saved session tokens, cookies and playback history if present
         val prefs = getSharedPreferences("stopify_prefs", MODE_PRIVATE)
+        globalPrefs = prefs
         val savedClientToken = prefs.getString("spotify_client_token", null)
         if (!savedClientToken.isNullOrEmpty()) {
             spotifyClient.setClientToken(savedClientToken)
@@ -639,13 +644,11 @@ fun SimpMusicApp(
             )
         }
 
-    // Floating Bottom Controls Dock: MiniPlayer + SimpBottomNavigationBar
-    // Sibling to layerBackdrop content - visible across different screens!
+    // Bottom Controls Dock: MiniPlayer + SimpBottomNavigationBar (Spotui structure)
     Column(
         modifier = Modifier
             .align(Alignment.BottomCenter)
-            .fillMaxWidth()
-            .padding(bottom = 8.dp),
+            .fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Mini Player
