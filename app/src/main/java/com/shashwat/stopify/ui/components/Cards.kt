@@ -33,16 +33,16 @@ fun SimpSquareCard(
 ) {
     Column(
         modifier = modifier
-            .width(155.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .width(168.dp)
+            .clip(RoundedCornerShape(6.dp))
             .clickable { onClick() }
-            .padding(4.dp)
+            .padding(2.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(147.dp)
-                .shadow(8.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.35f))
-                .clip(RoundedCornerShape(12.dp))
+                .size(164.dp)
+                .shadow(4.dp, RoundedCornerShape(6.dp), spotColor = Color.Black.copy(alpha = 0.35f))
+                .clip(RoundedCornerShape(6.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             if (!item.coverUrl.isNullOrEmpty()) {
@@ -85,7 +85,7 @@ fun SimpSquareCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = item.name,

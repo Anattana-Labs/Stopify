@@ -72,8 +72,8 @@ fun SimpHomeScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             // Spotify-style top row: profile avatar on left (opens Settings), then filter pills inline
             item {
@@ -188,7 +188,7 @@ fun SimpHomeScreen(
             // Recently Played horizontal shelf (when more than 2 tracks exist)
             if (recentlyPlayed.size > 2) {
                 item {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -203,34 +203,34 @@ fun SimpHomeScreen(
                             Text(
                                 text = "${recentlyPlayed.size} tracks",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.6f)
+                                color = Color.White.copy(alpha = 0.65f)
                             )
                         }
 
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             contentPadding = PaddingValues(horizontal = 2.dp)
                         ) {
                             items(recentlyPlayed) { rTrack ->
                                 Column(
                                     modifier = Modifier
-                                        .width(140.dp)
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .width(168.dp)
+                                        .clip(RoundedCornerShape(6.dp))
                                         .clickable { onPlayTrack(rTrack) }
-                                        .padding(4.dp)
-                                ) {
+                                        .padding(2.dp)
+                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(132.dp)
-                                            .shadow(8.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.45f))
-                                            .clip(RoundedCornerShape(12.dp))
+                                            .size(164.dp)
+                                            .shadow(4.dp, RoundedCornerShape(6.dp), spotColor = Color.Black.copy(alpha = 0.45f))
+                                            .clip(RoundedCornerShape(6.dp))
                                             .background(Color(0xFF242424))
                                             .border(
                                                 0.75.dp,
                                                 Brush.verticalGradient(
                                                     listOf(Color.White.copy(0.2f), Color.White.copy(0.05f))
                                                 ),
-                                                RoundedCornerShape(12.dp)
+                                                RoundedCornerShape(6.dp)
                                             )
                                     ) {
                                         if (!rTrack.coverUrl.isNullOrEmpty()) {
@@ -327,7 +327,7 @@ fun SimpHomeScreen(
                     val isArtistSection = section.title.contains("Artist", ignoreCase = true) ||
                             (section.items.isNotEmpty() && section.items.all { it.type == SpotifyItemType.ARTIST || it.uri.contains("artist") })
 
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
                             text = section.title,
                             style = MaterialTheme.typography.titleLarge,
@@ -336,7 +336,7 @@ fun SimpHomeScreen(
                         )
 
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             contentPadding = PaddingValues(horizontal = 2.dp)
                         ) {
                             items(section.items) { item ->
