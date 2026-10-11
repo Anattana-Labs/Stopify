@@ -775,6 +775,78 @@ class SpotifyWebClient {
                 // Skip
             }
 
+            // 7. Spotify Web Player / Melody Batch Telemetry (jssdk_playback_start & jssdk_connect_command)
+            // This is the exact pipeline Spotify Web uses to record playback sessions into account history!
+            try {
+                val melodyEndpoints = listOf(
+                    "https://gae2-spclient.spotify.com/melody/v1/msg/batch",
+                    "https://spclient.wg.spotify.com/melody/v1/msg/batch"
+                )
+                val playbackId = UUID.randomUUID().toString().replace("-", "")
+                val sessionId = System.currentTimeMillis().toString()
+
+                val melodyPayload = JSONObject().apply {
+                    put("messages", JSONArray().apply {
+                        // Playback Start Event
+                        put(JSONObject().apply {
+                            put("type", "jssdk_playback_start")
+                            put("message", JSONObject().apply {
+                                put("play_track", track.uri)
+                                put("playback_id", playbackId)
+                                put("session_id", sessionId)
+                                put("ms_start_position", positionMs)
+                                put("initially_paused", false)
+                                put("client_id", "")
+                                put("correlation_id", "")
+                                put("feature_identifier", "")
+                            })
+                        })
+                        // Connect Command Success Event
+                        put(JSONObject().apply {
+                            put("type", "jssdk_connect_command")
+                            put("message", JSONObject().apply {
+                                put("command_id", playbackId)
+                                put("command_type", "play")
+                                put("target_device_brand", "spotify")
+                                put("target_device_model", "web_player")
+                                put("target_device_id", currentDeviceId)
+                                put("result", "success")
+                                put("http_status_code", 200)
+                            })
+                        })
+                    })
+                    put("sdk_id", "harmony:4.80.0")
+                    put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
+                    put("client_version", "0.0.0")
+                }
+
+                for (melodyUrlStr in melodyEndpoints) {
+                    try {
+                        val mUrl = URL(melodyUrlStr)
+                        val mConn = (mUrl.openConnection() as HttpURLConnection).apply {
+                            requestMethod = "POST"
+                            doOutput = true
+                            connectTimeout = 5000
+                            readTimeout = 5000
+                            setRequestProperty("authorization", "Bearer $token")
+                            setRequestProperty("client-token", clientToken)
+                            setRequestProperty("content-type", "text/plain;charset=UTF-8")
+                            setRequestProperty("referer", "https://open.spotify.com/")
+                            setRequestProperty("origin", "https://open.spotify.com")
+                            setRequestProperty("user-agent", USER_AGENT)
+                        }
+                        OutputStreamWriter(mConn.outputStream).use { it.write(melodyPayload.toString()) }
+                        val mc = mConn.responseCode
+                        mConn.disconnect()
+                        Log.d(TAG, "melody batch ($melodyUrlStr) playback start status: $mc")
+                    } catch (ex: Exception) {
+                        Log.w(TAG, "Error posting melody batch to $melodyUrlStr", ex)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error creating melody playback batch", e)
+            }
+
             Result.success(true)
         } catch (e: Exception) {
             Log.w(TAG, "Failed reporting track to Spotify history API", e)
