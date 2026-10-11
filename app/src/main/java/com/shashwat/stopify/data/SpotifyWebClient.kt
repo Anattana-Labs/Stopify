@@ -774,30 +774,7 @@ class SpotifyWebClient {
                 }
                 historyManager.mergeRemoteHistory(list, prefs)
             } else if (responseCode == 429) {
-                // Rate limited on REST API: Extract recently played / jump back in tracks directly from the live GQL Home feed
-                try {
-                    val homeRes = fetchHomeSections()
-                    if (homeRes.isSuccess) {
-                        val homeData = homeRes.getOrThrow()
-                        Log.d(TAG, "Home sections for recents: ${homeData.sections.map { it.title }}")
-                        val recentSection = homeData.sections.firstOrNull { 
-                            val t = it.title.lowercase()
-                            t.contains("recently") || t.contains("jump back") || t.contains("recent") || t.contains("played") || t.contains("mix")
-                        } ?: homeData.sections.firstOrNull()
-
-                        recentSection?.items?.forEach { item ->
-                            if (list.none { it.uri == item.uri }) {
-                                list.add(item.toTrack())
-                            }
-                        }
-                        if (list.isNotEmpty()) {
-                            historyManager.mergeRemoteHistory(list, prefs)
-                            Log.d(TAG, "Extracted ${list.size} recently played items from Home GQL feed section '${recentSection?.title}'")
-                        }
-                    }
-                } catch (he: Exception) {
-                    Log.w(TAG, "Failed extracting recents from Home fallback", he)
-                }
+                Log.w(TAG, "Spotify recently-played rate limited (429), relying strictly on local history")
             }
             Log.d(TAG, "Fetched ${list.size} tracks for recently played (online + local)")
         } catch (e: Exception) {

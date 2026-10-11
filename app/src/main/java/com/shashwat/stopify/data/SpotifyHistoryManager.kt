@@ -15,11 +15,55 @@ class SpotifyHistoryManager {
         get() = synchronized(_playbackHistory) { _playbackHistory.toList() }
 
     fun loadHistoryFromPrefs(prefs: android.content.SharedPreferences) {
-        // Disabled: do not load history from local preferences; fetch live from Spotify
+        val jsonStr = prefs.getString("local_playback_history_v2", null) ?: return
+        try {
+            val arr = JSONArray(jsonStr)
+            val list = mutableListOf<SpotifyTrack>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    SpotifyTrack(
+                        id = obj.getString("id"),
+                        uri = obj.getString("uri"),
+                        name = obj.getString("name"),
+                        artist = obj.getString("artist"),
+                        album = obj.optString("album", ""),
+                        coverUrl = obj.optString("coverUrl").takeIf { it.isNotEmpty() },
+                        durationMs = obj.optLong("durationMs", 0L),
+                        albumUri = obj.optString("albumUri").takeIf { it.isNotEmpty() }
+                    )
+                )
+            }
+            synchronized(_playbackHistory) {
+                _playbackHistory.clear()
+                _playbackHistory.addAll(list)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error loading history from prefs", e)
+        }
     }
 
     fun saveHistoryToPrefs(prefs: android.content.SharedPreferences) {
-        // Disabled: do not store history locally in SharedPreferences; sync live with Spotify
+        try {
+            val arr = JSONArray()
+            val currentList = playbackHistory
+            for (track in currentList.take(50)) {
+                val obj = JSONObject().apply {
+                    put("id", track.id)
+                    put("uri", track.uri)
+                    put("name", track.name)
+                    put("artist", track.artist)
+                    put("album", track.album)
+                    put("coverUrl", track.coverUrl ?: "")
+                    put("durationMs", track.durationMs)
+                    put("albumUri", track.albumUri ?: "")
+                }
+                arr.put(obj)
+            }
+            prefs.edit().putString("local_playback_history_v2", arr.toString()).apply()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error saving history to prefs", e)
+        }
     }
 
     fun addLocalHistoryTrack(track: SpotifyTrack, prefs: android.content.SharedPreferences? = null) {
