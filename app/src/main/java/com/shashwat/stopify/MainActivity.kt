@@ -19,6 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.palette.graphics.Palette
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -129,6 +134,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            val isSessionLoading by SpotifyTokenManager.isRefreshingState.collectAsState()
+
             StopifyTheme(
                 themeMode = currentThemeMode,
                 seedColor = artworkSeedColor
@@ -148,6 +155,68 @@ class MainActivity : ComponentActivity() {
                         },
                         prefs = prefs
                     )
+
+                    // Full-screen non-dismissible loading overlay blocking all touch interactions
+                    AnimatedVisibility(
+                        visible = isSessionLoading,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.78f))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = { /* Intercept all touches */ }
+                                )
+                                .pointerInput(Unit) {
+                                    // Consume all raw pointer input events to prevent underlying clicks
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+                                tonalElevation = 8.dp,
+                                shadowElevation = 12.dp,
+                                modifier = Modifier.padding(32.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 28.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        strokeWidth = 3.5.dp,
+                                        modifier = Modifier.size(46.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                    Text(
+                                        text = "Connecting Session...",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Refreshing Spotify session keys and authorization",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

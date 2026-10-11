@@ -12,6 +12,9 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -27,6 +30,9 @@ object SpotifyTokenManager {
 
     @Volatile
     private var isRefreshing = false
+
+    private val _isRefreshingState = MutableStateFlow(false)
+    val isRefreshingState: StateFlow<Boolean> = _isRefreshingState.asStateFlow()
 
     private val pendingCallbacks = mutableListOf<(String?) -> Unit>()
 
@@ -47,6 +53,7 @@ object SpotifyTokenManager {
             }
 
             isRefreshing = true
+            _isRefreshingState.value = true
             val appContext = context.applicationContext
             val prefs = appContext.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
 
@@ -163,6 +170,7 @@ object SpotifyTokenManager {
                 if (isRefreshing) {
                     Log.w(TAG, "Background token refresh timed out")
                     isRefreshing = false
+                    _isRefreshingState.value = false
                     val callbacks = ArrayList(pendingCallbacks)
                     pendingCallbacks.clear()
                     callbacks.forEach { it(null) }
@@ -176,6 +184,7 @@ object SpotifyTokenManager {
     private fun notifyTokenFound(context: Context, client: SpotifyWebClient, token: String) {
         if (!isRefreshing && client.customAccessToken == token) return
         isRefreshing = false
+        _isRefreshingState.value = false
 
         client.setAccessToken(token)
         val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
