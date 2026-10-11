@@ -62,10 +62,10 @@ class MainActivity : ComponentActivity() {
         val savedAccessToken = prefs.getString("spotify_access_token", null)
         if (!savedAccessToken.isNullOrEmpty()) {
             spotifyClient.setAccessToken(savedAccessToken)
-        } else {
-            // Background autogenerate token on startup
-            SpotifyTokenManager.refreshAccessTokenInBackground(this, spotifyClient)
         }
+        
+        // Always trigger automatic token and cookie refresh in background webview on app open
+        SpotifyTokenManager.refreshAccessTokenInBackground(this, spotifyClient)
 
         // Load persisted playback history from SharedPreferences
         spotifyClient.loadHistoryFromPrefs(prefs)

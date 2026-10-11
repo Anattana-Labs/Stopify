@@ -102,9 +102,10 @@ object SpotifyTokenManager {
 
                     val isApiEndpoint = reqUrl.contains("api-partner.spotify.com") ||
                             reqUrl.contains("spclient.spotify.com") ||
-                            reqUrl.contains("gae2-spclient.spotify.com")
+                            reqUrl.contains("gae2-spclient.spotify.com") ||
+                            reqUrl.contains("open.spotify.com")
 
-                    if (isApiEndpoint && headers != null) {
+                    if (headers != null) {
                         val auth = headers["authorization"] ?: headers["Authorization"]
                         if (auth != null && auth.startsWith("Bearer BQ")) {
                             val token = auth.removePrefix("Bearer ").trim()
@@ -126,7 +127,16 @@ object SpotifyTokenManager {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    if (url != null && url.contains("open.spotify.com")) {
+                    
+                    // Capture live cookies from open.spotify.com and accounts.spotify.com
+                    val currentCookies = cookieManager.getCookie("https://open.spotify.com") ?: ""
+                    if (currentCookies.contains("sp_dc")) {
+                        Log.d(TAG, "Captured updated session cookies from WebView")
+                        prefs.edit().putString("spotify_cookies", currentCookies).apply()
+                        client.updateCookies(currentCookies)
+                    }
+
+                    if (url != null && url.contains("spotify.com")) {
                         view?.evaluateJavascript(
                             """
                             (function() {
@@ -134,7 +144,7 @@ object SpotifyTokenManager {
                                     fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player')
                                         .then(function(r) { return r.json(); })
                                         .then(function(d) {
-                                            if (d && d.accessToken && d.isAnonymous === false) {
+                                            if (d && d.accessToken) {
                                                 window.StopifyBridge.onToken(d.accessToken);
                                             }
                                         })
