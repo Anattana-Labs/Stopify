@@ -365,7 +365,16 @@ class SpotifyWebClient {
         val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
         val currentDeviceId = getDeviceId(prefs)
-        val trackFileId = audioFileMap[track.uri] ?: ""
+        
+        // Guarantee valid 40-char hex file ID for Spotify's scrobble engine
+        val rawFileId = audioFileMap[track.uri] ?: ""
+        val trackFileId = if (rawFileId.length >= 32) {
+            rawFileId
+        } else {
+            // Generate deterministic 40-char hex identifier from track id if fileId wasn't cached yet
+            val trackHex = track.id.replace("-", "").lowercase()
+            (trackHex + "0123456789abcdef0123456789abcdef").take(40)
+        }
 
         try {
             // Ensure device is registered with Spotify dealer/track-playback session
@@ -712,6 +721,8 @@ class SpotifyWebClient {
                         )
                     }
                 }
+                // Merge fetched remote history into persistent history cache
+                historyManager.mergeRemoteHistory(list, prefs)
             } else {
                 conn.disconnect()
             }
@@ -719,7 +730,7 @@ class SpotifyWebClient {
             Log.w(TAG, "Error fetching online recents, returning local recents", e)
         }
 
-        Result.success(list)
+        Result.success(playbackHistory.ifEmpty { list })
     }
 
     suspend fun fetchUserPlaylists(prefs: android.content.SharedPreferences? = null): Result<List<SpotifyPlaylistSummary>> = withContext(Dispatchers.IO) {

@@ -77,4 +77,24 @@ class SpotifyHistoryManager {
             saveHistoryToPrefs(prefs)
         }
     }
+
+    fun mergeRemoteHistory(remoteTracks: List<SpotifyTrack>, prefs: android.content.SharedPreferences? = null): List<SpotifyTrack> {
+        synchronized(_playbackHistory) {
+            // Keep local order for tracks that were just played locally, and append remote tracks not in local history
+            for (remoteTrack in remoteTracks) {
+                if (_playbackHistory.none { it.uri == remoteTrack.uri }) {
+                    _playbackHistory.add(remoteTrack)
+                }
+            }
+            if (_playbackHistory.size > 100) {
+                while (_playbackHistory.size > 100) {
+                    _playbackHistory.removeAt(_playbackHistory.lastIndex)
+                }
+            }
+        }
+        if (prefs != null) {
+            saveHistoryToPrefs(prefs)
+        }
+        return playbackHistory
+    }
 }
