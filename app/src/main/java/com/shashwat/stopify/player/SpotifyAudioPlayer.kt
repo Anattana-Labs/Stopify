@@ -10,6 +10,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
@@ -110,8 +111,19 @@ class SpotifyAudioPlayer(private val context: Context) {
 
             val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
 
+            val loadControl = DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    15_000, // minBufferMs
+                    50_000, // maxBufferMs
+                    500,    // bufferForPlaybackMs (instant stream start!)
+                    1_000   // bufferForPlaybackAfterRebufferMs
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+
             val player = ExoPlayer.Builder(context)
                 .setMediaSourceFactory(mediaSourceFactory)
+                .setLoadControl(loadControl)
                 .build()
 
             player.addListener(object : Player.Listener {

@@ -3510,8 +3510,41 @@ class SpotifyWebClient {
                 conn.disconnect()
                 Log.d(TAG, "Triggered connect-state play command for $trackUri. Code: $code")
 
-                // Await manifest notification from Dealer WebSocket (up to 5s)
-                fileId = withTimeoutOrNull(5000L) {
+                if (code == 410 || code == 404) {
+                    // Session or device expired on Dealer; force re-registration and retry command once
+                    Log.w(TAG, "Device expired (HTTP $code). Re-registering with Dealer and retrying play command...")
+                    isDeviceRegistered = false
+                    dealerConnectionId = null
+                    activeWebSocket?.close(1000, "Reconnecting")
+                    activeWebSocket = null
+                    connectionIdDeferred = CompletableDeferred()
+                    if (ensureDeviceRegistered(token)) {
+                        try {
+                            val retryConn = (playUrl.openConnection() as HttpURLConnection).apply {
+                                requestMethod = "POST"
+                                doOutput = true
+                                connectTimeout = 8000
+                                readTimeout = 8000
+                                setRequestProperty("authorization", "Bearer $token")
+                                setRequestProperty("client-token", customClientToken ?: CLIENT_TOKEN)
+                                setRequestProperty("content-type", "application/json;charset=UTF-8")
+                                setRequestProperty("app-platform", APP_PLATFORM)
+                                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                                setRequestProperty("origin", "https://open.spotify.com")
+                                setRequestProperty("referer", "https://open.spotify.com/")
+                            }
+                            OutputStreamWriter(retryConn.outputStream).use { it.write(playPayload.toString()) }
+                            val retryCode = retryConn.responseCode
+                            retryConn.disconnect()
+                            Log.d(TAG, "Retry connect-state play command for $trackUri. Code: $retryCode")
+                        } catch (re: Exception) {
+                            Log.w(TAG, "Error retrying play command", re)
+                        }
+                    }
+                }
+
+                // Await manifest notification from Dealer WebSocket
+                fileId = withTimeoutOrNull(4000L) {
                     deferred.await()
                 } ?: audioFileMap[trackUri]
 
