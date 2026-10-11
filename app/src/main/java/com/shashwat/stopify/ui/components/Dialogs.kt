@@ -476,6 +476,336 @@ fun AddToPlaylistDialog(
 }
 
 @Composable
+fun CreatePlaylistDialog(
+    client: SpotifyWebClient,
+    prefs: SharedPreferences?,
+    onDismiss: () -> Unit,
+    onPlaylistCreated: (SpotifyPlaylistSummary) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var isCreating by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Create Playlist",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Playlist Name") },
+                    placeholder = { Text("e.g. My Favorites, Roadtrip") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description (Optional)") },
+                    placeholder = { Text("Give your playlist a vibe") },
+                    maxLines = 3,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Button(
+                        onClick = {
+                            if (name.isNotBlank() && !isCreating) {
+                                isCreating = true
+                                coroutineScope.launch {
+                                    val res = client.createPlaylist(name.trim(), description.trim(), prefs)
+                                    if (res.isSuccess) {
+                                        onPlaylistCreated(res.getOrThrow())
+                                        onDismiss()
+                                    }
+                                    isCreating = false
+                                }
+                            }
+                        },
+                        enabled = name.isNotBlank() && !isCreating,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = if (isCreating) "Creating..." else "Create Playlist",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SearchAndAddTracksDialog(
+    playlistId: String,
+    playlistName: String,
+    client: SpotifyWebClient,
+    prefs: SharedPreferences?,
+    onDismiss: () -> Unit,
+    onTrackAdded: (SpotifyTrack) -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<SpotifyTrack>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+    val addedTrackUris = remember { mutableStateListOf<String>() }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun search(q: String) {
+        if (q.isBlank()) {
+            results = emptyList()
+            return
+        }
+        isSearching = true
+        coroutineScope.launch {
+            val res = client.searchTracks(q)
+            if (res.isSuccess) {
+                results = res.getOrThrow()
+            }
+            isSearching = false
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .fillMaxHeight(0.82f)
+                .padding(vertical = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Add Songs",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "To $playlistName",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = {
+                        query = it
+                        if (it.length >= 2) search(it)
+                    },
+                    placeholder = { Text("Search songs or artists...") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Search, contentDescription = null)
+                    },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = ""; results = emptyList() }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Clear")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (isSearching) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                } else if (results.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (query.isEmpty()) "Type to find songs to add" else "No matching songs found",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(results.size) { idx ->
+                            val track = results[idx]
+                            val isAdded = addedTrackUris.contains(track.uri)
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (!track.coverUrl.isNullOrEmpty()) {
+                                            AsyncImage(
+                                                model = track.coverUrl,
+                                                contentDescription = track.name,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Icon(
+                                                Icons.Rounded.MusicNote,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = track.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = track.artist,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            if (!isAdded) {
+                                                coroutineScope.launch {
+                                                    client.addTrackToPlaylist(playlistId, track, prefs)
+                                                    addedTrackUris.add(track.uri)
+                                                    onTrackAdded(track)
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isAdded) Icons.Rounded.Check else Icons.Rounded.Add,
+                                            contentDescription = if (isAdded) "Added" else "Add",
+                                            tint = if (isAdded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun SpotifyCookieDialog(
     client: SpotifyWebClient,
     onDismiss: () -> Unit,
@@ -757,17 +1087,16 @@ fun SpotifyWebView(
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
 
-                if (initialCookies.isNotEmpty()) {
-                    for (pair in initialCookies.split(";")) {
-                        val p = pair.trim()
-                        if (p.isNotEmpty()) {
-                            cookieManager.setCookie("https://open.spotify.com", p)
-                            cookieManager.setCookie("https://accounts.spotify.com", p)
-                            cookieManager.setCookie(".spotify.com", p)
-                        }
+                val cookiesToSeed = initialCookies.ifEmpty { "sp_dc=${SpotifyWebClient.SP_DC}; sp_key=${SpotifyWebClient.SP_KEY}; sp_t=${SpotifyWebClient.SP_T}" }
+                for (pair in cookiesToSeed.split(";")) {
+                    val p = pair.trim()
+                    if (p.isNotEmpty()) {
+                        cookieManager.setCookie("https://open.spotify.com", p)
+                        cookieManager.setCookie("https://accounts.spotify.com", p)
+                        cookieManager.setCookie(".spotify.com", p)
                     }
-                    cookieManager.flush()
                 }
+                cookieManager.flush()
 
                 class StopifyBridge {
                     @android.webkit.JavascriptInterface

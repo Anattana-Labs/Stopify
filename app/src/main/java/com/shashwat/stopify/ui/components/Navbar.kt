@@ -3,9 +3,10 @@ package com.shashwat.stopify.ui.components
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
@@ -17,10 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.drawBackdrop
@@ -31,14 +32,14 @@ import com.kyant.backdrop.effects.vibrancy
 
 enum class NavigationTab(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Rounded.Home),
-    LIBRARY("Library", Icons.Rounded.LibraryMusic),
-    SEARCH("Search", Icons.Rounded.Search)
+    SEARCH("Search", Icons.Rounded.Search),
+    LIBRARY("Your Library", Icons.Rounded.LibraryMusic)
 }
 
-private val FlatTabWidth = 96.dp
-private val FlatBarHeight = 64.dp
-private val FlatIndicatorHeight = 54.dp
-private val CapsuleInset = 5.dp
+private val TabWidth = 98.dp
+private val BarHeight = 64.dp
+private val IndicatorHeight = 52.dp
+private val CapsuleInset = 6.dp
 
 @Composable
 fun SimpBottomNavigationBar(
@@ -47,9 +48,17 @@ fun SimpBottomNavigationBar(
     modifier: Modifier = Modifier,
     backdrop: PlatformBackdrop? = null
 ) {
-    val barTabs = listOf(NavigationTab.HOME, NavigationTab.LIBRARY)
-    val isSearchSelected = currentTab == NavigationTab.SEARCH
-    val selectedIndex = barTabs.indexOf(currentTab)
+    val barTabs = remember { listOf(NavigationTab.HOME, NavigationTab.SEARCH, NavigationTab.LIBRARY) }
+    val selectedIndex = barTabs.indexOf(currentTab).coerceAtLeast(0)
+    val tabCornerShape = RoundedCornerShape(BarHeight / 2)
+
+    val totalWidth = TabWidth * barTabs.size + CapsuleInset * 2
+
+    val indicatorOffset by animateDpAsState(
+        targetValue = TabWidth * selectedIndex.toFloat(),
+        animationSpec = spring(stiffness = 500f, dampingRatio = 0.82f),
+        label = "navIndicatorOffset"
+    )
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -58,49 +67,46 @@ fun SimpBottomNavigationBar(
             .fillMaxWidth()
             .windowInsetsPadding(NavigationBarDefaults.windowInsets)
             .padding(horizontal = 16.dp)
-            .padding(top = 4.dp, bottom = 8.dp)
+            .padding(top = 4.dp, bottom = 10.dp)
     ) {
-        // FlatTabBar Capsule
-        val tabWidth = FlatTabWidth
-        val fullWidth = tabWidth * barTabs.size + CapsuleInset * 2
-        val indicatorOffset by animateDpAsState(
-            targetValue = if (selectedIndex >= 0) {
-                tabWidth * selectedIndex.toFloat()
-            } else {
-                0.dp
-            },
-            animationSpec = spring(),
-            label = "flatBarIndicator"
-        )
-
         Box(
             modifier = Modifier
-                .height(FlatBarHeight)
-                .width(fullWidth)
-                .shadow(12.dp, RoundedCornerShape(FlatBarHeight / 2), spotColor = Color.Black.copy(alpha = 0.3f))
+                .height(BarHeight)
+                .width(totalWidth)
+                .shadow(20.dp, tabCornerShape, spotColor = Color.Black.copy(alpha = 0.55f))
+                .border(
+                    width = 0.75.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.28f),
+                            Color.White.copy(alpha = 0.08f)
+                        )
+                    ),
+                    shape = tabCornerShape
+                )
                 .then(
                     if (backdrop != null) {
                         Modifier.drawBackdrop(
                             backdrop = backdrop,
-                            shape = { RoundedCornerShape(FlatBarHeight / 2) },
+                            shape = { tabCornerShape },
                             effects = {
                                 vibrancy()
                                 colorControls(
-                                    brightness = 0.05f,
-                                    contrast = 1f,
-                                    saturation = 1.4f
+                                    brightness = 0.04f,
+                                    contrast = 1.05f,
+                                    saturation = 1.45f
                                 )
-                                blur(12f.dp.toPx())
+                                blur(16f.dp.toPx())
                                 lens(size.minDimension / 4f, size.minDimension / 2f, false)
                             },
                             onDrawSurface = {
-                                drawRect(Color.Black.copy(alpha = 0.45f))
+                                drawRect(Color(0xFF0F1210).copy(alpha = 0.65f))
                             }
                         )
                     } else {
                         Modifier
-                            .clip(RoundedCornerShape(FlatBarHeight / 2))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f))
+                            .clip(tabCornerShape)
+                            .background(Color(0xFF141715).copy(alpha = 0.94f))
                     }
                 ),
             contentAlignment = Alignment.CenterStart
@@ -111,53 +117,57 @@ fun SimpBottomNavigationBar(
                     .padding(horizontal = CapsuleInset),
                 contentAlignment = Alignment.CenterStart
             ) {
-                // Sliding indicator
-                if (selectedIndex >= 0) {
-                    Box(
-                        modifier = Modifier
-                            .offset(x = indicatorOffset)
-                            .size(width = tabWidth, height = FlatIndicatorHeight)
-                            .clip(RoundedCornerShape(FlatIndicatorHeight / 2))
-                            .background(
-                                if (backdrop != null) {
-                                    Color.White.copy(alpha = 0.15f)
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainerHighest
-                                }
+                // Sliding indicator pill with subtle liquid glow
+                Box(
+                    modifier = Modifier
+                        .offset(x = indicatorOffset)
+                        .size(width = TabWidth, height = IndicatorHeight)
+                        .clip(RoundedCornerShape(IndicatorHeight / 2))
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.16f),
+                                    Color.White.copy(alpha = 0.06f)
+                                )
                             )
-                    )
-                }
+                        )
+                        .border(
+                            0.5.dp,
+                            Color.White.copy(alpha = 0.18f),
+                            RoundedCornerShape(IndicatorHeight / 2)
+                        )
+                )
 
+                // Tab items
                 Row(modifier = Modifier.fillMaxSize()) {
-                    barTabs.forEachIndexed { index, tab ->
+                    barTabs.forEach { tab ->
                         val isSelected = currentTab == tab
-                        val contentColor = if (isSelected) {
-                            if (backdrop != null) Color.White else MaterialTheme.colorScheme.primary
-                        } else {
-                            if (backdrop != null) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                        val interactionSource = remember { MutableInteractionSource() }
 
                         Column(
                             modifier = Modifier
-                                .width(tabWidth)
+                                .width(TabWidth)
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(FlatIndicatorHeight / 2))
-                                .clickable { onTabSelect(tab) },
+                                .clip(RoundedCornerShape(IndicatorHeight / 2))
+                                .clickable(
+                                    interactionSource = interactionSource,
+                                    indication = null
+                                ) { onTabSelect(tab) },
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
                             Icon(
                                 imageVector = tab.icon,
                                 contentDescription = tab.title,
-                                tint = contentColor,
-                                modifier = Modifier.size(24.dp)
+                                tint = if (isSelected) Color(0xFF1ED760) else Color.White.copy(alpha = 0.65f),
+                                modifier = Modifier.size(23.dp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = tab.title,
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = contentColor,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.65f),
                                 fontSize = 11.sp,
                                 maxLines = 1
                             )
@@ -165,60 +175,6 @@ fun SimpBottomNavigationBar(
                     }
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.size(12.dp))
-
-        // Circular Search Button
-        Box(
-            modifier = Modifier
-                .size(FlatBarHeight)
-                .shadow(12.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.3f))
-                .then(
-                    if (backdrop != null) {
-                        Modifier.drawBackdrop(
-                            backdrop = backdrop,
-                            shape = { CircleShape },
-                            effects = {
-                                vibrancy()
-                                colorControls(
-                                    brightness = 0.05f,
-                                    contrast = 1f,
-                                    saturation = 1.4f
-                                )
-                                blur(12f.dp.toPx())
-                                lens(size.minDimension / 4f, size.minDimension / 2f, false)
-                            },
-                            onDrawSurface = {
-                                val alpha = if (isSearchSelected) 0.6f else 0.45f
-                                drawRect(Color.Black.copy(alpha = alpha))
-                            }
-                        )
-                    } else {
-                        Modifier
-                            .clip(CircleShape)
-                            .background(
-                                if (isSearchSelected) {
-                                    MaterialTheme.colorScheme.surfaceContainerHighest
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f)
-                                }
-                            )
-                    }
-                )
-                .clickable { onTabSelect(NavigationTab.SEARCH) },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = "Search",
-                tint = if (isSearchSelected) {
-                    if (backdrop != null) Color.White else MaterialTheme.colorScheme.primary
-                } else {
-                    if (backdrop != null) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(26.dp)
-            )
         }
     }
 }

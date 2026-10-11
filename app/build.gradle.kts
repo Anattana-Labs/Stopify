@@ -8,7 +8,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.shashwat.stopify"
+        applicationId = "com.aistudio.stopify.app"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -17,7 +17,19 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("debugConfig") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debugConfig")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -32,6 +44,12 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        freeCompilerArgs.add("-Xskip-metadata-version-check")
     }
 }
 

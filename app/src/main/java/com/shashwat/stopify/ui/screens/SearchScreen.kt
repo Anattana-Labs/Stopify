@@ -1,6 +1,8 @@
 package com.shashwat.stopify.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -13,9 +15,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.shashwat.stopify.data.SpotifyItemType
 import com.shashwat.stopify.data.SpotifyMediaItem
 import com.shashwat.stopify.data.SpotifyTrack
@@ -33,6 +39,19 @@ enum class SearchFilter(val label: String) {
     ARTISTS("Artists"),
     PLAYLISTS("Playlists")
 }
+
+data class BrowseCategory(val title: String, val gradientColors: List<Color>)
+
+private val BrowseCategories = listOf(
+    BrowseCategory("Pop", listOf(Color(0xFF8D67AB), Color(0xFFE8115B))),
+    BrowseCategory("Hip-Hop", listOf(Color(0xFFBA5D07), Color(0xFFBC5900))),
+    BrowseCategory("Rock", listOf(Color(0xFFE91429), Color(0xFF8B0000))),
+    BrowseCategory("Indie", listOf(Color(0xFF608108), Color(0xFF388E3C))),
+    BrowseCategory("Chill", listOf(Color(0xFF477D95), Color(0xFF1976D2))),
+    BrowseCategory("Dance / Electronic", listOf(Color(0xFF006450), Color(0xFF1ED760))),
+    BrowseCategory("Workout", listOf(Color(0xFF7358FF), Color(0xFF4A148C))),
+    BrowseCategory("Focus", listOf(Color(0xFF503750), Color(0xFF311B92)))
+)
 
 @Composable
 fun SimpSearchScreen(
@@ -65,7 +84,7 @@ fun SimpSearchScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color(0xFF121212))
             .statusBarsPadding()
     ) {
         Column(
@@ -73,7 +92,16 @@ fun SimpSearchScreen(
                 .fillMaxSize()
                 .padding(horizontal = 20.dp)
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Search",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Search text field
             OutlinedTextField(
@@ -82,12 +110,12 @@ fun SimpSearchScreen(
                     onQueryChange(it)
                     if (it.length >= 2) onSearch(it)
                 },
-                placeholder = { Text("What do you want to play?") },
+                placeholder = { Text("What do you want to listen to?", color = Color.White.copy(alpha = 0.6f)) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = "Search",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = Color.White.copy(alpha = 0.8f)
                     )
                 },
                 trailingIcon = {
@@ -96,58 +124,53 @@ fun SimpSearchScreen(
                             onQueryChange("")
                             focusManager.clearFocus()
                         }) {
-                            Icon(Icons.Rounded.Close, contentDescription = "Clear")
+                            Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = Color.White)
                         }
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    focusedContainerColor = Color(0xFF242424),
+                    unfocusedContainerColor = Color(0xFF1E1E1E),
+                    focusedBorderColor = Color(0xFF1ED760),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Filter Chips Row
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 10.dp)
-            ) {
-                items(SearchFilter.values()) { filter ->
-                    val isSelected = selectedFilter == filter
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { selectedFilter = filter },
-                        label = {
+            // Filter Chips Row (when results available)
+            if (searchResults.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp)
+                ) {
+                    items(SearchFilter.values()) { filter ->
+                        val isSelected = selectedFilter == filter
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isSelected) Color(0xFF1ED760) else Color.White.copy(alpha = 0.08f),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { selectedFilter = filter }
+                        ) {
                             Text(
                                 text = filter.label,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.Black else Color.White,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
                             )
-                        },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = isSelected,
-                            borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                            selectedBorderColor = androidx.compose.ui.graphics.Color.Transparent
-                        )
-                    )
+                        }
+                    }
                 }
+            } else {
+                Spacer(modifier = Modifier.height(10.dp))
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
 
             if (isSearching) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -156,23 +179,79 @@ fun SimpSearchScreen(
                     }
                 }
             } else if (searchResults.isEmpty()) {
-                Box(
+                // Spotify "Browse all" Categories
+                LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    contentPadding = PaddingValues(bottom = 120.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                            modifier = Modifier.size(54.dp)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
+                    item {
                         Text(
-                            text = if (searchQuery.isBlank()) "Search for songs, artists, and albums" else "No results found for \"$searchQuery\"",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "Browse all",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(top = 8.dp)
                         )
+                    }
+
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            for (i in BrowseCategories.indices step 2) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    val cat1 = BrowseCategories[i]
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(96.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Brush.linearGradient(cat1.gradientColors))
+                                            .clickable {
+                                                onQueryChange(cat1.title)
+                                                onSearch(cat1.title)
+                                            }
+                                            .padding(14.dp),
+                                        contentAlignment = Alignment.TopStart
+                                    ) {
+                                        Text(
+                                            text = cat1.title,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+
+                                    if (i + 1 < BrowseCategories.size) {
+                                        val cat2 = BrowseCategories[i + 1]
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(96.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(Brush.linearGradient(cat2.gradientColors))
+                                                .clickable {
+                                                    onQueryChange(cat2.title)
+                                                    onSearch(cat2.title)
+                                                }
+                                                .padding(14.dp),
+                                            contentAlignment = Alignment.TopStart
+                                        ) {
+                                            Text(
+                                                text = cat2.title,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    } else {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             } else {
@@ -188,7 +267,7 @@ fun SimpSearchScreen(
                                 text = "Artists",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color.White
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -209,7 +288,7 @@ fun SimpSearchScreen(
                                 text = "Albums",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color.White
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -230,7 +309,7 @@ fun SimpSearchScreen(
                                 text = "Playlists",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color.White
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -251,12 +330,13 @@ fun SimpSearchScreen(
                                 text = "Songs",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color.White
                             )
+                            Spacer(modifier = Modifier.height(10.dp))
                         }
 
-                        items(songs) { song ->
-                            val track = song.toTrack()
+                        items(songs) { songItem ->
+                            val track = songItem.toTrack()
                             val isCurrent = playbackState.currentTrack?.uri == track.uri
                             SimpTrackItem(
                                 track = track,
@@ -271,6 +351,7 @@ fun SimpSearchScreen(
             }
         }
 
+        // 3-dot Options Menu
         selectedOptionTrack?.let { optTrack ->
             TrackOptionsMenu(
                 expanded = true,

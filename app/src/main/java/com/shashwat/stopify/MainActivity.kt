@@ -188,6 +188,7 @@ fun SimpMusicApp(
     var viewingSettings by remember { mutableStateOf(false) }
     var trackToAddToPlaylist by remember { mutableStateOf<SpotifyTrack?>(null) }
     var favoriteTrackIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var userProfile by remember { mutableStateOf<SpotifyUserProfile?>(null) }
 
     // Initialize playback history and favorites
     LaunchedEffect(Unit) {
@@ -199,6 +200,23 @@ fun SimpMusicApp(
         val initialHistory = client.playbackHistory
         playbackHistory.clear()
         playbackHistory.addAll(initialHistory)
+
+        // Proactively fetch account profile and remote recents
+        coroutineScope.launch {
+            val uRes = client.fetchCurrentUserProfile(prefs)
+            if (uRes.isSuccess) {
+                userProfile = uRes.getOrNull()
+            }
+        }
+        coroutineScope.launch {
+            val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
+            if (recentsRes.isSuccess) {
+                val list = recentsRes.getOrThrow()
+                val merged = (playbackHistory + list).distinctBy { it.uri }
+                playbackHistory.clear()
+                playbackHistory.addAll(merged)
+            }
+        }
     }
 
     val onToggleFavoriteLambda: (SpotifyTrack) -> Unit = { track ->
@@ -240,9 +258,8 @@ fun SimpMusicApp(
 
                 if (addToHistory) {
                     client.addLocalHistoryTrack(track, prefs)
-                    if (playbackHistory.none { it.uri == track.uri }) {
-                        playbackHistory.add(0, track)
-                    }
+                    playbackHistory.removeAll { it.uri == track.uri }
+                    playbackHistory.add(0, track)
                     coroutineScope.launch {
                         client.reportPlaybackToApi(track, 0L, prefs)
                     }
@@ -410,7 +427,10 @@ fun SimpMusicApp(
                     isLoading = isHomeLoading,
                     onRefresh = { loadHome() },
                     onOpenSettings = { viewingSettings = true },
-                    onMediaItemClick = { playMediaItem(it) }
+                    onMediaItemClick = { playMediaItem(it) },
+                    recentlyPlayed = playbackHistory,
+                    onPlayTrack = { playTrackInternal(it) },
+                    userProfile = userProfile
                 )
             }
             NavigationTab.SEARCH -> {
@@ -482,7 +502,8 @@ fun SimpMusicApp(
                         viewingArtistName = artistName
                     },
                     onToggleFavorite = onToggleFavoriteLambda,
-                    isFavorite = { favoriteTrackIds.contains(it.id) }
+                    isFavorite = { favoriteTrackIds.contains(it.id) },
+                    userProfile = userProfile
                 )
             }
         }
@@ -613,7 +634,8 @@ fun SimpMusicApp(
                     viewingArtistName = artistName
                 },
                 onToggleFavorite = onToggleFavoriteLambda,
-                isFavorite = { favoriteTrackIds.contains(it.id) }
+                isFavorite = { favoriteTrackIds.contains(it.id) },
+                userProfile = userProfile
             )
         }
 
@@ -639,7 +661,9 @@ fun SimpMusicApp(
                     onNextTrack = { playNextTrack() },
                     onPreviousTrack = { playPreviousTrack() },
                     onSeekTo = { player.seekTo(it) },
-                    onExpand = { showFullPlayer = true }
+                    onExpand = { showFullPlayer = true },
+                    isFavorite = favoriteTrackIds.contains(currentTrack.id),
+                    onToggleFavorite = { onToggleFavoriteLambda(currentTrack) }
                 )
             }
         }

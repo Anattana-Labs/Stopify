@@ -2,6 +2,7 @@ package com.shashwat.stopify.ui.screens
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.shashwat.stopify.data.SpotifyTokenManager
 import com.shashwat.stopify.data.SpotifyTrack
@@ -49,6 +51,7 @@ fun SimpSettingsScreen(
     onToggleFavorite: (SpotifyTrack) -> Unit = {},
     isFavorite: (SpotifyTrack) -> Boolean = { false },
     bottomPadding: Dp = 100.dp,
+    userProfile: com.shashwat.stopify.data.SpotifyUserProfile? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -114,6 +117,98 @@ fun SimpSettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+        }
+
+        // Account Profile Card (Spotify Connected Profile)
+        item {
+            Surface(
+                shape = ShapeExtraLargeIncreased,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 4.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        0.75.dp,
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(
+                                androidx.compose.ui.graphics.Color.White.copy(0.2f),
+                                androidx.compose.ui.graphics.Color.White.copy(0.05f)
+                            )
+                        ),
+                        ShapeExtraLargeIncreased
+                    )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(androidx.compose.ui.graphics.Color(0xFF242424))
+                            .border(1.5.dp, androidx.compose.ui.graphics.Color(0xFF1ED760), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!userProfile?.avatarUrl.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = userProfile!!.avatarUrl,
+                                contentDescription = "Avatar",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = (userProfile?.displayName?.firstOrNull() ?: 'S').uppercase(),
+                                fontWeight = FontWeight.Bold,
+                                color = androidx.compose.ui.graphics.Color(0xFF1ED760),
+                                fontSize = 22.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = userProfile?.displayName ?: "Spotify User",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        userProfile?.email?.let { em ->
+                            Text(
+                                text = em,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = androidx.compose.ui.graphics.Color(0xFF1ED760).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = (userProfile?.product ?: "Spotify Connected").uppercase(),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = androidx.compose.ui.graphics.Color(0xFF1ED760),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onOpenCookieManager,
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Connect", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }
