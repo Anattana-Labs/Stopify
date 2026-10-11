@@ -1,9 +1,13 @@
 package com.shashwat.stopify.player
 
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -14,6 +18,9 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
+import com.shashwat.stopify.MainActivity
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,7 +36,7 @@ data class PlaybackState(
     val error: String? = null
 )
 
-class SpotifyAudioPlayer(private val context: Context) {
+class SpotifyAudioPlayer private constructor(private val appContext: Context) {
 
     companion object {
         private const val TAG = "SpotifyAudioPlayer"
@@ -42,6 +49,15 @@ class SpotifyAudioPlayer(private val context: Context) {
         @Volatile
         var activePlayer: ExoPlayer? = null
             internal set
+
+        @Volatile
+        private var INSTANCE: SpotifyAudioPlayer? = null
+
+        fun getInstance(context: Context): SpotifyAudioPlayer {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: SpotifyAudioPlayer(context.applicationContext).also { INSTANCE = it }
+            }
+        }
     }
 
     private var exoPlayer: ExoPlayer? = null
@@ -52,6 +68,12 @@ class SpotifyAudioPlayer(private val context: Context) {
 
     @Volatile
     var onTrackCompleted: ((SpotifyTrack) -> Unit)? = null
+
+    @Volatile
+    var onSkipToNext: (() -> Unit)? = null
+
+    @Volatile
+    var onSkipToPrevious: (() -> Unit)? = null
 
     fun notifyLoading(track: SpotifyTrack) {
         _playbackState.value = _playbackState.value.copy(
@@ -104,6 +126,7 @@ class SpotifyAudioPlayer(private val context: Context) {
                 .build()
 
             val mediaItem = MediaItem.Builder()
+                .setMediaId(track.id)
                 .setUri(Uri.parse(audioUrl))
                 .setMediaMetadata(mediaMetadata)
                 .setDrmConfiguration(drmConfiguration)
@@ -115,15 +138,22 @@ class SpotifyAudioPlayer(private val context: Context) {
                 .setBufferDurationsMs(
                     15_000, // minBufferMs
                     50_000, // maxBufferMs
-                    500,    // bufferForPlaybackMs (instant stream start!)
+                    500,    // bufferForPlaybackMs
                     1_000   // bufferForPlaybackAfterRebufferMs
                 )
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
-            val player = ExoPlayer.Builder(context)
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .setUsage(C.USAGE_MEDIA)
+                .build()
+
+            val player = ExoPlayer.Builder(appContext)
                 .setMediaSourceFactory(mediaSourceFactory)
                 .setLoadControl(loadControl)
+                .setAudioAttributes(audioAttributes, true)
+                .setHandleAudioBecomingNoisy(true)
                 .build()
 
             player.addListener(object : Player.Listener {
@@ -176,9 +206,56 @@ class SpotifyAudioPlayer(private val context: Context) {
                 }
             })
 
-            // Create Android OS MediaSession
-            val session = MediaSession.Builder(context, player)
+            // Build PendingIntent for clicking notification opens MainActivity
+            val sessionActivityIntent = Intent(appContext, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val sessionActivityPendingIntent = PendingIntent.getActivity(
+                appContext,
+                0,
+                sessionActivityIntent,
+                pendingIntentFlags
+            )
+
+            // Callback to handle notification shade transport actions
+            val sessionCallback = object : MediaSession.Callback {
+                override fun onPlayerCommandRequest(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    playerCommand: Int
+                ): Int {
+                    when (playerCommand) {
+                        Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
+                            onSkipToNext?.invoke()
+                            return androidx.media3.session.SessionResult.RESULT_SUCCESS
+                        }
+                        Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
+                            onSkipToPrevious?.invoke()
+                            return androidx.media3.session.SessionResult.RESULT_SUCCESS
+                        }
+                    }
+                    return super.onPlayerCommandRequest(session, controller, playerCommand)
+                }
+
+                override fun onCustomCommand(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    customCommand: androidx.media3.session.SessionCommand,
+                    args: android.os.Bundle
+                ): ListenableFuture<androidx.media3.session.SessionResult> {
+                    return Futures.immediateFuture(androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_SUCCESS))
+                }
+            }
+
+            val session = MediaSession.Builder(appContext, player)
                 .setId("StopifyMediaSession")
+                .setSessionActivity(sessionActivityPendingIntent)
+                .setCallback(sessionCallback)
                 .build()
 
             mediaSession = session
@@ -186,8 +263,8 @@ class SpotifyAudioPlayer(private val context: Context) {
             activePlayer = player
 
             try {
-                val serviceIntent = Intent(context, PlaybackService::class.java)
-                context.startService(serviceIntent)
+                val serviceIntent = Intent(appContext, PlaybackService::class.java)
+                ContextCompat.startForegroundService(appContext, serviceIntent)
             } catch (e: Exception) {
                 Log.w(TAG, "Could not start PlaybackService", e)
             }

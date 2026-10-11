@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        audioPlayer = SpotifyAudioPlayer(this)
+        audioPlayer = SpotifyAudioPlayer.getInstance(this)
 
         // Restore saved session tokens, cookies and playback history if present
         val prefs = getSharedPreferences("stopify_prefs", MODE_PRIVATE)
@@ -228,7 +228,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        audioPlayer.releasePlayer()
+        if (isFinishing) {
+            audioPlayer.releasePlayer()
+        }
     }
 }
 
@@ -442,8 +444,16 @@ fun SimpMusicApp(
             }
             playNextTrack()
         }
+        player.onSkipToNext = {
+            playNextTrack()
+        }
+        player.onSkipToPrevious = {
+            playPreviousTrack()
+        }
         onDispose {
             player.onTrackCompleted = null
+            player.onSkipToNext = null
+            player.onSkipToPrevious = null
         }
     }
 

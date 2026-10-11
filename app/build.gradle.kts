@@ -42,6 +42,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val localKeystore = file("${rootDir}/debug.keystore")
+            val defaultKeystore = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            if (localKeystore.exists() || defaultKeystore.exists()) {
+                signingConfig = signingConfigs.getByName("debugConfig")
+            }
         }
     }
     compileOptions {
