@@ -114,7 +114,7 @@ fun LoginScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (selectedTab == 0) Color(0xFF1ED760) else Color.Transparent)
+                            .background(if (selectedTab == 0) MaterialTheme.colorScheme.primary else Color.Transparent)
                             .clickable { selectedTab = 0 }
                             .padding(horizontal = 20.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
@@ -123,14 +123,14 @@ fun LoginScreen(
                             text = "Web",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = if (selectedTab == 0) Color.Black else Color.White.copy(alpha = 0.75f)
+                            color = if (selectedTab == 0) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.75f)
                         )
                     }
 
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (selectedTab == 1) Color(0xFF1ED760) else Color.Transparent)
+                            .background(if (selectedTab == 1) MaterialTheme.colorScheme.primary else Color.Transparent)
                             .clickable { selectedTab = 1 }
                             .padding(horizontal = 20.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
@@ -139,7 +139,7 @@ fun LoginScreen(
                             text = "cookies.txt",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = if (selectedTab == 1) Color.Black else Color.White.copy(alpha = 0.75f)
+                            color = if (selectedTab == 1) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.75f)
                         )
                     }
                 }
@@ -275,7 +275,7 @@ fun LoginScreen(
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (hasSpDc) Color(0xFF1ED760).copy(alpha = 0.2f) else Color(0xFF242424)
+                                color = if (hasSpDc) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0xFF242424)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -285,20 +285,20 @@ fun LoginScreen(
                                         modifier = Modifier
                                             .size(6.dp)
                                             .clip(CircleShape)
-                                            .background(if (hasSpDc) Color(0xFF1ED760) else Color.Gray)
+                                            .background(if (hasSpDc) MaterialTheme.colorScheme.primary else Color.Gray)
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(
                                         text = if (hasSpDc) "sp_dc detected" else "sp_dc missing",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (hasSpDc) Color(0xFF1ED760) else Color.Gray
+                                        color = if (hasSpDc) MaterialTheme.colorScheme.primary else Color.Gray
                                     )
                                 }
                             }
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (hasBearer) Color(0xFF1ED760).copy(alpha = 0.2f) else Color(0xFF242424)
+                                color = if (hasBearer) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0xFF242424)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -308,13 +308,13 @@ fun LoginScreen(
                                         modifier = Modifier
                                             .size(6.dp)
                                             .clip(CircleShape)
-                                            .background(if (hasBearer) Color(0xFF1ED760) else Color.Gray)
+                                            .background(if (hasBearer) MaterialTheme.colorScheme.primary else Color.Gray)
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(
                                         text = if (hasBearer) "Bearer Token detected" else "Bearer Token optional",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (hasBearer) Color(0xFF1ED760) else Color.Gray
+                                        color = if (hasBearer) MaterialTheme.colorScheme.primary else Color.Gray
                                     )
                                 }
                             }
@@ -335,7 +335,7 @@ fun LoginScreen(
                             },
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF1ED760),
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
                                 unfocusedBorderColor = Color(0xFF333333),
                                 focusedContainerColor = Color(0xFF1A1A1A),
                                 unfocusedContainerColor = Color(0xFF1A1A1A),
@@ -367,7 +367,7 @@ fun LoginScreen(
                         Text(
                             text = statusMessage,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isSuccess) Color(0xFF1ED760) else Color(0xFFFF5252),
+                            color = if (isSuccess) MaterialTheme.colorScheme.primary else Color(0xFFFF5252),
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
@@ -386,7 +386,7 @@ fun LoginScreen(
                                     modifier = Modifier
                                         .size(8.dp)
                                         .clip(CircleShape)
-                                        .background(if (hasSessionInWeb) Color(0xFF1ED760) else Color(0xFFE8622C))
+                                        .background(if (hasSessionInWeb) MaterialTheme.colorScheme.primary else Color(0xFFE8622C))
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
@@ -417,8 +417,8 @@ fun LoginScreen(
                                 },
                                 shape = RoundedCornerShape(24.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF1ED760),
-                                    contentColor = Color.Black
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
                                 )
                             ) {
                                 Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -480,8 +480,8 @@ fun LoginScreen(
                                 },
                                 shape = RoundedCornerShape(24.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF1ED760),
-                                    contentColor = Color.Black
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
                                 ),
                                 modifier = Modifier.weight(0.6f)
                             ) {

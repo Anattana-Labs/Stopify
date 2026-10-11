@@ -571,7 +571,7 @@ fun SimpSettingsScreen(
                                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF1ED760))
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.primary)
                                     }
                                 } else if (spotifyRecents.isEmpty()) {
                                     Text(
@@ -623,7 +623,7 @@ fun SimpSettingsScreen(
                                                 Icon(
                                                     Icons.Rounded.PlayArrow,
                                                     contentDescription = "Play",
-                                                    tint = Color(0xFF1ED760),
+                                                    tint = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }
@@ -765,13 +765,13 @@ private fun SettingsRow(
         if (badge != null) {
             Surface(
                 shape = RoundedCornerShape(6.dp),
-                color = Color(0xFF262632)
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
             ) {
                 Text(
                     text = badge,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1ED760),
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                 )
             }
@@ -798,22 +798,22 @@ private fun SettingsToggleRow(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.55f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Black,
-                checkedTrackColor = Color(0xFF1ED760),
-                uncheckedThumbColor = Color.White.copy(alpha = 0.7f),
-                uncheckedTrackColor = Color(0xFF2A2A36)
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHigh
             )
         )
     }

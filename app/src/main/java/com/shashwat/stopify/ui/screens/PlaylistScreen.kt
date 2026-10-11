@@ -390,7 +390,7 @@ fun SimpPlaylistScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = { showAddSongsDialog = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1ED760)),
+                                colors = ButtonDefaults.buttonColors(containerColor = dynamicTint),
                                 shape = RoundedCornerShape(20.dp)
                             ) {
                                 Icon(Icons.Rounded.Add, contentDescription = null, tint = Color.Black)

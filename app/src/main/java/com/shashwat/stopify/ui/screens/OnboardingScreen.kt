@@ -28,10 +28,12 @@ fun OnboardingScreen(
     onSkip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF09090C))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Subtle ambient radial glow behind header
         Box(
@@ -41,7 +43,7 @@ fun OnboardingScreen(
                 .size(300.dp)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(Color(0xFF1ED760).copy(alpha = 0.18f), Color.Transparent)
+                        colors = listOf(primaryColor.copy(alpha = 0.22f), Color.Transparent)
                     )
                 )
         )
@@ -65,14 +67,14 @@ fun OnboardingScreen(
                     modifier = Modifier
                         .size(76.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF1ED760))
-                        .border(4.dp, Color(0xFF1ED760).copy(alpha = 0.35f), CircleShape),
+                        .background(primaryColor)
+                        .border(4.dp, primaryColor.copy(alpha = 0.35f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.GraphicEq,
                         contentDescription = "Stopify Logo",
-                        tint = Color.Black,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(42.dp)
                     )
                 }
@@ -83,7 +85,7 @@ fun OnboardingScreen(
                     text = "Welcome to Stopify",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center
                 )
 
@@ -92,7 +94,7 @@ fun OnboardingScreen(
                 Text(
                     text = "Ad-free, high fidelity Spotify playback powered by Widevine DRM. Connect your account to get started.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
@@ -107,7 +109,7 @@ fun OnboardingScreen(
                     text = "CHOOSE HOW TO SIGN IN",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1ED760),
+                    color = primaryColor,
                     letterSpacing = 1.2.sp,
                     modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
                 )
@@ -170,13 +172,15 @@ private fun LoginOptionCard(
     isPrimary: Boolean,
     onClick: () -> Unit
 ) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF16161D),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (isPrimary) Color(0xFF1ED760).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.08f)
+            if (isPrimary) primaryColor.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -188,13 +192,13 @@ private fun LoginOptionCard(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (isPrimary) Color(0xFF1ED760).copy(alpha = 0.15f) else Color(0xFF24242E)),
+                    .background(if (isPrimary) primaryColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (isPrimary) Color(0xFF1ED760) else Color.White,
+                    tint = if (isPrimary) primaryColor else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -207,18 +211,18 @@ private fun LoginOptionCard(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = if (isPrimary) Color(0xFF1ED760) else Color(0xFF2A2A38)
+                        color = if (isPrimary) primaryColor else MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
                             text = badge,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = if (isPrimary) Color.Black else Color.White.copy(alpha = 0.7f),
+                            color = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 9.sp,
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                         )
@@ -230,7 +234,7 @@ private fun LoginOptionCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 16.sp
                 )
             }
@@ -240,7 +244,7 @@ private fun LoginOptionCard(
             Icon(
                 imageVector = Icons.Rounded.ChevronRight,
                 contentDescription = null,
-                tint = if (isPrimary) Color(0xFF1ED760) else Color.White.copy(alpha = 0.4f),
+                tint = if (isPrimary) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.size(22.dp)
             )
         }
