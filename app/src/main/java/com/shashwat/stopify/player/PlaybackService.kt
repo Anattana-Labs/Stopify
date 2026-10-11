@@ -1,107 +1,187 @@
 package com.shashwat.stopify.player
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.os.Binder
 import android.os.Build
+import android.os.IBinder
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.lifecycle.LifecycleService
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
-import com.google.common.util.concurrent.Futures
-import com.google.common.util.concurrent.ListenableFuture
+import androidx.media3.ui.PlayerNotificationManager
+import coil.ImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.shashwat.stopify.MainActivity
+import com.shashwat.stopify.R
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
-class PlaybackService : MediaSessionService() {
+class PlaybackService : LifecycleService() {
 
     companion object {
         private const val TAG = "PlaybackService"
+        private const val CHANNEL_ID = "stopify_playback_channel"
+        private const val NOTIFICATION_ID = 1001
     }
 
+    private val binder = LocalBinder()
     private var mediaSession: MediaSession? = null
+    private var notificationManager: PlayerNotificationManager? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    inner class LocalBinder : Binder() {
+        fun getService(): PlaybackService = this@PlaybackService
+    }
+
+    override fun onBind(intent: Intent): IBinder {
+        super.onBind(intent)
+        return binder
+    }
 
     override fun onCreate() {
         super.onCreate()
-        val player = SpotifyAudioPlayer.activePlayer ?: return
+        createNotificationChannel()
+        val player = SpotifyAudioPlayer.activePlayer ?: run {
+            Log.w(TAG, "No activePlayer when PlaybackService created")
+            return
+        }
 
-        val sessionActivityIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        val sessionActivityPendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            sessionActivityIntent,
-            pendingIntentFlags
+        val sessionIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            else PendingIntent.FLAG_UPDATE_CURRENT
         )
-
-        val audioPlayer = SpotifyAudioPlayer.getInstance(this)
-        val sessionCallback = object : MediaSession.Callback {
-            override fun onPlayerCommandRequest(
-                session: MediaSession,
-                controller: MediaSession.ControllerInfo,
-                playerCommand: Int
-            ): Int {
-                when (playerCommand) {
-                    Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
-                        audioPlayer.onSkipToNext?.invoke()
-                        return androidx.media3.session.SessionResult.RESULT_SUCCESS
-                    }
-                    Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
-                        audioPlayer.onSkipToPrevious?.invoke()
-                        return androidx.media3.session.SessionResult.RESULT_SUCCESS
-                    }
-                }
-                return super.onPlayerCommandRequest(session, controller, playerCommand)
-            }
-
-            override fun onCustomCommand(
-                session: MediaSession,
-                controller: MediaSession.ControllerInfo,
-                customCommand: androidx.media3.session.SessionCommand,
-                args: android.os.Bundle
-            ): ListenableFuture<androidx.media3.session.SessionResult> {
-                return Futures.immediateFuture(
-                    androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_SUCCESS)
-                )
-            }
-        }
 
         mediaSession = MediaSession.Builder(this, player)
             .setId("StopifyMediaSession")
-            .setSessionActivity(sessionActivityPendingIntent)
-            .setCallback(sessionCallback)
+            .setSessionActivity(sessionIntent)
+            .build()
+        SpotifyAudioPlayer.activeMediaSession = mediaSession
+
+        notificationManager = PlayerNotificationManager.Builder(
+            this,
+            NOTIFICATION_ID,
+            CHANNEL_ID
+        )
+            .setMediaDescriptionAdapter(object : PlayerNotificationManager.MediaDescriptionAdapter {
+                override fun getCurrentContentTitle(player: Player): CharSequence {
+                    return player.mediaMetadata.title ?: "Stopify"
+                }
+
+                override fun createCurrentContentIntent(player: Player): PendingIntent? = sessionIntent
+
+                override fun getCurrentContentText(player: Player): CharSequence? {
+                    return player.mediaMetadata.artist
+                }
+
+                override fun getCurrentLargeIcon(
+                    player: Player,
+                    callback: PlayerNotificationManager.BitmapCallback
+                ): Bitmap? {
+                    val artworkUri = player.mediaMetadata.artworkUri ?: return null
+                    serviceScope.launch {
+                        try {
+                            val loader = ImageLoader(this@PlaybackService)
+                            val req = ImageRequest.Builder(this@PlaybackService)
+                                .data(artworkUri)
+                                .build()
+                            val result = loader.execute(req)
+                            if (result is SuccessResult) {
+                                val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                                if (bitmap != null) callback.onBitmap(bitmap)
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not load artwork", e)
+                        }
+                    }
+                    return null
+                }
+            })
+            .setNotificationListener(object : PlayerNotificationManager.NotificationListener {
+                override fun onNotificationPosted(
+                    notificationId: Int,
+                    notification: Notification,
+                    ongoing: Boolean
+                ) {
+                    if (ongoing) {
+                        startForeground(notificationId, notification)
+                    } else {
+                        stopForeground(false)
+                    }
+                }
+
+                override fun onNotificationCancelled(notificationId: Int, dismissedByUser: Boolean) {
+                    stopSelf()
+                }
+            })
             .build()
 
-        SpotifyAudioPlayer.activeMediaSession = mediaSession
-        Log.d(TAG, "PlaybackService created MediaSession successfully")
+        notificationManager?.setPlayer(player)
+        notificationManager?.setUseNextActionInCompactView(true)
+        notificationManager?.setUsePreviousActionInCompactView(true)
+
+        Log.d(TAG, "PlaybackService started with PlayerNotificationManager")
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        // If player not yet ready when service first created (race), try again
         if (mediaSession == null && SpotifyAudioPlayer.activePlayer != null) {
             onCreate()
         }
-        return mediaSession ?: SpotifyAudioPlayer.activeMediaSession
+        return START_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = SpotifyAudioPlayer.activePlayer
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+        if (player == null || !player.playWhenReady) {
             stopSelf()
         }
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
+        notificationManager?.setPlayer(null)
+        notificationManager = null
         SpotifyAudioPlayer.activeMediaSession = null
         mediaSession?.run {
             player.release()
             release()
-            mediaSession = null
         }
+        mediaSession = null
+        serviceScope.cancel()
         super.onDestroy()
     }
-}
 
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Stopify Playback",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Music playback controls"
+                setShowBadge(false)
+            }
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
+    }
+}
