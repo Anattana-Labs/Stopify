@@ -92,6 +92,15 @@ object SpotifyTokenManager {
                             client.setClientToken(ct)
                         }
                     }
+
+                    @JavascriptInterface
+                    fun onDeviceId(devId: String?) {
+                        if (!devId.isNullOrEmpty()) {
+                            Log.d(TAG, "Captured Spotify Web Player active cluster device_id: $devId")
+                            prefs.edit().putString("spotify_active_device_id", devId).apply()
+                            client.webPlayerDeviceId = devId
+                        }
+                    }
                 }
                 it.addJavascriptInterface(StopifyBridge(), "StopifyBridge")
                 headlessWebView = it
@@ -114,17 +123,36 @@ object SpotifyTokenManager {
             cookieManager.flush()
 
             webView.webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    // Spoof Page Visibility so Spotify's Web Playback SDK connects to Dealer & registers cluster device even off-screen
+                    view?.evaluateJavascript(
+                        """
+                        (function(){
+                          try {
+                            var vis = function(){ return 'visible'; };
+                            var no  = function(){ return false; };
+                            Object.defineProperty(document,'visibilityState',{configurable:true,get:vis});
+                            Object.defineProperty(document,'hidden',{configurable:true,get:no});
+                            Object.defineProperty(document,'webkitVisibilityState',{configurable:true,get:vis});
+                            Object.defineProperty(document,'webkitHidden',{configurable:true,get:no});
+                            document.hasFocus = function(){ return true; };
+                            ['visibilitychange','webkitvisibilitychange','blur','pagehide'].forEach(function(t){
+                              window.addEventListener(t, function(e){ e.stopImmediatePropagation(); }, true);
+                              document.addEventListener(t, function(e){ e.stopImmediatePropagation(); }, true);
+                            });
+                          } catch(e){}
+                        })();
+                        """.trimIndent(),
+                        null
+                    )
+                }
+
                 override fun shouldInterceptRequest(
                     view: WebView?,
                     request: WebResourceRequest?
                 ): WebResourceResponse? {
                     val reqUrl = request?.url?.toString() ?: ""
                     val headers = request?.requestHeaders
-
-                    val isApiEndpoint = reqUrl.contains("api-partner.spotify.com") ||
-                            reqUrl.contains("spclient.spotify.com") ||
-                            reqUrl.contains("gae2-spclient.spotify.com") ||
-                            reqUrl.contains("open.spotify.com")
 
                     if (headers != null) {
                         val auth = headers["authorization"] ?: headers["Authorization"]
@@ -158,6 +186,39 @@ object SpotifyTokenManager {
                     }
 
                     if (url != null && url.contains("spotify.com")) {
+                        // Inject bootstrap hook to capture web player device ID and tokens
+                        view?.evaluateJavascript(
+                            """
+                            (function(){
+                              if (window.__stopifyHooked) return;
+                              window.__stopifyHooked = true;
+                              var oriFetch = window.fetch.bind(window);
+                              window.fetch = function(){
+                                try {
+                                  var url = arguments[0], opts = arguments[1] || {};
+                                  var us = (typeof url === 'string') ? url : (url && url.url) || '';
+                                  var hs = opts.headers || {};
+                                  function hv(n){ try { return hs.get ? hs.get(n) : (hs[n] || hs[n.toLowerCase()]); } catch(e){ return null; } }
+                                  if (us.indexOf('/track-playback/v1/devices') > -1 && opts.body) {
+                                    try {
+                                      var b = JSON.parse(opts.body);
+                                      if (b && b.device && b.device.device_id) {
+                                        window.StopifyBridge.onDeviceId(b.device.device_id);
+                                      }
+                                    } catch(e){}
+                                  }
+                                  var ct = hv('Client-Token') || hv('client-token');
+                                  if (ct) window.StopifyBridge.onClientToken(ct);
+                                  var au = hv('Authorization') || hv('authorization');
+                                  if (au && au.indexOf('Bearer') === 0) window.StopifyBridge.onToken(au.replace('Bearer ', '').trim());
+                                } catch(e){}
+                                return oriFetch.apply(this, arguments);
+                              };
+                            })();
+                            """.trimIndent(),
+                            null
+                        )
+
                         view?.evaluateJavascript(
                             """
                             (function() {
@@ -211,6 +272,25 @@ object SpotifyTokenManager {
             val callbacks = ArrayList(pendingCallbacks)
             pendingCallbacks.clear()
             callbacks.forEach { it(token) }
+        }
+    }
+
+    fun sendWebPlayerPlayCommand(uri: String) {
+        mainHandler.post {
+            headlessWebView?.evaluateJavascript(
+                """
+                (function(){
+                  try {
+                    var devId = window.StopifyBridge ? null : null;
+                    // Try playing directly via Web Player DOM play/pause or fetch if ready
+                    if (window.__spotuiPlay) {
+                      window.__spotuiPlay('$uri');
+                    }
+                  } catch(e){}
+                })();
+                """.trimIndent(),
+                null
+            )
         }
     }
 

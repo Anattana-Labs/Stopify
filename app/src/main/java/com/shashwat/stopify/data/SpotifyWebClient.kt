@@ -127,6 +127,9 @@ class SpotifyWebClient {
     var customCookies: String? = null
         internal set
 
+    @Volatile
+    var webPlayerDeviceId: String? = null
+
     val historyManager = SpotifyHistoryManager()
     val authService = SpotifyAuthService(this)
     val lyricsService = SpotifyLyricsService(this)
@@ -465,59 +468,67 @@ class SpotifyWebClient {
 
             // Sync with Spotify Connect player command to register with account cluster
             if (!isFinished && positionMs < 5000L) {
-                try {
-                    val playCmdUrl = URL("https://gae2-spclient.spotify.com/connect-state/v1/player/command/from/$currentDeviceId/to/$currentDeviceId")
-                    val cmdId = UUID.randomUUID().toString().replace("-", "")
-                    val ctxUri = if (!track.albumUri.isNullOrEmpty() && track.albumUri.startsWith("spotify:album:")) {
-                        track.albumUri
-                    } else {
-                        track.uri
-                    }
-                    val playCmdBody = JSONObject().apply {
-                        put("command", JSONObject().apply {
-                            put("context", JSONObject().apply {
-                                put("uri", ctxUri)
-                                put("url", "context://$ctxUri")
-                                put("metadata", JSONObject())
-                            })
-                            put("play_origin", JSONObject().apply {
-                                put("feature_identifier", if (ctxUri.startsWith("spotify:album:")) "album" else "track")
-                                put("feature_version", "web-player_2026-10-09_1791504000000_d873ee9db135")
-                                put("referrer_identifier", "home")
-                            })
-                            put("options", JSONObject().apply {
-                                put("license", "tft")
-                                put("skip_to", JSONObject())
-                                put("player_options_override", JSONObject())
-                            })
-                            put("logging_params", JSONObject().apply {
-                                put("page_instance_ids", JSONArray())
-                                put("interaction_ids", JSONArray())
-                                put("command_id", cmdId)
-                            })
-                            put("endpoint", "play")
-                        })
-                    }
+                val targetDevices = mutableListOf(currentDeviceId)
+                val wpDevId = webPlayerDeviceId
+                if (!wpDevId.isNullOrEmpty() && wpDevId != currentDeviceId && !targetDevices.contains(wpDevId)) {
+                    targetDevices.add(wpDevId)
+                }
 
-                    val pConn = (playCmdUrl.openConnection() as HttpURLConnection).apply {
-                        requestMethod = "POST"
-                        doOutput = true
-                        connectTimeout = 5000
-                        readTimeout = 5000
-                        setRequestProperty("authorization", "Bearer $token")
-                        setRequestProperty("client-token", clientToken)
-                        setRequestProperty("content-type", "application/json;charset=UTF-8")
-                        setRequestProperty("app-platform", APP_PLATFORM)
-                        setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
-                        setRequestProperty("origin", "https://open.spotify.com")
-                        setRequestProperty("referer", "https://open.spotify.com/")
+                for (targetDevId in targetDevices) {
+                    try {
+                        val playCmdUrl = URL("https://gae2-spclient.spotify.com/connect-state/v1/player/command/from/$currentDeviceId/to/$targetDevId")
+                        val cmdId = UUID.randomUUID().toString().replace("-", "")
+                        val ctxUri = if (!track.albumUri.isNullOrEmpty() && track.albumUri.startsWith("spotify:album:")) {
+                            track.albumUri
+                        } else {
+                            track.uri
+                        }
+                        val playCmdBody = JSONObject().apply {
+                            put("command", JSONObject().apply {
+                                put("context", JSONObject().apply {
+                                    put("uri", ctxUri)
+                                    put("url", "context://$ctxUri")
+                                    put("metadata", JSONObject())
+                                })
+                                put("play_origin", JSONObject().apply {
+                                    put("feature_identifier", if (ctxUri.startsWith("spotify:album:")) "album" else "track")
+                                    put("feature_version", "web-player_2026-10-09_1791504000000_d873ee9db135")
+                                    put("referrer_identifier", "home")
+                                })
+                                put("options", JSONObject().apply {
+                                    put("license", "tft")
+                                    put("skip_to", JSONObject())
+                                    put("player_options_override", JSONObject())
+                                })
+                                put("logging_params", JSONObject().apply {
+                                    put("page_instance_ids", JSONArray())
+                                    put("interaction_ids", JSONArray())
+                                    put("command_id", cmdId)
+                                })
+                                put("endpoint", "play")
+                            })
+                        }
+
+                        val pConn = (playCmdUrl.openConnection() as HttpURLConnection).apply {
+                            requestMethod = "POST"
+                            doOutput = true
+                            connectTimeout = 5000
+                            readTimeout = 5000
+                            setRequestProperty("authorization", "Bearer $token")
+                            setRequestProperty("client-token", clientToken)
+                            setRequestProperty("content-type", "application/json;charset=UTF-8")
+                            setRequestProperty("app-platform", APP_PLATFORM)
+                            setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                            setRequestProperty("origin", "https://open.spotify.com")
+                            setRequestProperty("referer", "https://open.spotify.com/")
+                        }
+                        OutputStreamWriter(pConn.outputStream).use { it.write(playCmdBody.toString()) }
+                        val pCode = pConn.responseCode
+                        pConn.disconnect()
+                        Log.d(TAG, "Sync playback to Spotify Connect player command (target: $targetDevId): HTTP $pCode for ${track.uri}")
+                    } catch (ce: Exception) {
+                        Log.w(TAG, "Error syncing playback to connect-state for target $targetDevId", ce)
                     }
-                    OutputStreamWriter(pConn.outputStream).use { it.write(playCmdBody.toString()) }
-                    val pCode = pConn.responseCode
-                    pConn.disconnect()
-                    Log.d(TAG, "Sync playback to Spotify Connect player command: HTTP $pCode for ${track.uri}")
-                } catch (ce: Exception) {
-                    Log.w(TAG, "Error syncing playback to connect-state", ce)
                 }
             }
 
