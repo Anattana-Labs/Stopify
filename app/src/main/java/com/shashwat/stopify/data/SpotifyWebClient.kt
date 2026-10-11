@@ -440,9 +440,19 @@ class SpotifyWebClient {
                     if (code in 200..299 && respBody.isNotEmpty()) {
                         try {
                             val respJson = JSONObject(respBody)
-                            val newSm = respJson.optJSONObject("state_machine")?.optString("state_machine_id")
+                            val smObj = respJson.optJSONObject("state_machine")
+                            val newSm = smObj?.optString("state_machine_id")
                             if (!newSm.isNullOrEmpty()) {
                                 activeStateMachineId = newSm
+                            }
+                            val updatedRef = respJson.optJSONObject("updated_state_ref")
+                            val stateIdx = updatedRef?.optInt("state_index", -1) ?: -1
+                            val statesArr = smObj?.optJSONArray("states")
+                            if (statesArr != null && stateIdx in 0 until statesArr.length()) {
+                                val nextStateId = statesArr.getJSONObject(stateIdx).optString("state_id")
+                                if (nextStateId.isNotEmpty()) {
+                                    activeStateId = nextStateId
+                                }
                             }
                         } catch (e: Exception) {}
                     }
@@ -458,15 +468,20 @@ class SpotifyWebClient {
                 try {
                     val playCmdUrl = URL("https://gae2-spclient.spotify.com/connect-state/v1/player/command/from/$currentDeviceId/to/$currentDeviceId")
                     val cmdId = UUID.randomUUID().toString().replace("-", "")
+                    val ctxUri = if (!track.albumUri.isNullOrEmpty() && track.albumUri.startsWith("spotify:album:")) {
+                        track.albumUri
+                    } else {
+                        track.uri
+                    }
                     val playCmdBody = JSONObject().apply {
                         put("command", JSONObject().apply {
                             put("context", JSONObject().apply {
-                                put("uri", track.uri)
-                                put("url", "context://${track.uri}")
+                                put("uri", ctxUri)
+                                put("url", "context://$ctxUri")
                                 put("metadata", JSONObject())
                             })
                             put("play_origin", JSONObject().apply {
-                                put("feature_identifier", "album")
+                                put("feature_identifier", if (ctxUri.startsWith("spotify:album:")) "album" else "track")
                                 put("feature_version", "web-player_2026-10-09_1791504000000_d873ee9db135")
                                 put("referrer_identifier", "home")
                             })
@@ -1859,7 +1874,7 @@ class SpotifyWebClient {
                     put("name", "Stopify Player")
                     put("platform_identifier", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
                     put("is_group", false)
-                    put("is_public", false)
+                    put("is_public", true)
                     put("correlation_id", "9167488b53cb6529d696cc87a46a8235")
                     put("client_version", "harmony:4.80.0-3cdf02c91")
                 })
