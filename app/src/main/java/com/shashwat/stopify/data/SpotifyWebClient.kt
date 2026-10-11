@@ -510,81 +510,15 @@ class SpotifyWebClient {
 
         val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
-        val currentDeviceId = getDeviceId(prefs)
+        // Use registered DEVICE_ID so device state matches the dealer session
+        val currentDeviceId = DEVICE_ID
+        val trackFileId = audioFileMap[track.uri] ?: ""
 
         try {
             // Ensure device is registered with Spotify dealer/track-playback session
             ensureDeviceRegistered(token, currentDeviceId)
 
-            // 1. Connect-State put_state to register active playback on Spotify Account
-            val putStateEndpoints = listOf(
-                "https://spclient.wg.spotify.com/connect-state/v1/devices/put_state",
-                "https://gae2-spclient.spotify.com/connect-state/v1/devices/put_state"
-            )
-
-            for (endpoint in putStateEndpoints) {
-                try {
-                    val putStateUrl = URL(endpoint)
-                    val putStateConn = (putStateUrl.openConnection() as HttpURLConnection).apply {
-                        requestMethod = "PUT"
-                        doOutput = true
-                        connectTimeout = 6000
-                        readTimeout = 6000
-                        setRequestProperty("authorization", "Bearer $token")
-                        setRequestProperty("client-token", clientToken)
-                        setRequestProperty("content-type", "application/json")
-                        setRequestProperty("app-platform", APP_PLATFORM)
-                        setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
-                        setRequestProperty("origin", "https://open.spotify.com")
-                        setRequestProperty("referer", "https://open.spotify.com/")
-                        setRequestProperty("user-agent", USER_AGENT)
-                        if (dealerConnectionId != null) {
-                            setRequestProperty("x-spotify-connection-id", dealerConnectionId)
-                        }
-                    }
-
-                    val putStatePayload = JSONObject().apply {
-                        put("member_type", "CONNECT_STATE")
-                        put("device", JSONObject().apply {
-                            put("device_info", JSONObject().apply {
-                                put("can_play", true)
-                                put("volume", 65535)
-                                put("name", "Stopify Player")
-                                put("device_id", currentDeviceId)
-                                put("device_type", "smartphone")
-                                put("is_active", true)
-                            })
-                            put("player_state", JSONObject().apply {
-                                put("timestamp", System.currentTimeMillis())
-                                put("context_uri", track.uri)
-                                put("track", JSONObject().apply {
-                                    put("uri", track.uri)
-                                    put("metadata", JSONObject().apply {
-                                        put("title", track.name)
-                                        put("artist_name", track.artist)
-                                        put("album_title", track.album)
-                                    })
-                                })
-                                put("playback_speed", 1.0)
-                                put("position_as_of_timestamp", positionMs)
-                                put("duration", track.durationMs)
-                                put("is_playing", true)
-                                put("is_paused", false)
-                            })
-                        })
-                        put("is_active", true)
-                    }
-
-                    OutputStreamWriter(putStateConn.outputStream).use { it.write(putStatePayload.toString()) }
-                    val psc = putStateConn.responseCode
-                    putStateConn.disconnect()
-                    Log.d(TAG, "Report playback to connect-state ($endpoint): $psc")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error reporting to connect-state put_state", e)
-                }
-            }
-
-            // 2. Report playback state to Spotify Connect / device track-playback endpoint (matches req.json network capture)
+            // 1. Report playback state to Spotify Connect / device track-playback endpoint (matches req.json network capture)
             val trackPlaybackEndpoints = listOf(
                 "https://gae2-spclient.spotify.com/track-playback/v1/devices/$currentDeviceId/state",
                 "https://spclient.wg.spotify.com/track-playback/v1/devices/$currentDeviceId/state"
@@ -638,189 +572,60 @@ class SpotifyWebClient {
                 }
             }
 
-            // 3. Trigger connect-state play command to ensure Spotify backend registers account play
-            try {
-                val cmdUrl = URL("https://spclient.wg.spotify.com/connect-state/v1/player/command/from/$currentDeviceId/to/$currentDeviceId")
-                val cmdPayload = JSONObject().apply {
-                    put("command", JSONObject().apply {
-                        put("context", JSONObject().apply {
-                            put("uri", track.uri)
-                            put("url", "context://${track.uri}")
-                            put("metadata", JSONObject())
-                        })
-                        put("play_origin", JSONObject().apply {
-                            put("feature_identifier", "auto_play_on_load")
-                            put("feature_version", "web-player_2026-10-09_1791504000000_d873ee9db135")
-                            put("referrer_identifier", "search")
-                        })
-                        put("options", JSONObject().apply {
-                            put("license", "tft")
-                            put("skip_to", JSONObject())
-                            put("player_options_override", JSONObject())
-                        })
-                        put("logging_params", JSONObject().apply {
-                            put("page_instance_ids", JSONArray())
-                            put("interaction_ids", JSONArray())
-                            put("command_id", UUID.randomUUID().toString().replace("-", ""))
-                        })
-                        put("endpoint", "play")
-                    })
-                }
+            // 2. Spotify Web Player / Melody Batch Telemetry (jssdk_playback_start & jssdk_connect_command)
+            // This is the primary pipeline Spotify Web uses to record playback sessions into account history!
+            val playbackId = UUID.randomUUID().toString().replace("-", "")
+            val sessionId = System.currentTimeMillis().toString()
 
-                val cmdConn = (cmdUrl.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    doOutput = true
-                    connectTimeout = 6000
-                    readTimeout = 6000
-                    setRequestProperty("authorization", "Bearer $token")
-                    setRequestProperty("client-token", clientToken)
-                    setRequestProperty("content-type", "application/json;charset=UTF-8")
-                    setRequestProperty("app-platform", APP_PLATFORM)
-                    setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
-                    setRequestProperty("origin", "https://open.spotify.com")
-                    setRequestProperty("referer", "https://open.spotify.com/")
-                    setRequestProperty("user-agent", USER_AGENT)
-                }
-                OutputStreamWriter(cmdConn.outputStream).use { it.write(cmdPayload.toString()) }
-                val cmdCode = cmdConn.responseCode
-                cmdConn.disconnect()
-                Log.d(TAG, "Triggered connect-state account play command: $cmdCode")
-            } catch (e: Exception) {
-                Log.w(TAG, "Error sending connect-state play command", e)
-            }
-
-            // 4. Proactively notify Spotify Web API player queue so it shows in account session
-            try {
-                val qUrl = URL("https://api.spotify.com/v1/me/player/queue?uri=${track.uri}")
-                val qConn = (qUrl.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    connectTimeout = 4000
-                    readTimeout = 4000
-                    setRequestProperty("Authorization", "Bearer $token")
-                    setRequestProperty("User-Agent", USER_AGENT)
-                }
-                val qc = qConn.responseCode
-                qConn.disconnect()
-                Log.d(TAG, "me/player/queue result: $qc")
-            } catch (e: Exception) {
-                // Ignore queue errors when no other connect device is active
-            }
-
-            // 5. Trigger active player sync via Web API play endpoint
-            try {
-                val playUrl = URL("https://api.spotify.com/v1/me/player/play")
-                val playConn = (playUrl.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "PUT"
-                    doOutput = true
-                    connectTimeout = 4000
-                    readTimeout = 4000
-                    setRequestProperty("Authorization", "Bearer $token")
-                    setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("User-Agent", USER_AGENT)
-                }
-                val playPayload = JSONObject().apply {
-                    put("uris", JSONArray().apply { put(track.uri) })
-                    put("position_ms", positionMs)
-                }
-                OutputStreamWriter(playConn.outputStream).use { it.write(playPayload.toString()) }
-                val prc = playConn.responseCode
-                playConn.disconnect()
-                Log.d(TAG, "me/player/play result: $prc")
-            } catch (e: Exception) {
-                // Ignore if no other active connect device is active
-            }
-
-            // 6. Report listening event to Spotify Event Service for account history tracking
-            try {
-                val eventEndpoints = listOf(
-                    "https://event-service.spotify.com/v1/events",
-                    "https://spclient.wg.spotify.com/event-service/v1/events"
-                )
-                for (evEndpoint in eventEndpoints) {
-                    try {
-                        val evUrl = URL(evEndpoint)
-                        val evConn = (evUrl.openConnection() as HttpURLConnection).apply {
-                            requestMethod = "POST"
-                            doOutput = true
-                            connectTimeout = 4000
-                            readTimeout = 4000
-                            setRequestProperty("Authorization", "Bearer $token")
-                            setRequestProperty("Content-Type", "application/json")
-                            setRequestProperty("User-Agent", USER_AGENT)
-                        }
-                        val evPayload = JSONObject().apply {
-                            put("events", JSONArray().apply {
-                                put(JSONObject().apply {
-                                    put("event_id", UUID.randomUUID().toString().replace("-", ""))
-                                    put("type", "track_played")
-                                    put("timestamp", System.currentTimeMillis())
-                                    put("data", JSONObject().apply {
-                                        put("uri", track.uri)
-                                        put("position_ms", positionMs)
-                                        put("duration_ms", track.durationMs)
-                                        put("device_id", currentDeviceId)
-                                    })
-                                })
-                            })
-                        }
-                        OutputStreamWriter(evConn.outputStream).use { it.write(evPayload.toString()) }
-                        val ec = evConn.responseCode
-                        evConn.disconnect()
-                        Log.d(TAG, "event-service ($evEndpoint) result: $ec")
-                    } catch (e: Exception) {
-                        // Skip
-                    }
-                }
-            } catch (e: Exception) {
-                // Skip
-            }
-
-            // 7. Spotify Web Player / Melody Batch Telemetry (jssdk_playback_start & jssdk_connect_command)
-            // This is the exact pipeline Spotify Web uses to record playback sessions into account history!
-            try {
-                val melodyEndpoints = listOf(
-                    "https://gae2-spclient.spotify.com/melody/v1/msg/batch",
-                    "https://spclient.wg.spotify.com/melody/v1/msg/batch"
-                )
-                val playbackId = UUID.randomUUID().toString().replace("-", "")
-                val sessionId = System.currentTimeMillis().toString()
-
-                val melodyPayload = JSONObject().apply {
-                    put("messages", JSONArray().apply {
-                        // Playback Start Event
-                        put(JSONObject().apply {
-                            put("type", "jssdk_playback_start")
-                            put("message", JSONObject().apply {
-                                put("play_track", track.uri)
-                                put("playback_id", playbackId)
-                                put("session_id", sessionId)
-                                put("ms_start_position", positionMs)
-                                put("initially_paused", false)
-                                put("client_id", "")
-                                put("correlation_id", "")
-                                put("feature_identifier", "")
-                            })
-                        })
-                        // Connect Command Success Event
-                        put(JSONObject().apply {
-                            put("type", "jssdk_connect_command")
-                            put("message", JSONObject().apply {
-                                put("command_id", playbackId)
-                                put("command_type", "play")
-                                put("target_device_brand", "spotify")
-                                put("target_device_model", "web_player")
-                                put("target_device_id", currentDeviceId)
-                                put("result", "success")
-                                put("http_status_code", 200)
-                            })
+            val melodyStartPayload = JSONObject().apply {
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("type", "jssdk_playback_start")
+                        put("message", JSONObject().apply {
+                            put("play_track", track.uri)
+                            put("file_id", trackFileId)
+                            put("playback_id", playbackId)
+                            put("session_id", sessionId)
+                            put("ms_start_position", positionMs)
+                            put("initially_paused", false)
+                            put("client_id", "")
+                            put("correlation_id", "")
+                            put("feature_identifier", "")
                         })
                     })
-                    put("sdk_id", "harmony:4.80.0")
-                    put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
-                    put("client_version", "0.0.0")
-                }
+                })
+                put("sdk_id", "harmony:4.80.0")
+                put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
+                put("client_version", "0.0.0")
+            }
 
-                for (melodyUrlStr in melodyEndpoints) {
+            val melodyCmdPayload = JSONObject().apply {
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("type", "jssdk_connect_command")
+                        put("message", JSONObject().apply {
+                            put("command_id", playbackId)
+                            put("command_type", "play")
+                            put("target_device_brand", "spotify")
+                            put("target_device_model", "web_player")
+                            put("target_device_id", currentDeviceId)
+                            put("result", "success")
+                            put("http_status_code", 200)
+                        })
+                    })
+                })
+                put("sdk_id", "harmony:4.80.0-3cdf02c91")
+                put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
+                put("client_version", "0.0.0")
+            }
+
+            val melodyEndpoints = listOf(
+                "https://gae2-spclient.spotify.com/melody/v1/msg/batch",
+                "https://spclient.wg.spotify.com/melody/v1/msg/batch"
+            )
+
+            for (melodyUrlStr in melodyEndpoints) {
+                for (payload in listOf(melodyStartPayload, melodyCmdPayload)) {
                     try {
                         val mUrl = URL(melodyUrlStr)
                         val mConn = (mUrl.openConnection() as HttpURLConnection).apply {
@@ -835,16 +640,14 @@ class SpotifyWebClient {
                             setRequestProperty("origin", "https://open.spotify.com")
                             setRequestProperty("user-agent", USER_AGENT)
                         }
-                        OutputStreamWriter(mConn.outputStream).use { it.write(melodyPayload.toString()) }
+                        OutputStreamWriter(mConn.outputStream).use { it.write(payload.toString()) }
                         val mc = mConn.responseCode
                         mConn.disconnect()
-                        Log.d(TAG, "melody batch ($melodyUrlStr) playback start status: $mc")
+                        Log.d(TAG, "melody batch ($melodyUrlStr) status: $mc")
                     } catch (ex: Exception) {
                         Log.w(TAG, "Error posting melody batch to $melodyUrlStr", ex)
                     }
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error creating melody playback batch", e)
             }
 
             Result.success(true)
