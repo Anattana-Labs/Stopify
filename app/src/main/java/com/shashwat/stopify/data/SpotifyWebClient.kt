@@ -636,6 +636,8 @@ class SpotifyWebClient {
             } else {
                 // Playback stats event (scrobble trigger when played >= 30s or finished)
                 val playedMs = if (isFinished) trackDuration else positionMs.coerceAtLeast(30000L)
+                val now = System.currentTimeMillis()
+                val startTime = now - playedMs
                 val melodyStatsPayload = JSONObject().apply {
                     put("messages", JSONArray().apply {
                         put(JSONObject().apply {
@@ -645,22 +647,61 @@ class SpotifyWebClient {
                                 put("file_id", trackFileId)
                                 put("playback_id", playbackId)
                                 put("session_id", sessionId)
+                                put("internal_play_id", "1")
+                                put("start_time", startTime)
+                                put("end_time", now)
                                 put("ms_played", playedMs)
                                 put("ms_nominal_played", playedMs)
                                 put("ms_file_duration", trackDuration)
                                 put("ms_actual_duration", trackDuration)
+                                put("ms_metadata_duration", trackDuration)
                                 put("ms_start_position", 0)
                                 put("ms_end_position", reportedPosition)
                                 put("reason_start", "playbtn")
-                                put("reason_end", if (isFinished) "trackdone" else "progress")
+                                put("reason_end", if (isFinished) "trackdone" else "endplay")
+                                put("initially_paused", false)
+                                put("had_error", false)
+                                put("sequence_id", 0)
                                 put("client_id", "")
                                 put("correlation_id", "")
+                                put("urls_json", "{\"version\":\"1.0.0\",\"urls\":[]}")
+                                put("manifest_id", trackFileId)
+                                put("memory_cached", false)
+                                put("persistent_cached", false)
+                                put("audio_format", "")
+                                put("video_format", "")
+                                put("protected", false)
+                                put("key_system", "")
+                                put("key_system_impl", "")
+                                put("external_start_time", 0)
+                                put("ms_played_per_surface", JSONObject())
+                                put("ms_played_visible", 0)
+                                put("n_stalls", 0)
+                                put("n_rendition_upgrade", 0)
+                                put("n_rendition_downgrade", 0)
+                                put("bps_bandwidth_max", 0)
+                                put("bps_bandwidth_min", 0)
+                                put("bps_bandwidth_avg", 0)
+                                put("n_seekback", 0)
+                                put("n_seekforward", 0)
+                                put("start_bitrate", 0)
+                                put("time_weighted_bitrate", 0)
+                                put("n_warnings", 0)
+                                put("n_navigator_offline", 0)
+                                put("n_dropped_video_frames", 0)
+                                put("n_total_video_frames", 0)
+                                put("resolution_max", 0)
+                                put("resolution_min", 0)
+                                put("total_bytes", 0)
+                                put("strategy", "")
+                                put("ms_played_per_audio_format", JSONObject())
+                                put("ms_played_per_video_format", JSONObject())
                             })
                         })
                     })
-                    put("sdk_id", "harmony:4.80.0")
-                    put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
-                    put("client_version", "0.0.0")
+                    put("sdk_id", "overture:4.80.0")
+                    put("platform", "Partner spotify desktop")
+                    put("client_version", SPOTIFY_APP_VERSION)
                 }
                 messagesList.add(melodyStatsPayload)
             }
@@ -688,8 +729,12 @@ class SpotifyWebClient {
                         }
                         OutputStreamWriter(mConn.outputStream).use { it.write(payload.toString()) }
                         val mc = mConn.responseCode
+                        val respText = try {
+                            val stream = if (mc in 200..299) mConn.inputStream else mConn.errorStream
+                            BufferedReader(InputStreamReader(stream)).readText()
+                        } catch (e: Exception) { "" }
                         mConn.disconnect()
-                        Log.d(TAG, "melody batch ($melodyUrlStr) status: $mc (isFinished: $isFinished, playedMs: $reportedPosition)")
+                        Log.d(TAG, "melody batch ($melodyUrlStr) status: $mc, resp: $respText (isFinished: $isFinished, playedMs: $reportedPosition)")
                     } catch (ex: Exception) {
                         Log.w(TAG, "Error posting melody batch to $melodyUrlStr", ex)
                     }
