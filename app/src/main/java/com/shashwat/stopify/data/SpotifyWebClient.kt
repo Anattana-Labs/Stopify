@@ -156,6 +156,8 @@ class SpotifyWebClient {
         const val GET_ALBUM_HASH = "11c9cad9cb24c4f9e25ef9456f68621cfd6006a90f679e729c1d2f2fd70dfe16"
         const val HOME_HASH = "5fb7da7a03ee2776c0670856609cb85a189a3cecc36cc160b91cde79063b9cf1"
         const val LIBRARY_HASH = "390c78e5b951029bad359785e69b07b536a509c581cbcd0aded5e5067f187455"
+        const val EDITABLE_PLAYLISTS_HASH = "d5c4b8096437dcc2ac9528c91dfcd299e35b747cda2f8f75d28f41f49c5092ba"
+        const val ADD_TO_PLAYLIST_HASH = "b907ad6b088d5bf7680fa81198996d58398c2d55dfcdf59fcc959e0be98a418a"
 
         // Working fallback Bearer token from web session
         const val FALLBACK_BEARER_TOKEN = "BQDyP_PgW1Uj_1SVWN4PgYEDZ1wgIj2Dohsrx8jXZiXpxofEgaAqyImnIFyRCJ9_MtAWm2bUUyMFbpUaf_X1KCa9YnP24UgtRNzoU6q21uytBgXaKbMKISMlWGBkRwuG4QACxXbnaHkm-gBm8VPIVyopxU6GYPxxRtyuVxRk1yDBE27cNQJNdsETLt0dAGvTzB36iWQR8YFBSoLsvRGmvOSMHcxXad0fD8zg_Zt6muogKnlHAnIn0Q9kQN_lqwb3o7ipmbOqrMQ-7TVJaz4nkIF0GI5kIIHd8AdOaO9foLcF3RyjhKfI9r6yDcv5LR1iLqpgluuBasbhIObAGhUhrSpBYltpzTtKCGuBq_7n4_6H03ysecKrUEe2UVD8w3SfA_dJ8tN9RRajljHIbu-K"
@@ -516,41 +518,58 @@ class SpotifyWebClient {
                 }
             }
 
-            // 2. Report playback state to Spotify Connect / device track-playback endpoint
-            try {
-                val stateUrl = URL("https://spclient.wg.spotify.com/track-playback/v1/devices/$currentDeviceId/state")
-                val conn = (stateUrl.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "PUT"
-                    doOutput = true
-                    connectTimeout = 6000
-                    readTimeout = 6000
-                    setRequestProperty("authorization", "Bearer $token")
-                    setRequestProperty("client-token", clientToken)
-                    setRequestProperty("content-type", "application/json")
-                    setRequestProperty("app-platform", APP_PLATFORM)
-                    setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
-                    setRequestProperty("origin", "https://open.spotify.com")
-                    setRequestProperty("referer", "https://open.spotify.com/")
-                    setRequestProperty("user-agent", USER_AGENT)
-                }
+            // 2. Report playback state to Spotify Connect / device track-playback endpoint (matches req.json network capture)
+            val trackPlaybackEndpoints = listOf(
+                "https://gae2-spclient.spotify.com/track-playback/v1/devices/$currentDeviceId/state",
+                "https://spclient.wg.spotify.com/track-playback/v1/devices/$currentDeviceId/state"
+            )
 
-                val body = JSONObject().apply {
-                    put("seq_num", 1)
-                    put("state_ref", JSONObject.NULL)
-                    put("sub_state", JSONObject().apply {
-                        put("playback_speed", 1)
-                        put("format", "file_urls_external")
-                        put("is_video_on", false)
-                    })
-                    put("debug_source", "play")
-                }
+            for (stateUrlStr in trackPlaybackEndpoints) {
+                try {
+                    val stateUrl = URL(stateUrlStr)
+                    val conn = (stateUrl.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "PUT"
+                        doOutput = true
+                        connectTimeout = 6000
+                        readTimeout = 6000
+                        setRequestProperty("authorization", "Bearer $token")
+                        setRequestProperty("client-token", clientToken)
+                        setRequestProperty("content-type", "application/json")
+                        setRequestProperty("app-platform", APP_PLATFORM)
+                        setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                        setRequestProperty("origin", "https://open.spotify.com")
+                        setRequestProperty("referer", "https://open.spotify.com/")
+                        setRequestProperty("user-agent", USER_AGENT)
+                    }
 
-                OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
-                val code = conn.responseCode
-                conn.disconnect()
-                Log.d(TAG, "Report playback to track-playback API status: $code for '${track.name}'")
-            } catch (e: Exception) {
-                Log.w(TAG, "Error reporting track-playback state", e)
+                    val body = JSONObject().apply {
+                        put("seq_num", 4)
+                        put("state_ref", JSONObject().apply {
+                            put("state_machine_id", "ChTYh8P7GXEaL9SXQ9jMrnbW_sLlYQ")
+                            put("state_id", "4afaf822d8624b5fb4d2f9ffe5b1fe79")
+                            put("paused", false)
+                        })
+                        put("sub_state", JSONObject().apply {
+                            put("playback_speed", 1)
+                            put("position", if (positionMs > 0) positionMs else 1002L)
+                            put("duration", if (track.durationMs > 0) track.durationMs else 203105L)
+                            put("media_type", "AUDIO")
+                            put("bitrate", 128000)
+                            put("audio_quality", "HIGH")
+                            put("format", 10)
+                            put("is_video_on", false)
+                        })
+                        put("previous_position", if (positionMs > 0) positionMs else 1002L)
+                        put("debug_source", "started_playing")
+                    }
+
+                    OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+                    val code = conn.responseCode
+                    conn.disconnect()
+                    Log.d(TAG, "Report playback to track-playback API status: $code ($stateUrlStr) for '${track.name}'")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error reporting track-playback state to $stateUrlStr", e)
+                }
             }
 
             // 3. Trigger connect-state play command to ensure Spotify backend registers account play
@@ -776,40 +795,170 @@ class SpotifyWebClient {
 
     suspend fun fetchUserPlaylists(prefs: android.content.SharedPreferences? = null): Result<List<SpotifyPlaylistSummary>> = withContext(Dispatchers.IO) {
         val results = mutableListOf<SpotifyPlaylistSummary>()
-        val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
+        val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
+        val clientToken = customClientToken ?: CLIENT_TOKEN
 
+        // 1. Try Pathfinder v2 libraryV3 query to fetch all user playlists (private, public, followed)
         try {
-            val url = URL("https://api.spotify.com/v1/me/playlists?limit=50")
+            val url = URL("https://api-partner.spotify.com/pathfinder/v2/query")
             val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
+                requestMethod = "POST"
+                doOutput = true
                 connectTimeout = 8000
                 readTimeout = 8000
-                setRequestProperty("Authorization", "Bearer $token")
-                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
+                setRequestProperty("content-type", "application/json;charset=UTF-8")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                setRequestProperty("origin", "https://open.spotify.com")
+                setRequestProperty("referer", "https://open.spotify.com/")
+                setRequestProperty("user-agent", USER_AGENT)
             }
-            val responseCode = conn.responseCode
-            if (responseCode in 200..299) {
-                val responseBody = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+            val payload = JSONObject().apply {
+                put("variables", JSONObject().apply {
+                    put("order", JSONObject.NULL)
+                    put("textFilter", "")
+                    put("features", JSONArray().apply {
+                        put("LIKED_SONGS")
+                        put("YOUR_EPISODES_V2")
+                        put("PRERELEASES")
+                        put("PRERELEASES_V2")
+                        put("CLIPS")
+                        put("EVENTS")
+                    })
+                    put("limit", 50)
+                    put("offset", 0)
+                    put("flatten", false)
+                    put("expandedFolders", JSONArray())
+                    put("folderUri", JSONObject.NULL)
+                    put("includeFoldersWhenFlattening", true)
+                })
+                put("operationName", "libraryV3")
+                put("extensions", JSONObject().apply {
+                    put("persistedQuery", JSONObject().apply {
+                        put("version", 1)
+                        put("sha256Hash", LIBRARY_HASH)
+                    })
+                })
+            }
+            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+            val code = conn.responseCode
+            if (code in 200..299) {
+                val resBody = BufferedReader(InputStreamReader(conn.inputStream)).readText()
                 conn.disconnect()
-                val json = JSONObject(responseBody)
-                val items = json.optJSONArray("items") ?: JSONArray()
-                for (i in 0 until items.length()) {
-                    val item = items.getJSONObject(i)
-                    val id = item.optString("id")
-                    val uri = item.optString("uri", "spotify:playlist:$id")
-                    val name = item.optString("name", "Playlist")
-                    val owner = item.optJSONObject("owner")?.optString("display_name") ?: "Spotify"
-                    val coverUrl = item.optJSONArray("images")?.optJSONObject(0)?.optString("url")
-                    val total = item.optJSONObject("tracks")?.optInt("total", 0) ?: 0
-                    results.add(SpotifyPlaylistSummary(id, uri, name, owner, coverUrl, total))
+                val json = JSONObject(resBody)
+                val items = json.optJSONObject("data")?.optJSONObject("me")?.optJSONObject("libraryV3")?.optJSONArray("items")
+                if (items != null) {
+                    for (i in 0 until items.length()) {
+                        val itObj = items.getJSONObject(i)
+                        val itemWrapper = itObj.optJSONObject("item") ?: continue
+                        val itemData = itemWrapper.optJSONObject("data") ?: JSONObject()
+                        val typeName = itemWrapper.optString("__typename")
+                        if (typeName == "LibraryPseudoPlaylistResponseWrapper") continue // Handled separately (Liked Songs)
+                        val uri = itemWrapper.optString("uri", itemWrapper.optString("_uri"))
+                        if (uri.isEmpty() || !uri.contains("playlist")) continue
+                        val id = uri.substringAfterLast(":")
+                        val name = itemData.optString("name", itemWrapper.optString("name", "Playlist"))
+                        val ownerName = itemData.optJSONObject("ownerV2")?.optJSONObject("data")?.optString("name") ?: "Spotify"
+                        val imagesArr = itemData.optJSONObject("images")?.optJSONArray("items")
+                        val coverUrl = imagesArr?.optJSONObject(0)?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")
+                            ?: itemData.optJSONArray("images")?.optJSONObject(0)?.optString("url")
+                        val total = itemData.optInt("count", itemData.optJSONObject("tracks")?.optInt("total") ?: 0)
+
+                        if (results.none { it.uri == uri || it.id == id }) {
+                            results.add(SpotifyPlaylistSummary(id, uri, name, ownerName, coverUrl, total))
+                        }
+                    }
                 }
             } else {
                 conn.disconnect()
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error fetching web playlists", e)
+            Log.w(TAG, "Pathfinder libraryV3 query error", e)
         }
 
+        // 2. Fallback / Merge with Web API me/playlists
+        if (results.isEmpty()) {
+            try {
+                val url = URL("https://api.spotify.com/v1/me/playlists?limit=50")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    setRequestProperty("Authorization", "Bearer $token")
+                    setRequestProperty("Content-Type", "application/json")
+                }
+                val responseCode = conn.responseCode
+                if (responseCode in 200..299) {
+                    val responseBody = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+                    conn.disconnect()
+                    val json = JSONObject(responseBody)
+                    val items = json.optJSONArray("items") ?: JSONArray()
+                    for (i in 0 until items.length()) {
+                        val item = items.getJSONObject(i)
+                        val id = item.optString("id")
+                        val uri = item.optString("uri", "spotify:playlist:$id")
+                        val name = item.optString("name", "Playlist")
+                        val owner = item.optJSONObject("owner")?.optString("display_name") ?: "Spotify"
+                        val coverUrl = item.optJSONArray("images")?.optJSONObject(0)?.optString("url")
+                        val total = item.optJSONObject("tracks")?.optInt("total", 0) ?: 0
+                        if (results.none { it.id == id || it.uri == uri }) {
+                            results.add(SpotifyPlaylistSummary(id, uri, name, owner, coverUrl, total))
+                        }
+                    }
+                } else {
+                    conn.disconnect()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching web playlists", e)
+            }
+        }
+
+        // 3. Fallback / Merge with spclient rootlist (Spotify internal rootlist API)
+        if (results.isEmpty()) {
+            try {
+                val userProfile = fetchCurrentUserProfile(prefs).getOrNull()
+                val username = userProfile?.id?.ifEmpty { null } ?: prefs?.getString("user_profile_id", null) ?: "31dgtnegwnonpz7pbb62523oc5ny"
+                val rootlistUrl = URL("https://spclient.wg.spotify.com/playlist/v2/user/$username/rootlist?decorate=revision%2Clength%2Cattributes%2Ctimestamp%2Cowner%2Ccapabilities&bustCache=${System.currentTimeMillis()}")
+                val conn = (rootlistUrl.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    setRequestProperty("authorization", "Bearer $token")
+                    setRequestProperty("client-token", clientToken)
+                    setRequestProperty("app-platform", APP_PLATFORM)
+                    setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                    setRequestProperty("origin", "https://open.spotify.com")
+                    setRequestProperty("referer", "https://open.spotify.com/")
+                    setRequestProperty("user-agent", USER_AGENT)
+                }
+                if (conn.responseCode in 200..299) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+                    conn.disconnect()
+                    val json = JSONObject(body)
+                    val contents = json.optJSONObject("contents")
+                    val items = contents?.optJSONArray("items") ?: JSONArray()
+                    for (i in 0 until items.length()) {
+                        val itObj = items.getJSONObject(i)
+                        val uri = itObj.optString("uri")
+                        if (uri.contains("playlist")) {
+                            val id = uri.substringAfterLast(":")
+                            val name = itObj.optJSONObject("attributes")?.optString("name", "Playlist") ?: "Playlist"
+                            if (results.none { it.id == id || it.uri == uri }) {
+                                results.add(SpotifyPlaylistSummary(id, uri, name, "You", null, 0))
+                            }
+                        }
+                    }
+                } else {
+                    conn.disconnect()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error reading rootlist", e)
+            }
+        }
+
+        // 4. Merge any locally cached playlists
         if (prefs != null) {
             try {
                 val localJson = prefs.getString("local_user_playlists_json", null)
@@ -822,7 +971,7 @@ class SpotifyWebClient {
                         val name = pObj.optString("name", "My Playlist")
                         val cover = pObj.optString("coverUrl", null)
                         val tracksArr = pObj.optJSONArray("tracks") ?: JSONArray()
-                        if (results.none { it.id == id }) {
+                        if (results.none { it.id == id || it.uri == uri }) {
                             results.add(SpotifyPlaylistSummary(id, uri, name, "You", cover, tracksArr.length()))
                         }
                     }
@@ -835,37 +984,155 @@ class SpotifyWebClient {
         Result.success(results)
     }
 
-    suspend fun createPlaylist(name: String, description: String = "", prefs: android.content.SharedPreferences? = null): Result<SpotifyPlaylistSummary> = withContext(Dispatchers.IO) {
-        val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
+    suspend fun createPlaylist(
+        name: String,
+        description: String = "",
+        isPublic: Boolean = true,
+        prefs: android.content.SharedPreferences? = null
+    ): Result<SpotifyPlaylistSummary> = withContext(Dispatchers.IO) {
+        val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
+        val clientToken = customClientToken ?: CLIENT_TOKEN
         var createdOnline: SpotifyPlaylistSummary? = null
 
+        // 1. Primary Spotify Web Player method: POST to spclient.wg.spotify.com/playlist/v2/playlist
+        //    followed by POST to /rootlist/changes to add it to user's Spotify account
         try {
-            val url = URL("https://api.spotify.com/v1/me/playlists")
-            val conn = (url.openConnection() as HttpURLConnection).apply {
+            val plUrl = URL("https://spclient.wg.spotify.com/playlist/v2/playlist")
+            val plConn = (plUrl.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
                 connectTimeout = 8000
                 readTimeout = 8000
-                setRequestProperty("Authorization", "Bearer $token")
-                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
+                setRequestProperty("content-type", "application/json;charset=UTF-8")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                setRequestProperty("origin", "https://open.spotify.com")
+                setRequestProperty("referer", "https://open.spotify.com/")
+                setRequestProperty("user-agent", USER_AGENT)
             }
-            val body = JSONObject().apply {
-                put("name", name)
-                put("description", description.ifEmpty { "Created with Stopify" })
-                put("public", false)
+
+            val plBody = JSONObject().apply {
+                put("ops", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("kind", "UPDATE_LIST_ATTRIBUTES")
+                        put("updateListAttributes", JSONObject().apply {
+                            put("newAttributes", JSONObject().apply {
+                                put("values", JSONObject().apply {
+                                    put("name", name)
+                                    if (description.isNotEmpty()) {
+                                        put("description", description)
+                                    }
+                                })
+                            })
+                        })
+                    })
+                })
             }
-            OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
-            val code = conn.responseCode
-            if (code in 200..299) {
-                val resText = BufferedReader(InputStreamReader(conn.inputStream)).readText()
-                val json = JSONObject(resText)
-                val id = json.optString("id")
-                val uri = json.optString("uri", "spotify:playlist:$id")
-                createdOnline = SpotifyPlaylistSummary(id, uri, name, "You", null, 0)
+
+            OutputStreamWriter(plConn.outputStream).use { it.write(plBody.toString()) }
+            val plCode = plConn.responseCode
+            if (plCode in 200..299) {
+                val resText = BufferedReader(InputStreamReader(plConn.inputStream)).readText()
+                val resJson = JSONObject(resText)
+                val playlistUri = resJson.optString("uri")
+                val cleanId = playlistUri.substringAfterLast(":")
+                createdOnline = SpotifyPlaylistSummary(cleanId, playlistUri, name, "You", null, 0)
+                Log.d(TAG, "Created playlist on Spotify: $playlistUri")
+
+                // Add to rootlist changes so it appears in the user's Spotify account
+                try {
+                    val userProfile = fetchCurrentUserProfile(prefs).getOrNull()
+                    val username = userProfile?.id?.ifEmpty { null } ?: prefs?.getString("user_profile_id", null) ?: "31dgtnegwnonpz7pbb62523oc5ny"
+                    val rootChangesUrl = URL("https://spclient.wg.spotify.com/playlist/v2/user/$username/rootlist/changes")
+                    val rcConn = (rootChangesUrl.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        doOutput = true
+                        connectTimeout = 8000
+                        readTimeout = 8000
+                        setRequestProperty("authorization", "Bearer $token")
+                        setRequestProperty("client-token", clientToken)
+                        setRequestProperty("content-type", "application/json;charset=UTF-8")
+                        setRequestProperty("app-platform", APP_PLATFORM)
+                        setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                        setRequestProperty("origin", "https://open.spotify.com")
+                        setRequestProperty("referer", "https://open.spotify.com/")
+                        setRequestProperty("user-agent", USER_AGENT)
+                    }
+
+                    val rcBody = JSONObject().apply {
+                        put("deltas", JSONArray().apply {
+                            put(JSONObject().apply {
+                                put("ops", JSONArray().apply {
+                                    put(JSONObject().apply {
+                                        put("kind", "ADD")
+                                        put("add", JSONObject().apply {
+                                            put("items", JSONArray().apply {
+                                                put(JSONObject().apply {
+                                                    put("uri", playlistUri)
+                                                    put("attributes", JSONObject().apply {
+                                                        put("timestamp", System.currentTimeMillis().toString())
+                                                        put("public", isPublic)
+                                                    })
+                                                })
+                                            })
+                                            put("addFirst", true)
+                                        })
+                                    })
+                                })
+                                put("info", JSONObject().apply {
+                                    put("source", JSONObject().apply {
+                                        put("client", "WEBPLAYER")
+                                    })
+                                })
+                            })
+                        })
+                    }
+
+                    OutputStreamWriter(rcConn.outputStream).use { it.write(rcBody.toString()) }
+                    val rcCode = rcConn.responseCode
+                    rcConn.disconnect()
+                    Log.d(TAG, "Added playlist to rootlist changes: $rcCode")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error adding to rootlist changes", e)
+                }
             }
-            conn.disconnect()
+            plConn.disconnect()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed creating online playlist, saving locally", e)
+            Log.w(TAG, "Failed creating playlist via spclient", e)
+        }
+
+        // 2. Fallback to Web API POST https://api.spotify.com/v1/me/playlists
+        if (createdOnline == null) {
+            try {
+                val url = URL("https://api.spotify.com/v1/me/playlists")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    setRequestProperty("Authorization", "Bearer $token")
+                    setRequestProperty("Content-Type", "application/json")
+                }
+                val body = JSONObject().apply {
+                    put("name", name)
+                    put("description", description.ifEmpty { "Created with Stopify" })
+                    put("public", isPublic)
+                }
+                OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    val resText = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+                    val json = JSONObject(resText)
+                    val id = json.optString("id")
+                    val uri = json.optString("uri", "spotify:playlist:$id")
+                    createdOnline = SpotifyPlaylistSummary(id, uri, name, "You", null, 0)
+                }
+                conn.disconnect()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed creating online playlist via Web API", e)
+            }
         }
 
         val summary = createdOnline ?: SpotifyPlaylistSummary(
@@ -899,31 +1166,91 @@ class SpotifyWebClient {
     }
 
     suspend fun addTrackToPlaylist(playlistId: String, track: SpotifyTrack, prefs: android.content.SharedPreferences? = null): Result<Boolean> = withContext(Dispatchers.IO) {
-        val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
+        val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
+        val clientToken = customClientToken ?: CLIENT_TOKEN
 
+        val canonicalPlaylistUri = if (playlistId.startsWith("spotify:playlist:")) playlistId else "spotify:playlist:${playlistId.substringAfterLast(":")}"
+        val cleanId = playlistId.substringAfterLast(":")
+
+        // 1. Try Pathfinder v2 addToPlaylist GraphQL query (matches web client network flow)
+        var onlineSuccess = false
         if (!playlistId.startsWith("local_")) {
             try {
-                val cleanId = playlistId.substringAfterLast(":")
-                val url = URL("https://api.spotify.com/v1/playlists/$cleanId/tracks")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
+                val pfUrl = URL("https://api-partner.spotify.com/pathfinder/v2/query")
+                val pfConn = (pfUrl.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
                     connectTimeout = 8000
                     readTimeout = 8000
-                    setRequestProperty("Authorization", "Bearer $token")
-                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("authorization", "Bearer $token")
+                    setRequestProperty("client-token", clientToken)
+                    setRequestProperty("content-type", "application/json;charset=UTF-8")
+                    setRequestProperty("app-platform", APP_PLATFORM)
+                    setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                    setRequestProperty("origin", "https://open.spotify.com")
+                    setRequestProperty("referer", "https://open.spotify.com/")
+                    setRequestProperty("user-agent", USER_AGENT)
                 }
-                val body = JSONObject().apply {
-                    put("uris", JSONArray().apply { put(track.uri) })
+                val pfBody = JSONObject().apply {
+                    put("variables", JSONObject().apply {
+                        put("playlistItemUris", JSONArray().apply { put(track.uri) })
+                        put("playlistUri", canonicalPlaylistUri)
+                        put("newPosition", JSONObject().apply {
+                            put("moveType", "BOTTOM_OF_PLAYLIST")
+                            put("fromUid", JSONObject.NULL)
+                        })
+                        put("interactionId", UUID.randomUUID().toString())
+                    })
+                    put("operationName", "addToPlaylist")
+                    put("extensions", JSONObject().apply {
+                        put("persistedQuery", JSONObject().apply {
+                            put("version", 1)
+                            put("sha256Hash", ADD_TO_PLAYLIST_HASH)
+                        })
+                    })
                 }
-                OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
-                val code = conn.responseCode
-                conn.disconnect()
+                OutputStreamWriter(pfConn.outputStream).use { it.write(pfBody.toString()) }
+                val pfCode = pfConn.responseCode
+                if (pfCode in 200..299) {
+                    val pfRes = BufferedReader(InputStreamReader(pfConn.inputStream)).readText()
+                    if (!pfRes.contains("errors") || pfRes.contains("AddItemsToPlaylistPayload")) {
+                        onlineSuccess = true
+                        Log.d(TAG, "Successfully added '${track.name}' to Spotify playlist $canonicalPlaylistUri via Pathfinder")
+                    }
+                }
+                pfConn.disconnect()
             } catch (e: Exception) {
-                Log.w(TAG, "Could not add track online: $playlistId", e)
+                Log.w(TAG, "Could not add track via Pathfinder query", e)
+            }
+
+            // 2. Fallback to Web API: POST https://api.spotify.com/v1/playlists/{playlist_id}/tracks
+            if (!onlineSuccess) {
+                try {
+                    val url = URL("https://api.spotify.com/v1/playlists/$cleanId/tracks")
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        doOutput = true
+                        connectTimeout = 8000
+                        readTimeout = 8000
+                        setRequestProperty("Authorization", "Bearer $token")
+                        setRequestProperty("Content-Type", "application/json")
+                    }
+                    val body = JSONObject().apply {
+                        put("uris", JSONArray().apply { put(track.uri) })
+                    }
+                    OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+                    val code = conn.responseCode
+                    conn.disconnect()
+                    if (code in 200..299) {
+                        onlineSuccess = true
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not add track online via Web API: $playlistId", e)
+                }
             }
         }
 
+        // 3. Mirror in local preferences cache
         if (prefs != null) {
             try {
                 val localJson = prefs.getString("local_user_playlists_json", "[]") ?: "[]"
@@ -931,7 +1258,7 @@ class SpotifyWebClient {
                 var found = false
                 for (i in 0 until array.length()) {
                     val p = array.getJSONObject(i)
-                    if (p.optString("id") == playlistId || p.optString("uri") == playlistId) {
+                    if (p.optString("id") == playlistId || p.optString("uri") == playlistId || p.optString("id") == cleanId) {
                         val tracks = p.optJSONArray("tracks") ?: JSONArray()
                         val trackObj = JSONObject().apply {
                             put("id", track.id)
@@ -954,7 +1281,7 @@ class SpotifyWebClient {
                 if (!found) {
                     val newP = JSONObject().apply {
                         put("id", playlistId)
-                        put("uri", if (playlistId.startsWith("spotify:")) playlistId else "spotify:playlist:$playlistId")
+                        put("uri", canonicalPlaylistUri)
                         put("name", "Playlist")
                         put("ownerName", "You")
                         put("coverUrl", track.coverUrl)
@@ -1070,6 +1397,7 @@ class SpotifyWebClient {
         }
         Result.success(true)
     }
+
 
     val favoriteTrackIds: MutableSet<String> = Collections.synchronizedSet(mutableSetOf<String>())
 

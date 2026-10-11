@@ -198,7 +198,7 @@ fun StopifyTheme(
             if (seedColor != null) {
                 generateArtworkColorScheme(seedColor, darkTheme)
             } else {
-                DarkColorScheme
+                MonochromeColorScheme
             }
         }
     }

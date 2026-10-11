@@ -553,6 +553,33 @@ fun CreatePlaylistDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                var isPublic by remember { mutableStateOf(true) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isPublic) "Public Playlist" else "Private Playlist",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isPublic) "Anyone can find and listen" else "Only visible to you on Spotify",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = isPublic,
+                        onCheckedChange = { isPublic = it }
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Row(
@@ -568,7 +595,7 @@ fun CreatePlaylistDialog(
                             if (name.isNotBlank() && !isCreating) {
                                 isCreating = true
                                 coroutineScope.launch {
-                                    val res = client.createPlaylist(name.trim(), description.trim(), prefs)
+                                    val res = client.createPlaylist(name.trim(), description.trim(), isPublic, prefs)
                                     if (res.isSuccess) {
                                         onPlaylistCreated(res.getOrThrow())
                                         onDismiss()

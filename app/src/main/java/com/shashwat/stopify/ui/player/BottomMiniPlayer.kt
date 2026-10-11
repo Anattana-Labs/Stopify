@@ -81,13 +81,6 @@ fun SimpBottomMiniPlayer(
         label = "play_pause_scale"
     )
 
-    val progressFraction = remember(playbackState.currentPositionMs, playbackState.durationMs) {
-        if (playbackState.durationMs > 0) {
-            (playbackState.currentPositionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
-        } else {
-            0f
-        }
-    }
 
     val shape = RoundedCornerShape(16.dp)
 
@@ -320,21 +313,7 @@ fun SimpBottomMiniPlayer(
                     )
                 }
             }
-
-            // Spotify Progress Bar at Bottom Edge
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.5.dp)
-                    .background(Color.White.copy(alpha = 0.12f))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(fraction = progressFraction)
-                        .fillMaxHeight()
-                        .background(Color(0xFF1ED760))
-                )
-            }
         }
     }
 }
+
