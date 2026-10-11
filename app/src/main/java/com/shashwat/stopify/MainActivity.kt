@@ -47,12 +47,18 @@ class MainActivity : ComponentActivity() {
 
     private val spotifyClient = SpotifyWebClient()
     private lateinit var audioPlayer: SpotifyAudioPlayer
-
+    private var controllerFuture: com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.MediaController>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         audioPlayer = SpotifyAudioPlayer.getInstance(this)
+
+        val sessionToken = androidx.media3.session.SessionToken(
+            this,
+            android.content.ComponentName(this, com.shashwat.stopify.player.PlaybackService::class.java)
+        )
+        controllerFuture = androidx.media3.session.MediaController.Builder(this, sessionToken).buildAsync()
 
 
 
@@ -231,7 +237,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-
+        controllerFuture?.let {
+            androidx.media3.session.MediaController.releaseFuture(it)
+        }
         if (isFinishing) {
             audioPlayer.releasePlayer()
         }
