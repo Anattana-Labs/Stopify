@@ -74,6 +74,7 @@ fun SimpFullPlayer(
     var scrubProgress by remember { mutableFloatStateOf(0f) }
     var showQueueOverlay by remember { mutableStateOf(false) }
     var showTrackOptionsMenu by remember { mutableStateOf(false) }
+    var showFullScreenLyrics by remember { mutableStateOf(false) }
     var isShuffle by remember { mutableStateOf(false) }
     var isRepeat by remember { mutableStateOf(false) }
 
@@ -256,9 +257,7 @@ fun SimpFullPlayer(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .clickable {
-                                    coroutineScope.launch {
-                                        scrollState.animateScrollTo(scrollState.maxValue)
-                                    }
+                                    showFullScreenLyrics = true
                                 }
                         ) {
                             Icon(
@@ -442,7 +441,8 @@ fun SimpFullPlayer(
                     SpotifyColorLyricsCard(
                         lyrics = colorLyrics!!,
                         currentPositionMs = currentPositionMs,
-                        onLineClick = { onSeekTo(it) }
+                        onLineClick = { onSeekTo(it) },
+                        onExpand = { showFullScreenLyrics = true }
                     )
                 } else if (isLyricsLoading) {
                     Box(
@@ -457,6 +457,18 @@ fun SimpFullPlayer(
                     }
                 }
             }
+        }
+
+        // Full Screen Lyrics Viewer (Spotui style)
+        if (showFullScreenLyrics) {
+            FullScreenLyricsViewer(
+                track = track,
+                lyrics = colorLyrics,
+                isLoading = isLyricsLoading,
+                currentPositionMs = currentPositionMs,
+                onSeekTo = onSeekTo,
+                onClose = { showFullScreenLyrics = false }
+            )
         }
 
         // Full-screen Queue Overlay Modal Sheet
@@ -507,6 +519,7 @@ fun SpotifyColorLyricsCard(
     lyrics: SpotifyColorLyrics,
     currentPositionMs: Long,
     onLineClick: (Long) -> Unit,
+    onExpand: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val bgColor = remember(lyrics.backgroundColor) { argbToColor(lyrics.backgroundColor) }
@@ -549,25 +562,42 @@ fun SpotifyColorLyricsCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Lyrics",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = highlightColor
-                )
-                if (lyrics.syncType == "LINE_SYNCED") {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = highlightColor.copy(alpha = 0.2f)
-                    ) {
-                        Text(
-                            text = "SYNCED",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = highlightColor,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Lyrics",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = highlightColor
+                    )
+                    if (lyrics.syncType == "LINE_SYNCED") {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = highlightColor.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "SYNCED",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = highlightColor,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
+                }
+
+                IconButton(
+                    onClick = onExpand,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Fullscreen,
+                        contentDescription = "Full screen lyrics",
+                        tint = highlightColor,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
 
