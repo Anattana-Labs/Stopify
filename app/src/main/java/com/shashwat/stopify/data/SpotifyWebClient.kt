@@ -237,6 +237,13 @@ class SpotifyWebClient {
     var customCookies: String? = null
         private set
 
+    private val lyricsCache = java.util.concurrent.ConcurrentHashMap<String, SpotifyColorLyrics>()
+
+    fun getCachedColorLyrics(trackId: String): SpotifyColorLyrics? {
+        val clean = trackId.substringAfterLast(":")
+        return lyricsCache[clean]
+    }
+
     val cookieHeaderString: String
         get() = customCookies ?: "sp_dc=$SP_DC; sp_key=$SP_KEY; sp_t=$SP_T"
 
@@ -503,14 +510,14 @@ class SpotifyWebClient {
     suspend fun reportPlaybackToApi(
         track: SpotifyTrack,
         positionMs: Long = 0L,
-        prefs: android.content.SharedPreferences? = null
+        prefs: android.content.SharedPreferences? = null,
+        isFinished: Boolean = false
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         // 1. Immediately record in local history cache and prefs so track appears at top of Recently Played instantly!
         addLocalHistoryTrack(track, prefs)
 
         val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
-        // Use registered DEVICE_ID so device state matches the dealer session
         val currentDeviceId = DEVICE_ID
         val trackFileId = audioFileMap[track.uri] ?: ""
 
@@ -518,7 +525,10 @@ class SpotifyWebClient {
             // Ensure device is registered with Spotify dealer/track-playback session
             ensureDeviceRegistered(token, currentDeviceId)
 
-            // 1. Report playback state to Spotify Connect / device track-playback endpoint (matches req.json network capture)
+            val trackDuration = if (track.durationMs > 0) track.durationMs else 203105L
+            val reportedPosition = if (isFinished) trackDuration else if (positionMs > 0) positionMs else 1002L
+
+            // 1. Report playback state to Spotify Connect / device track-playback endpoint
             val trackPlaybackEndpoints = listOf(
                 "https://gae2-spclient.spotify.com/track-playback/v1/devices/$currentDeviceId/state",
                 "https://spclient.wg.spotify.com/track-playback/v1/devices/$currentDeviceId/state"
@@ -543,7 +553,7 @@ class SpotifyWebClient {
                     }
 
                     val body = JSONObject().apply {
-                        put("seq_num", 4)
+                        put("seq_num", if (isFinished || positionMs >= 30000L) 6 else 4)
                         put("state_ref", JSONObject().apply {
                             put("state_machine_id", "ChTYh8P7GXEaL9SXQ9jMrnbW_sLlYQ")
                             put("state_id", "4afaf822d8624b5fb4d2f9ffe5b1fe79")
@@ -551,72 +561,108 @@ class SpotifyWebClient {
                         })
                         put("sub_state", JSONObject().apply {
                             put("playback_speed", 1)
-                            put("position", if (positionMs > 0) positionMs else 1002L)
-                            put("duration", if (track.durationMs > 0) track.durationMs else 203105L)
+                            put("position", reportedPosition)
+                            put("duration", trackDuration)
                             put("media_type", "AUDIO")
                             put("bitrate", 128000)
                             put("audio_quality", "HIGH")
                             put("format", 10)
                             put("is_video_on", false)
                         })
-                        put("previous_position", if (positionMs > 0) positionMs else 1002L)
-                        put("debug_source", "started_playing")
+                        put("previous_position", reportedPosition)
+                        put("debug_source", if (isFinished) "track_done" else if (positionMs >= 30000L) "playback_progress" else "started_playing")
                     }
 
                     OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
                     val code = conn.responseCode
                     conn.disconnect()
-                    Log.d(TAG, "Report playback to track-playback API status: $code ($stateUrlStr) for '${track.name}'")
+                    Log.d(TAG, "Report playback to track-playback API status: $code ($stateUrlStr) for '${track.name}' (pos: ${reportedPosition}ms, finished: $isFinished)")
                 } catch (e: Exception) {
                     Log.w(TAG, "Error reporting track-playback state to $stateUrlStr", e)
                 }
             }
 
-            // 2. Spotify Web Player / Melody Batch Telemetry (jssdk_playback_start & jssdk_connect_command)
-            // This is the primary pipeline Spotify Web uses to record playback sessions into account history!
+            // 2. Spotify Web Player / Melody Batch Telemetry
             val playbackId = UUID.randomUUID().toString().replace("-", "")
             val sessionId = System.currentTimeMillis().toString()
 
-            val melodyStartPayload = JSONObject().apply {
-                put("messages", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("type", "jssdk_playback_start")
-                        put("message", JSONObject().apply {
-                            put("play_track", track.uri)
-                            put("file_id", trackFileId)
-                            put("playback_id", playbackId)
-                            put("session_id", sessionId)
-                            put("ms_start_position", positionMs)
-                            put("initially_paused", false)
-                            put("client_id", "")
-                            put("correlation_id", "")
-                            put("feature_identifier", "")
-                        })
-                    })
-                })
-                put("sdk_id", "harmony:4.80.0")
-                put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
-                put("client_version", "0.0.0")
-            }
+            val messagesList = mutableListOf<JSONObject>()
 
-            val melodyCmdPayload = JSONObject().apply {
-                put("messages", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("type", "jssdk_connect_command")
-                        put("message", JSONObject().apply {
-                            put("command_id", playbackId)
-                            put("command_type", "play")
-                            put("target_device_brand", "spotify")
-                            put("target_device_model", "web_player")
-                            put("target_device_id", currentDeviceId)
-                            put("result", "success")
-                            put("http_status_code", 200)
+            if (!isFinished && positionMs < 30000L) {
+                // Playback start event
+                val melodyStartPayload = JSONObject().apply {
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("type", "jssdk_playback_start")
+                            put("message", JSONObject().apply {
+                                put("play_track", track.uri)
+                                put("file_id", trackFileId)
+                                put("playback_id", playbackId)
+                                put("session_id", sessionId)
+                                put("ms_start_position", positionMs)
+                                put("initially_paused", false)
+                                put("client_id", "")
+                                put("correlation_id", "")
+                                put("feature_identifier", "")
+                            })
                         })
                     })
-                })
-                put("sdk_id", "harmony:4.80.0-3cdf02c91")
-                put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
-                put("client_version", "0.0.0")
+                    put("sdk_id", "harmony:4.80.0")
+                    put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
+                    put("client_version", "0.0.0")
+                }
+                messagesList.add(melodyStartPayload)
+
+                val melodyCmdPayload = JSONObject().apply {
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("type", "jssdk_connect_command")
+                            put("message", JSONObject().apply {
+                                put("command_id", playbackId)
+                                put("command_type", "play")
+                                put("target_device_brand", "spotify")
+                                put("target_device_model", "web_player")
+                                put("target_device_id", currentDeviceId)
+                                put("result", "success")
+                                put("http_status_code", 200)
+                            })
+                        })
+                    })
+                    put("sdk_id", "harmony:4.80.0-3cdf02c91")
+                    put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
+                    put("client_version", "0.0.0")
+                }
+                messagesList.add(melodyCmdPayload)
+            } else {
+                // Playback stats event (scrobble trigger when played >= 30s or finished)
+                val playedMs = if (isFinished) trackDuration else positionMs.coerceAtLeast(30000L)
+                val melodyStatsPayload = JSONObject().apply {
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("type", "jssdk_playback_stats")
+                            put("message", JSONObject().apply {
+                                put("play_track", track.uri)
+                                put("file_id", trackFileId)
+                                put("playback_id", playbackId)
+                                put("session_id", sessionId)
+                                put("ms_played", playedMs)
+                                put("ms_nominal_played", playedMs)
+                                put("ms_file_duration", trackDuration)
+                                put("ms_actual_duration", trackDuration)
+                                put("ms_start_position", 0)
+                                put("ms_end_position", reportedPosition)
+                                put("reason_start", "playbtn")
+                                put("reason_end", if (isFinished) "trackdone" else "progress")
+                                put("client_id", "")
+                                put("correlation_id", "")
+                            })
+                        })
+                    })
+                    put("sdk_id", "harmony:4.80.0")
+                    put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
+                    put("client_version", "0.0.0")
+                }
+                messagesList.add(melodyStatsPayload)
             }
 
             val melodyEndpoints = listOf(
@@ -625,7 +671,7 @@ class SpotifyWebClient {
             )
 
             for (melodyUrlStr in melodyEndpoints) {
-                for (payload in listOf(melodyStartPayload, melodyCmdPayload)) {
+                for (payload in messagesList) {
                     try {
                         val mUrl = URL(melodyUrlStr)
                         val mConn = (mUrl.openConnection() as HttpURLConnection).apply {
@@ -643,7 +689,7 @@ class SpotifyWebClient {
                         OutputStreamWriter(mConn.outputStream).use { it.write(payload.toString()) }
                         val mc = mConn.responseCode
                         mConn.disconnect()
-                        Log.d(TAG, "melody batch ($melodyUrlStr) status: $mc")
+                        Log.d(TAG, "melody batch ($melodyUrlStr) status: $mc (isFinished: $isFinished, playedMs: $reportedPosition)")
                     } catch (ex: Exception) {
                         Log.w(TAG, "Error posting melody batch to $melodyUrlStr", ex)
                     }
@@ -3591,6 +3637,8 @@ class SpotifyWebClient {
 
     suspend fun fetchColorLyrics(trackId: String, coverUrl: String? = null): Result<SpotifyColorLyrics> = withContext(Dispatchers.IO) {
         val cleanId = trackId.substringAfterLast(":")
+        lyricsCache[cleanId]?.let { return@withContext Result.success(it) }
+
         val token = getAccessToken().getOrElse { customAccessToken ?: FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
 
@@ -3653,16 +3701,16 @@ class SpotifyWebClient {
                 val provider = lyricsObj?.optString("providerDisplayName", "Musixmatch") ?: "Musixmatch"
 
                 Log.d(TAG, "Spotify Color Lyrics fetched: ${linesList.size} lines, syncType: $syncType, provider: $provider")
-                Result.success(
-                    SpotifyColorLyrics(
-                        syncType = syncType,
-                        lines = linesList,
-                        backgroundColor = bgColor,
-                        textColor = txtColor,
-                        highlightTextColor = highlightColor,
-                        providerDisplayName = provider
-                    )
+                val colorLyrics = SpotifyColorLyrics(
+                    syncType = syncType,
+                    lines = linesList,
+                    backgroundColor = bgColor,
+                    textColor = txtColor,
+                    highlightTextColor = highlightColor,
+                    providerDisplayName = provider
                 )
+                lyricsCache[cleanId] = colorLyrics
+                Result.success(colorLyrics)
             } else {
                 Log.w(TAG, "Lyrics request failed: HTTP $responseCode - $responseBody")
                 Result.failure(Exception("HTTP $responseCode: $responseBody"))

@@ -234,10 +234,40 @@ fun SimpMusicApp(
         }
     }
 
-    // Periodically update playback progress
+    // Lyrics background color for miniplayer and full player synchronization
+    var currentTrackLyricsColor by remember { mutableStateOf<Color?>(null) }
+    var hasReported30sScrobble by remember { mutableStateOf(false) }
+
+    // Fetch color lyrics for the current track whenever it changes
+    LaunchedEffect(playbackState.currentTrack?.id) {
+        val current = playbackState.currentTrack
+        hasReported30sScrobble = false
+        if (current != null) {
+            val cached = client.getCachedColorLyrics(current.id)
+            if (cached != null) {
+                currentTrackLyricsColor = argbToColor(cached.backgroundColor)
+            } else {
+                val res = client.fetchColorLyrics(current.id, current.coverUrl)
+                if (res.isSuccess) {
+                    currentTrackLyricsColor = argbToColor(res.getOrThrow().backgroundColor)
+                }
+            }
+        } else {
+            currentTrackLyricsColor = null
+        }
+    }
+
+    // Periodically update playback progress and report scrobble to Spotify history once 30s played
     LaunchedEffect(playbackState.isPlaying) {
         while (playbackState.isPlaying) {
             player.updateProgress()
+            val track = playbackState.currentTrack
+            if (track != null && !hasReported30sScrobble && playbackState.currentPositionMs >= 30000L) {
+                hasReported30sScrobble = true
+                coroutineScope.launch {
+                    client.reportPlaybackToApi(track, playbackState.currentPositionMs, prefs, isFinished = false)
+                }
+            }
             delay(500)
         }
     }
@@ -321,9 +351,12 @@ fun SimpMusicApp(
         }
     }
 
-    // Autoqueue on track completion hook
+    // Autoqueue and history scrobble on track completion hook
     DisposableEffect(player) {
-        player.onTrackCompleted = {
+        player.onTrackCompleted = { completedTrack ->
+            coroutineScope.launch {
+                client.reportPlaybackToApi(completedTrack, completedTrack.durationMs, prefs, isFinished = true)
+            }
             playNextTrack()
         }
         onDispose {
@@ -666,7 +699,8 @@ fun SimpMusicApp(
                     onSeekTo = { player.seekTo(it) },
                     onExpand = { showFullPlayer = true },
                     isFavorite = favoriteTrackIds.contains(currentTrack.id),
-                    onToggleFavorite = { onToggleFavoriteLambda(currentTrack) }
+                    onToggleFavorite = { onToggleFavoriteLambda(currentTrack) },
+                    backgroundColor = currentTrackLyricsColor
                 )
             }
         }

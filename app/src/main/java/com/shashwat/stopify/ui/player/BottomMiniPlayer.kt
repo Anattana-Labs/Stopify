@@ -3,10 +3,12 @@ package com.shashwat.stopify.ui.player
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -64,7 +66,8 @@ fun SimpBottomMiniPlayer(
     onPreviousTrack: (() -> Unit)? = null,
     onDismiss: (() -> Unit)? = null,
     isFavorite: Boolean = false,
-    onToggleFavorite: () -> Unit = {}
+    onToggleFavorite: () -> Unit = {},
+    backgroundColor: Color? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
@@ -76,6 +79,13 @@ fun SimpBottomMiniPlayer(
         label = "play_pause_scale"
     )
 
+    val targetBgColor = backgroundColor ?: Color(0xFF2A2A2A)
+    val animatedBgColor by animateColorAsState(
+        targetValue = targetBgColor,
+        animationSpec = tween(durationMillis = 400),
+        label = "miniplayer_bg_color"
+    )
+
     val shape = RoundedCornerShape(8.dp)
 
     Box(
@@ -83,7 +93,7 @@ fun SimpBottomMiniPlayer(
             .fillMaxWidth()
             .offset { IntOffset(0, offsetY.value.roundToInt()) }
             .clip(shape)
-            .background(Color(0xFF2A2A2A))
+            .background(animatedBgColor)
             .clickable { onExpand() }
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
