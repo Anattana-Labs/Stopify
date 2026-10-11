@@ -184,6 +184,32 @@ fun generateArtworkColorScheme(seedColor: Color, darkTheme: Boolean = true): Col
     )
 }
 
+val SpotifyGreen = Color(0xFF1ED760)
+
+private val SpotifyGreenScheme = darkColorScheme(
+    primary = SpotifyGreen,
+    onPrimary = Color(0xFF000000),
+    primaryContainer = Color(0xFF134D25),
+    onPrimaryContainer = Color(0xFF90FBB4),
+    secondary = Color(0xFF1DB954),
+    onSecondary = Color(0xFF000000),
+    secondaryContainer = Color(0xFF1F3B28),
+    onSecondaryContainer = Color(0xFFA1E7B9),
+    tertiary = Color(0xFF2AE66E),
+    onTertiary = Color(0xFF000000),
+    surface = Color(0xFF121212),
+    onSurface = Color(0xFFF0F0F0),
+    surfaceVariant = Color(0xFF1E1E1E),
+    onSurfaceVariant = Color(0xFFB3B3B3),
+    surfaceContainerLowest = Color(0xFF0C0C0E),
+    surfaceContainerLow = Color(0xFF16161A),
+    surfaceContainer = Color(0xFF1C1C22),
+    surfaceContainerHigh = Color(0xFF26262E),
+    surfaceContainerHighest = Color(0xFF32323C),
+    outline = Color(0xFF44444C),
+    outlineVariant = Color(0xFF282830)
+)
+
 @Composable
 fun StopifyTheme(
     themeMode: AppThemeMode = AppThemeMode.DYNAMIC,
@@ -198,7 +224,7 @@ fun StopifyTheme(
             if (seedColor != null) {
                 generateArtworkColorScheme(seedColor, darkTheme)
             } else {
-                MonochromeColorScheme
+                SpotifyGreenScheme
             }
         }
     }

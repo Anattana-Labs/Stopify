@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
@@ -21,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -835,263 +837,24 @@ fun SearchAndAddTracksDialog(
 @Composable
 fun SpotifyCookieDialog(
     client: SpotifyWebClient,
+    initialTab: Int = 0,
     onDismiss: () -> Unit,
     onCookiesUpdated: (String) -> Unit
 ) {
-    val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var cookieInputText by remember { mutableStateOf(client.customCookies ?: "") }
-    var statusMessage by remember { mutableStateOf("") }
-    var isSuccess by remember { mutableStateOf(false) }
-
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
-        Surface(
-            shape = ShapeExtraLargeIncreased,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp,
-            modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.85f)
-                .padding(16.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp)
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Spotify Account & Cookies",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Login with Spotify Web or paste session cookies",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Close")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier.clip(ShapeExtraLargeIncreased)
-                ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("Web Login", fontWeight = FontWeight.SemiBold) }
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Paste Cookies", fontWeight = FontWeight.SemiBold) }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                if (statusMessage.isNotEmpty()) {
-                    Surface(
-                        shape = ShapeLargeIncreased,
-                        color = if (isSuccess) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp)
-                    ) {
-                        Text(
-                            text = statusMessage,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isSuccess) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
-                }
-
-                if (selectedTab == 0) {
-                    Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        Text(
-                            text = "Log into your Spotify account below. Once logged in, session credentials are saved automatically.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .clip(ShapeLargeIncreased)
-                                .background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            SpotifyWebView(
-                                initialCookies = client.customCookies ?: "",
-                                onCookiesFound = { cookies ->
-                                    val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
-                                    prefs.edit().putString("spotify_cookies", cookies).apply()
-                                    client.updateCookies(cookies)
-                                    onCookiesUpdated(cookies)
-                                    statusMessage = "Session cookies extracted successfully."
-                                    isSuccess = true
-                                },
-                                onTokenFound = { token ->
-                                    val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
-                                    prefs.edit().putString("spotify_access_token", token).apply()
-                                    client.setAccessToken(token)
-                                    statusMessage = "Live Bearer Token captured! Ready to stream."
-                                    isSuccess = true
-                                },
-                                onClientTokenFound = { ct ->
-                                    val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
-                                    prefs.edit().putString("spotify_client_token", ct).apply()
-                                    client.setClientToken(ct)
-                                }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Button(
-                            onClick = {
-                                val cm = CookieManager.getInstance()
-                                val c1 = cm.getCookie("https://open.spotify.com") ?: ""
-                                val c2 = cm.getCookie("https://accounts.spotify.com") ?: ""
-                                val combined = "$c1; $c2"
-                                if (combined.contains("sp_dc")) {
-                                    val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
-                                    prefs.edit().putString("spotify_cookies", combined).apply()
-                                    client.updateCookies(combined)
-                                    onCookiesUpdated(combined)
-                                    statusMessage = "Session saved! Navigate to web player to capture token."
-                                    isSuccess = true
-                                } else {
-                                    statusMessage = "No active session detected yet. Please complete login above."
-                                    isSuccess = false
-                                }
-                            },
-                            shape = ShapeExtraLargeIncreased,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Rounded.Check, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Save Active Session")
-                        }
-                    }
-                } else {
-                    Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        Text(
-                            text = "Paste Bearer token (BQ...), DevTools request headers, or cookies.txt below:",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = cookieInputText,
-                            onValueChange = { cookieInputText = it },
-                            placeholder = {
-                                Text("Paste Bearer BQ..., request headers, or cookies.txt here...")
-                            },
-                            shape = ShapeLargeIncreased,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    val clip = clipboardManager.getText()?.text
-                                    if (!clip.isNullOrEmpty()) {
-                                        cookieInputText = clip
-                                    }
-                                },
-                                shape = ShapeExtraLargeIncreased,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Paste Clipboard")
-                            }
-
-                            Button(
-                                onClick = {
-                                    if (cookieInputText.isNotBlank()) {
-                                        val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
-                                        val tokenRegex = Regex("""(BQ[A-Za-z0-9_-]{80,})""")
-                                        val match = tokenRegex.find(cookieInputText)
-                                        if (match != null) {
-                                            val token = match.value
-                                            prefs.edit().putString("spotify_access_token", token).apply()
-                                            client.setAccessToken(token)
-                                        }
-
-                                        val parsed = SpotifyWebClient.parseCookieInput(cookieInputText)
-                                        if (parsed.isNotEmpty()) {
-                                            prefs.edit().putString("spotify_cookies", parsed).apply()
-                                            client.updateCookies(parsed)
-                                            onCookiesUpdated(parsed)
-                                        }
-
-                                        statusMessage = if (match != null) {
-                                            "Bearer Access Token and cookies saved successfully!"
-                                        } else {
-                                            "Cookies saved!"
-                                        }
-                                        isSuccess = true
-                                    } else {
-                                        statusMessage = "Please paste token or cookie text first."
-                                        isSuccess = false
-                                    }
-                                },
-                                shape = ShapeExtraLargeIncreased,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Save & Apply")
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        TextButton(
-                            onClick = {
-                                val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
-                                prefs.edit().remove("spotify_cookies").remove("spotify_access_token").apply()
-                                client.updateCookies("")
-                                cookieInputText = ""
-                                onCookiesUpdated("")
-                                statusMessage = "Reset credentials to defaults."
-                                isSuccess = true
-                            },
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) {
-                            Text("Reset to Default Credentials", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
-            }
-        }
+        com.shashwat.stopify.ui.screens.LoginScreen(
+            client = client,
+            initialTab = initialTab,
+            canDismiss = true,
+            onDismiss = onDismiss,
+            onLoginSuccess = onCookiesUpdated
+        )
     }
 }
 

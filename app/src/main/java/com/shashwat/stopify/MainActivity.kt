@@ -264,6 +264,10 @@ fun SimpMusicApp(
     var isSearchLoading by remember { mutableStateOf(false) }
     var statusLog by remember { mutableStateOf("") }
     var showCookieDialog by remember { mutableStateOf(false) }
+    var cookieDialogInitialTab by remember { mutableIntStateOf(0) }
+    val hasCompletedOnboarding = prefs?.getBoolean("onboarding_completed", false) == true
+    val hasAnySession = !client.customCookies.isNullOrEmpty() || prefs?.getString("spotify_cookies", null)?.isNotEmpty() == true
+    var showOnboarding by remember { mutableStateOf(!hasCompletedOnboarding && !hasAnySession) }
     var showFullPlayer by remember { mutableStateOf(false) }
     val playbackState by player.playbackState.collectAsState()
     val playbackQueue = remember { mutableStateListOf<SpotifyTrack>() }
@@ -907,9 +911,36 @@ fun SimpMusicApp(
         if (showCookieDialog) {
             SpotifyCookieDialog(
                 client = client,
-                onDismiss = { showCookieDialog = false },
+                initialTab = cookieDialogInitialTab,
+                onDismiss = {
+                    showCookieDialog = false
+                    if (!client.customCookies.isNullOrEmpty() || prefs?.getString("spotify_cookies", null)?.isNotEmpty() == true) {
+                        prefs?.edit()?.putBoolean("onboarding_completed", true)?.apply()
+                        showOnboarding = false
+                    }
+                },
                 onCookiesUpdated = {
+                    prefs?.edit()?.putBoolean("onboarding_completed", true)?.apply()
+                    showOnboarding = false
                     statusLog = "Session updated"
+                }
+            )
+        }
+
+        // Onboarding Screen (shown on first launch)
+        if (showOnboarding) {
+            com.shashwat.stopify.ui.screens.OnboardingScreen(
+                onSelectWebLogin = {
+                    cookieDialogInitialTab = 0
+                    showCookieDialog = true
+                },
+                onSelectCookiesTxt = {
+                    cookieDialogInitialTab = 1
+                    showCookieDialog = true
+                },
+                onSkip = {
+                    prefs?.edit()?.putBoolean("onboarding_completed", true)?.apply()
+                    showOnboarding = false
                 }
             )
         }
