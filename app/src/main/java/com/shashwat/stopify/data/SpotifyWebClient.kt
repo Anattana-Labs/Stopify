@@ -701,7 +701,8 @@ class SpotifyWebClient {
             val currentSmId = activeStateMachineId ?: "ChTYh8P7GXEaL9SXQ9jMrnbW_sLlYQ"
 
             // Handle track transition state machine state update
-            if (lastReportedTrackUri != null && lastReportedTrackUri != track.uri) {
+            val isTransitioningTrack = lastReportedTrackUri != null && lastReportedTrackUri != track.uri
+            if (isTransitioningTrack) {
                 if (!nextStateId.isNullOrEmpty()) {
                     activeStateId = nextStateId!!
                     nextStateId = null
@@ -723,8 +724,8 @@ class SpotifyWebClient {
             val seq = ++stateSeqNum
             val now = System.currentTimeMillis()
 
-            // 1. If starting new track, trigger connect-state player command first (matching new.json request 2)
-            if (debugSource == "before_track_load") {
+            // 1. If starting new manual track play (not auto-advance), trigger connect-state player command
+            if (debugSource == "before_track_load" && !isTransitioningTrack) {
                 try {
                     val playCmdUrl = URL("https://gae2-spclient.spotify.com/connect-state/v1/player/command/from/$currentDeviceId/to/$currentDeviceId")
                     val cmdId = UUID.randomUUID().toString().replace("-", "")
@@ -973,6 +974,8 @@ class SpotifyWebClient {
                 })
                 if (debugSource != "before_track_load") {
                     put("previous_position", reportedPosition)
+                } else if (isTransitioningTrack && lastReportedPositionMs > 0) {
+                    put("previous_position", lastReportedPositionMs)
                 }
                 if (debugSource == "track_data_finalized") {
                     put("playback_stats", JSONObject().apply {
@@ -1022,7 +1025,11 @@ class SpotifyWebClient {
                 put("debug_source", debugSource)
             }
 
-            lastReportedPositionMs = reportedPosition
+            if (isFinished) {
+                lastReportedPositionMs = reportedPosition
+            } else if (debugSource == "before_track_load" && !isTransitioningTrack) {
+                lastReportedPositionMs = 0L
+            }
 
             OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
             val code = conn.responseCode
@@ -1041,8 +1048,8 @@ class SpotifyWebClient {
 
             Log.d(TAG, "track-playback state API status: $code ($debugSource) for '${track.name}' (pos: ${reportedPosition}ms, seq: $seq)")
 
-            // 4. On initial load, trigger Pathfinder entity query and decorate context tracks
-            if (debugSource == "before_track_load") {
+            // 4. On initial manual load, trigger Pathfinder entity query and decorate context tracks
+            if (debugSource == "before_track_load" && !isTransitioningTrack) {
                 fetchEntitiesForRecentlyPlayed(track.uri)
                 if (stateMachineQueueTracks.isNotEmpty()) {
                     decorateContextTracks(stateMachineQueueTracks.map { it.uri })

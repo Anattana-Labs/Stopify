@@ -364,14 +364,11 @@ fun SimpMusicApp(
         }
     }
 
-    // Periodically update playback progress and report scrobble to Spotify history every few seconds
-    var lastPeriodicReportTimeMs by remember { mutableStateOf(0L) }
+    // Playback progress ticker and discrete state machine event reporting
     LaunchedEffect(playbackState.isPlaying, playbackState.currentTrack?.id) {
-        lastPeriodicReportTimeMs = System.currentTimeMillis()
         while (playbackState.isPlaying) {
             player.updateProgress()
             val track = playbackState.currentTrack
-            val now = System.currentTimeMillis()
             if (track != null) {
                 // Report started_playing after playback begins (~1s)
                 if (!hasReportedStartedPlaying && playbackState.currentPositionMs >= 1000L) {
@@ -381,20 +378,11 @@ fun SimpMusicApp(
                     }
                 }
 
-                // First 30s milestone report (played_threshold_reached)
+                // 30s milestone report (played_threshold_reached) - scrobbles to Spotify Recently Played
                 if (!hasReported30sScrobble && playbackState.currentPositionMs >= 30000L) {
                     hasReported30sScrobble = true
                     coroutineScope.launch {
                         client.reportPlaybackProgress(track, playbackState.currentPositionMs, prefs, "played_threshold_reached")
-                        client.reportPlaybackToApi(track, playbackState.currentPositionMs, prefs, isFinished = false)
-                    }
-                }
-
-                // Periodic heartbeat post every 5 seconds so Spotify continuously tracks the play in Recently Played
-                if (now - lastPeriodicReportTimeMs >= 5000L) {
-                    lastPeriodicReportTimeMs = now
-                    coroutineScope.launch {
-                        client.reportPlaybackToApi(track, playbackState.currentPositionMs, prefs, isFinished = false)
                     }
                 }
             }
