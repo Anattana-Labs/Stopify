@@ -444,10 +444,36 @@ class SpotifyWebClient {
             }
 
             val updatedRef = respJson.optJSONObject("updated_state_ref")
-            val stateIdx = updatedRef?.optInt("state_index", -1) ?: -1
+            var stateIdx = updatedRef?.optInt("state_index", -1) ?: -1
             val statesArr = smObj.optJSONArray("states")
 
-            if (statesArr != null && stateIdx in 0 until statesArr.length()) {
+            if (statesArr != null && statesArr.length() > 0) {
+                // If updated_state_ref not provided or out of range, find state matching current track URI
+                if (stateIdx !in 0 until statesArr.length()) {
+                    val targetUri = currentTrackUri ?: lastReportedTrackUri
+                    val matchTrackIdx = if (targetUri != null) parsedTracks.indexOfFirst { it.uri == targetUri } else -1
+                    if (matchTrackIdx >= 0) {
+                        for (s in 0 until statesArr.length()) {
+                            val st = statesArr.getJSONObject(s)
+                            if (st.optInt("track", -1) == matchTrackIdx) {
+                                stateIdx = s
+                                break
+                            }
+                        }
+                    }
+                    if (stateIdx !in 0 until statesArr.length()) {
+                        // Fallback to state with advance transition
+                        for (s in 0 until statesArr.length()) {
+                            val st = statesArr.getJSONObject(s)
+                            if (st.optJSONObject("transitions")?.optJSONObject("advance") != null) {
+                                stateIdx = s
+                                break
+                            }
+                        }
+                    }
+                    if (stateIdx !in 0 until statesArr.length()) stateIdx = 0
+                }
+
                 val currentStateObj = statesArr.getJSONObject(stateIdx)
                 val sId = currentStateObj.optString("state_id")
                 if (sId.isNotEmpty()) {
