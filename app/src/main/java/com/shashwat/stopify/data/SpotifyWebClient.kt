@@ -945,7 +945,9 @@ class SpotifyWebClient {
                     put("format", 10)
                     put("is_video_on", false)
                 })
-                put("previous_position", lastReportedPositionMs)
+                if (debugSource != "before_track_load") {
+                    put("previous_position", reportedPosition)
+                }
                 if (debugSource == "track_data_finalized") {
                     put("playback_stats", JSONObject().apply {
                         put("ms_total_est", trackDuration)
@@ -1007,6 +1009,8 @@ class SpotifyWebClient {
             if (code in 200..299 && respBody.isNotEmpty()) {
                 val respJson = JSONObject(respBody)
                 parseStateMachineResponse(respJson, currentTrackUri = track.uri)
+            } else if (code !in 200..299) {
+                Log.w(TAG, "track-playback state API error ($code): $respBody")
             }
 
             Log.d(TAG, "track-playback state API status: $code ($debugSource) for '${track.name}' (pos: ${reportedPosition}ms, seq: $seq)")
