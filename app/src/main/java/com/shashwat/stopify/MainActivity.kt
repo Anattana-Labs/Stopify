@@ -342,11 +342,13 @@ fun SimpMusicApp(
     // Lyrics background color for miniplayer and full player synchronization
     var currentTrackLyricsColor by remember { mutableStateOf<Color?>(null) }
     var hasReported30sScrobble by remember { mutableStateOf(false) }
+    var hasReportedStartedPlaying by remember { mutableStateOf(false) }
 
     // Fetch color lyrics for the current track whenever it changes
     LaunchedEffect(playbackState.currentTrack?.id) {
         val current = playbackState.currentTrack
         hasReported30sScrobble = false
+        hasReportedStartedPlaying = false
         if (current != null) {
             val cached = client.getCachedColorLyrics(current.id)
             if (cached != null) {
@@ -371,10 +373,19 @@ fun SimpMusicApp(
             val track = playbackState.currentTrack
             val now = System.currentTimeMillis()
             if (track != null) {
-                // First 30s milestone report
+                // Report started_playing after playback begins (~1s)
+                if (!hasReportedStartedPlaying && playbackState.currentPositionMs >= 1000L) {
+                    hasReportedStartedPlaying = true
+                    coroutineScope.launch {
+                        client.reportPlaybackProgress(track, playbackState.currentPositionMs, prefs, "started_playing")
+                    }
+                }
+
+                // First 30s milestone report (played_threshold_reached)
                 if (!hasReported30sScrobble && playbackState.currentPositionMs >= 30000L) {
                     hasReported30sScrobble = true
                     coroutineScope.launch {
+                        client.reportPlaybackProgress(track, playbackState.currentPositionMs, prefs, "played_threshold_reached")
                         client.reportPlaybackToApi(track, playbackState.currentPositionMs, prefs, isFinished = false)
                     }
                 }
@@ -475,8 +486,8 @@ fun SimpMusicApp(
         player.onTrackCompleted = { completedTrack ->
             coroutineScope.launch {
                 client.reportPlaybackToApi(completedTrack, completedTrack.durationMs, prefs, isFinished = true)
+                playNextTrack()
             }
-            playNextTrack()
         }
         player.onSkipToNext = {
             playNextTrack()

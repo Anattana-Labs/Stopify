@@ -20,6 +20,7 @@ import java.net.URL
 import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
 
@@ -191,9 +192,23 @@ class SpotifyWebClient {
     @Volatile
     private var activeStateMachineId: String? = null
     @Volatile
-    private var activeStateId: String = "4afaf822d8624b5fb4d2f9ffe5b1fe79"
+    var activeStateId: String = "4afaf822d8624b5fb4d2f9ffe5b1fe79"
+        internal set
     @Volatile
-    private var stateSeqNum: Int = 3
+    var nextStateId: String? = null
+        internal set
+    @Volatile
+    var nextTrackFromStateMachine: SpotifyTrack? = null
+        internal set
+    val stateMachineQueueTracks = CopyOnWriteArrayList<SpotifyTrack>()
+    @Volatile
+    private var stateSeqNum: Int = 2
+    @Volatile
+    private var playbackSessionId: String = System.currentTimeMillis().toString()
+    @Volatile
+    private var lastReportedTrackUri: String? = null
+    @Volatile
+    private var lastReportedPositionMs: Long = 0L
 
     @Volatile
     var tokenRefreshHook: (suspend () -> Boolean)? = null
@@ -355,201 +370,510 @@ class SpotifyWebClient {
         )
     }
 
+    fun parseStateMachineResponse(respJson: JSONObject, currentTrackUri: String? = null) {
+        try {
+            val smObj = respJson.optJSONObject("state_machine") ?: return
+            val newSm = smObj.optString("state_machine_id")
+            if (!newSm.isNullOrEmpty()) {
+                activeStateMachineId = newSm
+                Log.d(TAG, "Captured active state_machine_id: $newSm")
+            }
+
+            val parsedTracks = mutableListOf<SpotifyTrack>()
+            val tracksArr = smObj.optJSONArray("tracks")
+            if (tracksArr != null) {
+                for (i in 0 until tracksArr.length()) {
+                    val tObj = tracksArr.getJSONObject(i)
+                    val meta = tObj.optJSONObject("metadata") ?: continue
+                    val uri = meta.optString("uri")
+                    if (uri.isEmpty()) continue
+
+                    // Cache audio file ID from manifest immediately so next tracks stream instantly with zero latency
+                    val manifest = tObj.optJSONObject("manifest")
+                    val fileIdsMp4 = manifest?.optJSONArray("file_ids_mp4")
+                    val fileId = fileIdsMp4?.optJSONObject(0)?.optString("file_id")
+                    if (!fileId.isNullOrEmpty()) {
+                        audioFileMap[uri] = fileId
+                        pendingTrackResolutions[uri]?.complete(fileId)
+                        Log.d(TAG, "State machine autoqueue track resolved: $uri -> $fileId")
+                    }
+
+                    val name = meta.optString("name")
+                    val groupName = meta.optString("group_name")
+                    val groupUri = meta.optString("group_uri")
+                    val duration = meta.optLong("duration", 0L)
+
+                    var artistName = ""
+                    var artistUri = ""
+                    val authorsArr = meta.optJSONArray("authors")
+                    if (authorsArr != null && authorsArr.length() > 0) {
+                        val author = authorsArr.getJSONObject(0)
+                        artistName = author.optString("name")
+                        artistUri = author.optString("uri")
+                    }
+
+                    var coverUrl: String? = null
+                    val imagesArr = meta.optJSONArray("images")
+                    if (imagesArr != null && imagesArr.length() > 0) {
+                        var bestWidth = 0
+                        for (imgIdx in 0 until imagesArr.length()) {
+                            val imgObj = imagesArr.getJSONObject(imgIdx)
+                            val w = imgObj.optInt("width", 0)
+                            val url = imgObj.optString("url")
+                            if (url.isNotEmpty() && (coverUrl == null || w >= bestWidth)) {
+                                bestWidth = w
+                                coverUrl = url
+                            }
+                        }
+                    }
+
+                    val trackObj = SpotifyTrack(
+                        id = uri.removePrefix("spotify:track:"),
+                        uri = uri,
+                        name = name,
+                        artist = artistName,
+                        album = groupName,
+                        coverUrl = coverUrl,
+                        durationMs = duration,
+                        isPlayable = true,
+                        albumUri = groupUri.ifEmpty { null },
+                        artistUri = artistUri.ifEmpty { null }
+                    )
+                    parsedTracks.add(trackObj)
+                }
+            }
+
+            val updatedRef = respJson.optJSONObject("updated_state_ref")
+            val stateIdx = updatedRef?.optInt("state_index", -1) ?: -1
+            val statesArr = smObj.optJSONArray("states")
+
+            if (statesArr != null && stateIdx in 0 until statesArr.length()) {
+                val currentStateObj = statesArr.getJSONObject(stateIdx)
+                val sId = currentStateObj.optString("state_id")
+                if (sId.isNotEmpty()) {
+                    activeStateId = sId
+                    Log.d(TAG, "Current activeStateId from state_machine: $sId (index: $stateIdx)")
+                }
+
+                // Extract advance transition to identify exact next state ID and next autoplay track
+                val transitions = currentStateObj.optJSONObject("transitions")
+                val advanceObj = transitions?.optJSONObject("advance")
+                val advanceIdx = advanceObj?.optInt("state_index", -1) ?: -1
+                if (advanceIdx in 0 until statesArr.length()) {
+                    val nextStateObj = statesArr.getJSONObject(advanceIdx)
+                    val nId = nextStateObj.optString("state_id")
+                    if (nId.isNotEmpty()) {
+                        nextStateId = nId
+                        Log.d(TAG, "Advance transition nextStateId: $nId (index: $advanceIdx)")
+                    }
+                    val nextTrackIdx = nextStateObj.optInt("track", -1)
+                    if (nextTrackIdx in 0 until parsedTracks.size) {
+                        nextTrackFromStateMachine = parsedTracks[nextTrackIdx]
+                        Log.d(TAG, "Next track designated by state machine: '${parsedTracks[nextTrackIdx].name}' (${parsedTracks[nextTrackIdx].uri})")
+                    }
+                }
+            }
+
+            // Populate upcoming autoqueue tracks excluding current active track
+            val filterUri = currentTrackUri ?: lastReportedTrackUri
+            val upcoming = parsedTracks.filter { it.uri != filterUri }
+            if (upcoming.isNotEmpty()) {
+                stateMachineQueueTracks.clear()
+                stateMachineQueueTracks.addAll(upcoming)
+                Log.d(TAG, "Updated state_machine autoqueue with ${upcoming.size} tracks: ${upcoming.map { it.name }}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error parsing state_machine response", e)
+        }
+    }
+
+    suspend fun fetchEntitiesForRecentlyPlayed(trackUri: String) = withContext(Dispatchers.IO) {
+        try {
+            val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
+            val clientToken = customClientToken ?: CLIENT_TOKEN
+            val url = URL("https://api-partner.spotify.com/pathfinder/v2/query")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 6000
+                readTimeout = 6000
+                setRequestProperty("Referer", "https://open.spotify.com/")
+                setRequestProperty("accept", "application/json")
+                setRequestProperty("accept-language", "en")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
+                setRequestProperty("content-type", "application/json;charset=UTF-8")
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                setRequestProperty("user-agent", USER_AGENT)
+            }
+            val payload = JSONObject().apply {
+                put("variables", JSONObject().apply {
+                    put("uris", JSONArray().apply { put(trackUri) })
+                })
+                put("operationName", "fetchEntitiesForRecentlyPlayed")
+                put("extensions", JSONObject().apply {
+                    put("persistedQuery", JSONObject().apply {
+                        put("version", 1)
+                        put("sha256Hash", "cf5d2e94ffd82788470788ae1f6090cc3e9e774fb8fd383580634c6e6f50f7be")
+                    })
+                })
+            }
+            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+            val code = conn.responseCode
+            conn.disconnect()
+            Log.d(TAG, "fetchEntitiesForRecentlyPlayed for $trackUri status: $code")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error in fetchEntitiesForRecentlyPlayed", e)
+        }
+    }
+
+    suspend fun decorateContextTracks(uris: List<String>): List<SpotifyTrack> = withContext(Dispatchers.IO) {
+        if (uris.isEmpty()) return@withContext emptyList()
+        try {
+            val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
+            val clientToken = customClientToken ?: CLIENT_TOKEN
+            val url = URL("https://api-partner.spotify.com/pathfinder/v2/query")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("Referer", "https://open.spotify.com/")
+                setRequestProperty("accept", "application/json")
+                setRequestProperty("accept-language", "en")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
+                setRequestProperty("content-type", "application/json;charset=UTF-8")
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                setRequestProperty("user-agent", USER_AGENT)
+            }
+            val payload = JSONObject().apply {
+                put("variables", JSONObject().apply {
+                    put("uris", JSONArray().apply { uris.take(50).forEach { put(it) } })
+                })
+                put("operationName", "decorateContextTracks")
+                put("extensions", JSONObject().apply {
+                    put("persistedQuery", JSONObject().apply {
+                        put("version", 1)
+                        put("sha256Hash", "383de00240775c39a6afe0b1055dc562b2a3930894201f9762f3fc32a74971c7")
+                    })
+                })
+            }
+            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val respBody = stream?.bufferedReader()?.readText() ?: ""
+            conn.disconnect()
+
+            if (code in 200..299 && respBody.isNotEmpty()) {
+                val json = JSONObject(respBody)
+                val tracksArr = json.optJSONObject("data")?.optJSONArray("tracks")
+                if (tracksArr != null) {
+                    val resultList = mutableListOf<SpotifyTrack>()
+                    for (i in 0 until tracksArr.length()) {
+                        val tObj = tracksArr.getJSONObject(i)
+                        val uri = tObj.optString("uri")
+                        val name = tObj.optString("name")
+                        val durMs = tObj.optJSONObject("duration")?.optLong("totalMilliseconds") ?: 0L
+                        val albumObj = tObj.optJSONObject("albumOfTrack")
+                        val albumName = albumObj?.optString("name") ?: ""
+                        val albumUri = albumObj?.optString("uri") ?: ""
+
+                        var coverUrl: String? = null
+                        val sources = albumObj?.optJSONObject("coverArt")?.optJSONArray("sources")
+                        if (sources != null && sources.length() > 0) {
+                            var bestW = 0
+                            for (s in 0 until sources.length()) {
+                                val src = sources.getJSONObject(s)
+                                val w = src.optInt("width", 0)
+                                val u = src.optString("url")
+                                if (u.isNotEmpty() && (coverUrl == null || w >= bestW)) {
+                                    bestW = w
+                                    coverUrl = u
+                                }
+                            }
+                        }
+
+                        var artistName = ""
+                        var artistUri = ""
+                        val artistItems = tObj.optJSONObject("artists")?.optJSONArray("items")
+                        if (artistItems != null && artistItems.length() > 0) {
+                            val names = mutableListOf<String>()
+                            for (a in 0 until artistItems.length()) {
+                                val art = artistItems.getJSONObject(a)
+                                val n = art.optJSONObject("profile")?.optString("name") ?: ""
+                                if (n.isNotEmpty()) names.add(n)
+                                if (artistUri.isEmpty()) artistUri = art.optString("uri")
+                            }
+                            artistName = names.joinToString(", ")
+                        }
+
+                        if (uri.isNotEmpty() && name.isNotEmpty()) {
+                            resultList.add(
+                                SpotifyTrack(
+                                    id = uri.removePrefix("spotify:track:"),
+                                    uri = uri,
+                                    name = name,
+                                    artist = artistName,
+                                    album = albumName,
+                                    coverUrl = coverUrl,
+                                    durationMs = durMs,
+                                    isPlayable = true,
+                                    albumUri = albumUri.ifEmpty { null },
+                                    artistUri = artistUri.ifEmpty { null }
+                                )
+                            )
+                        }
+                    }
+                    Log.d(TAG, "Decorated ${resultList.size} context tracks via Pathfinder")
+                    return@withContext resultList
+                }
+            }
+            emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error in decorateContextTracks", e)
+            emptyList()
+        }
+    }
+
+    suspend fun reportPlaybackProgress(
+        track: SpotifyTrack,
+        positionMs: Long,
+        prefs: android.content.SharedPreferences? = null,
+        debugSource: String
+    ): Result<Boolean> = reportPlaybackToApi(track, positionMs, prefs, isFinished = false, debugSourceOverride = debugSource)
+
     suspend fun reportPlaybackToApi(
         track: SpotifyTrack,
         positionMs: Long = 0L,
         prefs: android.content.SharedPreferences? = null,
-        isFinished: Boolean = false
+        isFinished: Boolean = false,
+        debugSourceOverride: String? = null
     ): Result<Boolean> = withContext(Dispatchers.IO) {
-        // 1. Immediately record in local history cache and prefs so track appears at top of Recently Played instantly!
+        // Record in local history cache immediately so track appears at top of Recently Played
         addLocalHistoryTrack(track, prefs)
 
         val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
         val currentDeviceId = getDeviceId(prefs)
-        
-        // Guarantee valid 40-char hex file ID for Spotify's scrobble engine
+
+        // Guarantee valid 40-char hex file ID for Spotify's engine
         val rawFileId = audioFileMap[track.uri] ?: ""
         val trackFileId = if (rawFileId.length >= 32) {
             rawFileId
         } else {
-            // Generate deterministic 40-char hex identifier from track id if fileId wasn't cached yet
             val trackHex = track.id.replace("-", "").lowercase()
             (trackHex + "0123456789abcdef0123456789abcdef").take(40)
         }
 
         try {
-            // Ensure device is registered with Spotify dealer/track-playback session
             ensureDeviceRegistered(token, currentDeviceId)
 
-            val trackDuration = if (track.durationMs > 0) track.durationMs else 203105L
-            val reportedPosition = if (isFinished) trackDuration else if (positionMs > 0) positionMs else 1002L
-
-            // 1. Report playback state to Spotify Connect / device track-playback endpoint
+            val trackDuration = if (track.durationMs > 0) track.durationMs else 208706L
             val currentSmId = activeStateMachineId ?: "ChTYh8P7GXEaL9SXQ9jMrnbW_sLlYQ"
-            val seq = ++stateSeqNum
-            val trackPlaybackEndpoints = listOf(
-                "https://gae2-spclient.spotify.com/track-playback/v1/devices/$currentDeviceId/state",
-                "https://spclient.wg.spotify.com/track-playback/v1/devices/$currentDeviceId/state"
-            )
 
-            for (stateUrlStr in trackPlaybackEndpoints) {
+            // Handle track transition state machine state update
+            if (lastReportedTrackUri != null && lastReportedTrackUri != track.uri) {
+                if (!nextStateId.isNullOrEmpty()) {
+                    activeStateId = nextStateId!!
+                    nextStateId = null
+                }
+                nextTrackFromStateMachine = null
+            }
+            lastReportedTrackUri = track.uri
+
+            val debugSource = debugSourceOverride ?: when {
+                isFinished -> "track_data_finalized"
+                positionMs == 0L -> "before_track_load"
+                positionMs in 1000L..4000L -> "started_playing"
+                positionMs >= 30000L -> "played_threshold_reached"
+                else -> "playback_progress"
+            }
+
+            val reportedPosition = if (isFinished) trackDuration else positionMs
+            val playbackSpeed = if (debugSource == "before_track_load") 0 else 1
+            val seq = ++stateSeqNum
+            val now = System.currentTimeMillis()
+
+            // 1. If starting new track, trigger connect-state player command first (matching new.json request 2)
+            if (debugSource == "before_track_load") {
                 try {
-                    val stateUrl = URL(stateUrlStr)
-                    val conn = (stateUrl.openConnection() as HttpURLConnection).apply {
-                        requestMethod = "PUT"
+                    val playCmdUrl = URL("https://gae2-spclient.spotify.com/connect-state/v1/player/command/from/$currentDeviceId/to/$currentDeviceId")
+                    val cmdId = UUID.randomUUID().toString().replace("-", "")
+                    val playCmdBody = JSONObject().apply {
+                        put("command", JSONObject().apply {
+                            put("context", JSONObject().apply {
+                                put("uri", track.uri)
+                                put("url", "context://${track.uri}")
+                                put("metadata", JSONObject())
+                            })
+                            put("play_origin", JSONObject().apply {
+                                put("feature_identifier", "search")
+                                put("feature_version", "web-player_2026-10-12_1791795388600_2b2ea800fe12")
+                                put("referrer_identifier", "search")
+                            })
+                            put("options", JSONObject().apply {
+                                put("license", "tft")
+                                put("skip_to", JSONObject())
+                                put("player_options_override", JSONObject())
+                            })
+                            put("logging_params", JSONObject().apply {
+                                put("page_instance_ids", JSONArray().apply { put("b5bed12a-02cd-4529-8659-da9f174cdeca") })
+                                put("interaction_ids", JSONArray().apply { put("ee768f0f-6e4c-49ed-8f17-338dad1a83f2") })
+                                put("command_id", cmdId)
+                            })
+                            put("endpoint", "play")
+                        })
+                    }
+
+                    val pConn = (playCmdUrl.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
                         doOutput = true
-                        connectTimeout = 6000
-                        readTimeout = 6000
+                        connectTimeout = 5000
+                        readTimeout = 5000
                         setRequestProperty("authorization", "Bearer $token")
                         setRequestProperty("client-token", clientToken)
                         setRequestProperty("content-type", "application/json")
                         setRequestProperty("app-platform", APP_PLATFORM)
                         setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
-                        setRequestProperty("origin", "https://open.spotify.com")
                         setRequestProperty("referer", "https://open.spotify.com/")
                         setRequestProperty("user-agent", USER_AGENT)
                     }
-
-                    val body = JSONObject().apply {
-                        put("seq_num", seq)
-                        put("state_ref", JSONObject().apply {
-                            put("state_machine_id", currentSmId)
-                            put("state_id", activeStateId)
-                            put("paused", false)
-                        })
-                        put("sub_state", JSONObject().apply {
-                            put("playback_speed", 1)
-                            put("position", reportedPosition)
-                            put("duration", trackDuration)
-                            put("media_type", "AUDIO")
-                            put("bitrate", 128000)
-                            put("audio_quality", "HIGH")
-                            put("format", 10)
-                            put("is_video_on", false)
-                        })
-                        put("previous_position", reportedPosition)
-                        put("debug_source", if (isFinished) "track_done" else if (positionMs >= 30000L) "playback_progress" else "started_playing")
-                    }
-
-                    OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
-                    val code = conn.responseCode
-                    val respBody = try {
-                        val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-                        stream?.bufferedReader()?.readText() ?: ""
-                    } catch (e: Exception) { "" }
-                    conn.disconnect()
-
-                    if (code in 200..299 && respBody.isNotEmpty()) {
-                        try {
-                            val respJson = JSONObject(respBody)
-                            val smObj = respJson.optJSONObject("state_machine")
-                            val newSm = smObj?.optString("state_machine_id")
-                            if (!newSm.isNullOrEmpty()) {
-                                activeStateMachineId = newSm
-                            }
-                            val updatedRef = respJson.optJSONObject("updated_state_ref")
-                            val stateIdx = updatedRef?.optInt("state_index", -1) ?: -1
-                            val statesArr = smObj?.optJSONArray("states")
-                            if (statesArr != null && stateIdx in 0 until statesArr.length()) {
-                                val nextStateId = statesArr.getJSONObject(stateIdx).optString("state_id")
-                                if (nextStateId.isNotEmpty()) {
-                                    activeStateId = nextStateId
-                                }
-                            }
-                        } catch (e: Exception) {}
-                    }
-
-                    Log.d(TAG, "Report playback to track-playback API status: $code ($stateUrlStr) for '${track.name}' (pos: ${reportedPosition}ms, finished: $isFinished)")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error reporting track-playback state to $stateUrlStr", e)
+                    OutputStreamWriter(pConn.outputStream).use { it.write(playCmdBody.toString()) }
+                    val pCode = pConn.responseCode
+                    pConn.disconnect()
+                    Log.d(TAG, "connect-state play command status: $pCode for ${track.uri}")
+                } catch (ce: Exception) {
+                    Log.w(TAG, "Error in connect-state play command", ce)
                 }
             }
 
-            // Sync with Spotify Connect player command to register with account cluster
-            if (!isFinished && positionMs < 5000L) {
-                val targetDevices = mutableListOf(currentDeviceId)
-                val wpDevId = webPlayerDeviceId
-                if (!wpDevId.isNullOrEmpty() && wpDevId != currentDeviceId && !targetDevices.contains(wpDevId)) {
-                    targetDevices.add(wpDevId)
-                }
+            // 2. Melody Telemetry batch reporting
+            // If track is finished: send track_stream_verification + jssdk_playback_stats (reason_end: trackdone)
+            // If track is starting: send jssdk_playback_start
+            val melodyPayloads = mutableListOf<JSONObject>()
+            if (isFinished) {
+                val statsStartTime = now - trackDuration
+                val targetNextPlaybackId = nextStateId ?: activeStateId
 
-                for (targetDevId in targetDevices) {
-                    try {
-                        val playCmdUrl = URL("https://gae2-spclient.spotify.com/connect-state/v1/player/command/from/$currentDeviceId/to/$targetDevId")
-                        val cmdId = UUID.randomUUID().toString().replace("-", "")
-                        val ctxUri = if (!track.albumUri.isNullOrEmpty() && track.albumUri.startsWith("spotify:album:")) {
-                            track.albumUri
-                        } else {
-                            track.uri
-                        }
-                        val playCmdBody = JSONObject().apply {
-                            put("command", JSONObject().apply {
-                                put("context", JSONObject().apply {
-                                    put("uri", ctxUri)
-                                    put("url", "context://$ctxUri")
-                                    put("metadata", JSONObject())
-                                })
-                                put("play_origin", JSONObject().apply {
-                                    put("feature_identifier", if (ctxUri.startsWith("spotify:album:")) "album" else "track")
-                                    put("feature_version", "web-player_2026-10-09_1791504000000_d873ee9db135")
-                                    put("referrer_identifier", "home")
-                                })
-                                put("options", JSONObject().apply {
-                                    put("license", "tft")
-                                    put("skip_to", JSONObject())
-                                    put("player_options_override", JSONObject())
-                                })
-                                put("logging_params", JSONObject().apply {
-                                    put("page_instance_ids", JSONArray())
-                                    put("interaction_ids", JSONArray())
-                                    put("command_id", cmdId)
-                                })
-                                put("endpoint", "play")
+                val finishBatch = JSONObject().apply {
+                    put("messages", JSONArray().apply {
+                        // 1. track_stream_verification
+                        put(JSONObject().apply {
+                            put("type", "track_stream_verification")
+                            put("message", JSONObject().apply {
+                                put("play_track", track.uri)
+                                put("playback_id", activeStateId)
+                                put("ms_played", trackDuration)
+                                put("ms_nominal_played", trackDuration)
+                                put("session_id", playbackSessionId)
+                                put("sequence_id", 0)
+                                put("next_playback_id", targetNextPlaybackId)
+                                put("playback_service", "track-playback")
                             })
-                        }
-
-                        val pConn = (playCmdUrl.openConnection() as HttpURLConnection).apply {
-                            requestMethod = "POST"
-                            doOutput = true
-                            connectTimeout = 5000
-                            readTimeout = 5000
-                            setRequestProperty("authorization", "Bearer $token")
-                            setRequestProperty("client-token", clientToken)
-                            setRequestProperty("content-type", "application/json;charset=UTF-8")
-                            setRequestProperty("app-platform", APP_PLATFORM)
-                            setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
-                            setRequestProperty("origin", "https://open.spotify.com")
-                            setRequestProperty("referer", "https://open.spotify.com/")
-                        }
-                        OutputStreamWriter(pConn.outputStream).use { it.write(playCmdBody.toString()) }
-                        val pCode = pConn.responseCode
-                        pConn.disconnect()
-                        Log.d(TAG, "Sync playback to Spotify Connect player command (target: $targetDevId): HTTP $pCode for ${track.uri}")
-                    } catch (ce: Exception) {
-                        Log.w(TAG, "Error syncing playback to connect-state for target $targetDevId", ce)
-                    }
+                        })
+                        // 2. jssdk_playback_stats
+                        put(JSONObject().apply {
+                            put("type", "jssdk_playback_stats")
+                            put("message", JSONObject().apply {
+                                put("play_track", track.uri)
+                                put("file_id", trackFileId)
+                                put("playback_id", activeStateId)
+                                put("internal_play_id", "1")
+                                put("memory_cached", false)
+                                put("persistent_cached", false)
+                                put("audio_format", "mp4")
+                                put("video_format", "")
+                                put("manifest_id", trackFileId)
+                                put("protected", true)
+                                put("key_system", "com.widevine.alpha")
+                                put("key_system_impl", "native")
+                                put("urls_json", "{\"version\":\"1.0.0\",\"urls\":[]}")
+                                put("start_time", statsStartTime)
+                                put("end_time", now)
+                                put("external_start_time", 0)
+                                put("ms_play_latency", 487)
+                                put("ms_pre_play_latency", 2)
+                                put("ms_init_latency", 160)
+                                put("ms_head_latency", 185)
+                                put("ms_first_bytes_latency", 512)
+                                put("ms_first_append_done_latency", 158)
+                                put("ms_key_system_info_latency", 0)
+                                put("ms_manifest_latency", 77)
+                                put("ms_manifest_parse_latency", 0)
+                                put("ms_resolve_latency", 308)
+                                put("ms_license_session_latency", 357)
+                                put("ms_license_generation_latency", 37)
+                                put("ms_license_request_latency", 317)
+                                put("ms_license_update_latency", 68)
+                                put("ms_played", trackDuration)
+                                put("ms_nominal_played", trackDuration)
+                                put("ms_file_duration", trackDuration)
+                                put("ms_actual_duration", trackDuration)
+                                put("ms_metadata_duration", 0)
+                                put("ms_start_position", 0)
+                                put("ms_end_position", trackDuration)
+                                put("ms_initial_rebuffer", 160)
+                                put("ms_seek_rebuffer", 0)
+                                put("ms_seek_rebuffer_longest", 0)
+                                put("ms_stall_rebuffer", 0)
+                                put("ms_stall_rebuffer_longest", 0)
+                                put("ms_played_per_surface", JSONObject())
+                                put("ms_played_visible", 0)
+                                put("n_stalls", 0)
+                                put("n_rendition_upgrade", 0)
+                                put("n_rendition_downgrade", 0)
+                                put("bps_bandwidth_max", 0)
+                                put("bps_bandwidth_min", 0)
+                                put("bps_bandwidth_avg", 0)
+                                put("n_seekback", 0)
+                                put("n_seekforward", 0)
+                                put("audio_start_bitrate", 128000)
+                                put("video_start_bitrate", JSONObject.NULL)
+                                put("start_bitrate", 128000)
+                                put("time_weighted_bitrate", 0)
+                                put("reason_start", "remote")
+                                put("reason_end", "trackdone")
+                                put("initially_paused", false)
+                                put("had_error", false)
+                                put("n_warnings", 0)
+                                put("n_navigator_offline", 0)
+                                put("session_id", playbackSessionId)
+                                put("sequence_id", 0)
+                                put("client_id", "")
+                                put("correlation_id", "")
+                                put("n_dropped_video_frames", 0)
+                                put("n_total_video_frames", 0)
+                                put("resolution_max", 0)
+                                put("resolution_min", 0)
+                                put("total_bytes", 3450086)
+                                put("strategy", "MSE")
+                                put("ms_played_per_audio_format", JSONObject().apply {
+                                    put("mp4;128000", 171)
+                                    put("mp4a.40.2;128000", (trackDuration - 171).coerceAtLeast(0L))
+                                })
+                                put("ms_played_per_video_format", JSONObject())
+                            })
+                        })
+                    })
+                    put("sdk_id", "harmony:4.80.0")
+                    put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
+                    put("client_version", "0.0.0")
                 }
-            }
-
-            // 2. Spotify Web Player / Melody Batch Telemetry
-            val playbackId = UUID.randomUUID().toString().replace("-", "")
-            val sessionId = System.currentTimeMillis().toString()
-
-            val messagesList = mutableListOf<JSONObject>()
-
-            if (!isFinished && positionMs < 30000L) {
-                // Playback start event
-                val melodyStartPayload = JSONObject().apply {
+                melodyPayloads.add(finishBatch)
+            } else if (debugSource == "before_track_load") {
+                val startBatch = JSONObject().apply {
                     put("messages", JSONArray().apply {
                         put(JSONObject().apply {
                             put("type", "jssdk_playback_start")
                             put("message", JSONObject().apply {
                                 put("play_track", track.uri)
                                 put("file_id", trackFileId)
-                                put("playback_id", playbackId)
-                                put("session_id", sessionId)
-                                put("ms_start_position", positionMs)
+                                put("playback_id", activeStateId)
+                                put("session_id", playbackSessionId)
+                                put("ms_start_position", 0)
                                 put("initially_paused", false)
                                 put("client_id", "")
                                 put("correlation_id", "")
@@ -561,133 +885,137 @@ class SpotifyWebClient {
                     put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
                     put("client_version", "0.0.0")
                 }
-                messagesList.add(melodyStartPayload)
-
-                val melodyCmdPayload = JSONObject().apply {
-                    put("messages", JSONArray().apply {
-                        put(JSONObject().apply {
-                            put("type", "jssdk_connect_command")
-                            put("message", JSONObject().apply {
-                                put("command_id", playbackId)
-                                put("command_type", "play")
-                                put("target_device_brand", "spotify")
-                                put("target_device_model", "web_player")
-                                put("target_device_id", currentDeviceId)
-                                put("result", "success")
-                                put("http_status_code", 200)
-                            })
-                        })
-                    })
-                    put("sdk_id", "harmony:4.80.0-3cdf02c91")
-                    put("platform", "web_player osx 10.15.7;chrome 155.0.0.0;desktop")
-                    put("client_version", "0.0.0")
-                }
-                messagesList.add(melodyCmdPayload)
-            } else {
-                // Playback stats event (scrobble trigger when played >= 30s, periodic progress, or finished)
-                val playedMs = if (isFinished) trackDuration else if (positionMs >= 30000L) positionMs else positionMs.coerceAtLeast(1002L)
-                val now = System.currentTimeMillis()
-                val startTime = now - playedMs
-                val melodyStatsPayload = JSONObject().apply {
-                    put("messages", JSONArray().apply {
-                        put(JSONObject().apply {
-                            put("type", "jssdk_playback_stats")
-                            put("message", JSONObject().apply {
-                                put("play_track", track.uri)
-                                put("file_id", trackFileId)
-                                put("playback_id", playbackId)
-                                put("session_id", sessionId)
-                                put("internal_play_id", "1")
-                                put("start_time", startTime)
-                                put("end_time", now)
-                                put("ms_played", playedMs)
-                                put("ms_nominal_played", playedMs)
-                                put("ms_file_duration", trackDuration)
-                                put("ms_actual_duration", trackDuration)
-                                put("ms_metadata_duration", trackDuration)
-                                put("ms_start_position", 0)
-                                put("ms_end_position", reportedPosition)
-                                put("reason_start", "playbtn")
-                                put("reason_end", if (isFinished) "trackdone" else "endplay")
-                                put("initially_paused", false)
-                                put("had_error", false)
-                                put("sequence_id", 0)
-                                put("client_id", "")
-                                put("correlation_id", "")
-                                put("urls_json", "{\"version\":\"1.0.0\",\"urls\":[]}")
-                                put("manifest_id", trackFileId)
-                                put("memory_cached", false)
-                                put("persistent_cached", false)
-                                put("audio_format", "")
-                                put("video_format", "")
-                                put("protected", false)
-                                put("key_system", "")
-                                put("key_system_impl", "")
-                                put("external_start_time", 0)
-                                put("ms_played_per_surface", JSONObject())
-                                put("ms_played_visible", 0)
-                                put("n_stalls", 0)
-                                put("n_rendition_upgrade", 0)
-                                put("n_rendition_downgrade", 0)
-                                put("bps_bandwidth_max", 0)
-                                put("bps_bandwidth_min", 0)
-                                put("bps_bandwidth_avg", 0)
-                                put("n_seekback", 0)
-                                put("n_seekforward", 0)
-                                put("start_bitrate", 0)
-                                put("time_weighted_bitrate", 0)
-                                put("n_warnings", 0)
-                                put("n_navigator_offline", 0)
-                                put("n_dropped_video_frames", 0)
-                                put("n_total_video_frames", 0)
-                                put("resolution_max", 0)
-                                put("resolution_min", 0)
-                                put("total_bytes", 0)
-                                put("strategy", "")
-                                put("ms_played_per_audio_format", JSONObject())
-                                put("ms_played_per_video_format", JSONObject())
-                            })
-                        })
-                    })
-                    put("sdk_id", "overture:4.80.0")
-                    put("platform", "Partner spotify desktop")
-                    put("client_version", SPOTIFY_APP_VERSION)
-                }
-                messagesList.add(melodyStatsPayload)
+                melodyPayloads.add(startBatch)
             }
 
-            val melodyEndpoints = listOf(
-                "https://gae2-spclient.spotify.com/melody/v1/msg/batch",
-                "https://spclient.wg.spotify.com/melody/v1/msg/batch"
-            )
-
-            for (melodyUrlStr in melodyEndpoints) {
-                for (payload in messagesList) {
-                    try {
-                        val mUrl = URL(melodyUrlStr)
-                        val mConn = (mUrl.openConnection() as HttpURLConnection).apply {
-                            requestMethod = "POST"
-                            doOutput = true
-                            connectTimeout = 5000
-                            readTimeout = 5000
-                            setRequestProperty("authorization", "Bearer $token")
-                            setRequestProperty("client-token", clientToken)
-                            setRequestProperty("content-type", "text/plain;charset=UTF-8")
-                            setRequestProperty("referer", "https://open.spotify.com/")
-                            setRequestProperty("origin", "https://open.spotify.com")
-                            setRequestProperty("user-agent", USER_AGENT)
-                        }
-                        OutputStreamWriter(mConn.outputStream).use { it.write(payload.toString()) }
-                        val mc = mConn.responseCode
-                        val respText = try {
-                            val stream = if (mc in 200..299) mConn.inputStream else mConn.errorStream
-                            BufferedReader(InputStreamReader(stream)).readText()
-                        } catch (e: Exception) { "" }
-                        mConn.disconnect()
-                        Log.d(TAG, "melody batch ($melodyUrlStr) status: $mc, resp: $respText (isFinished: $isFinished, playedMs: $reportedPosition)")
-                    } catch (ex: Exception) {
-                        Log.w(TAG, "Error posting melody batch to $melodyUrlStr", ex)
+            for (mPayload in melodyPayloads) {
+                try {
+                    val mUrl = URL("https://gae2-spclient.spotify.com/melody/v1/msg/batch")
+                    val mConn = (mUrl.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        doOutput = true
+                        connectTimeout = 5000
+                        readTimeout = 5000
+                        setRequestProperty("authorization", "Bearer $token")
+                        setRequestProperty("client-token", clientToken)
+                        setRequestProperty("content-type", "text/plain;charset=UTF-8")
+                        setRequestProperty("referer", "https://open.spotify.com/")
+                        setRequestProperty("user-agent", USER_AGENT)
                     }
+                    OutputStreamWriter(mConn.outputStream).use { it.write(mPayload.toString()) }
+                    val mc = mConn.responseCode
+                    mConn.disconnect()
+                    Log.d(TAG, "melody batch sent (code: $mc) for '${track.name}' ($debugSource)")
+                } catch (me: Exception) {
+                    Log.w(TAG, "Error sending melody batch", me)
+                }
+            }
+
+            // 3. PUT track-playback device state
+            val stateUrl = URL("https://gae2-spclient.spotify.com/track-playback/v1/devices/$currentDeviceId/state")
+            val conn = (stateUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                doOutput = true
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
+                setRequestProperty("content-type", "application/json")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                setRequestProperty("origin", "https://open.spotify.com")
+                setRequestProperty("referer", "https://open.spotify.com/")
+                setRequestProperty("user-agent", USER_AGENT)
+            }
+
+            val body = JSONObject().apply {
+                put("seq_num", seq)
+                put("state_ref", JSONObject().apply {
+                    put("state_machine_id", currentSmId)
+                    put("state_id", activeStateId)
+                    put("paused", false)
+                })
+                put("sub_state", JSONObject().apply {
+                    put("playback_speed", playbackSpeed)
+                    put("position", reportedPosition)
+                    put("duration", trackDuration)
+                    put("media_type", "AUDIO")
+                    put("bitrate", 128000)
+                    put("audio_quality", "HIGH")
+                    put("format", 10)
+                    put("is_video_on", false)
+                })
+                put("previous_position", lastReportedPositionMs)
+                if (debugSource == "track_data_finalized") {
+                    put("playback_stats", JSONObject().apply {
+                        put("ms_total_est", trackDuration)
+                        put("ms_metadata_duration", 0)
+                        put("ms_manifest_latency", 77)
+                        put("ms_manifest_parse_latency", 0)
+                        put("ms_key_system_info_latency", 0)
+                        put("ms_latency", 487)
+                        put("ms_first_bytes_latency", 512)
+                        put("start_offset_ms", 0)
+                        put("ms_initial_buffering", 160)
+                        put("ms_initial_rebuffer", 160)
+                        put("ms_seek_rebuffering", 0)
+                        put("ms_stalled", 0)
+                        put("max_ms_seek_rebuffering", 0)
+                        put("max_ms_stalled", 0)
+                        put("n_stalls", 0)
+                        put("n_rendition_upgrade", 0)
+                        put("n_rendition_downgrade", 0)
+                        put("bps_bandwidth_max", 0)
+                        put("bps_bandwidth_min", 0)
+                        put("bps_bandwidth_avg", 0)
+                        put("audiocodec", "mp4")
+                        put("audio_start_bitrate", 128000)
+                        put("video_start_bitrate", JSONObject.NULL)
+                        put("start_bitrate", 128000)
+                        put("time_weighted_bitrate", 0)
+                        put("key_system", "widevine")
+                        put("ms_key_latency", 779)
+                        put("total_bytes", 3450086)
+                        put("local_time_ms", now)
+                        put("n_dropped_video_frames", 0)
+                        put("n_total_video_frames", 0)
+                        put("resolution_max", 0)
+                        put("resolution_min", 0)
+                        put("strategy", "MSE")
+                        put("ms_played_per_surface", JSONObject())
+                        put("ms_played_visible", 0)
+                        put("ms_played_per_audio_format", JSONObject().apply {
+                            put("mp4;128000", 171)
+                            put("mp4a.40.2;128000", (trackDuration - 171).coerceAtLeast(0L))
+                        })
+                        put("ms_played_per_video_format", JSONObject())
+                    })
+                }
+                put("debug_source", debugSource)
+            }
+
+            lastReportedPositionMs = reportedPosition
+
+            OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+            val code = conn.responseCode
+            val respBody = try {
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                stream?.bufferedReader()?.readText() ?: ""
+            } catch (e: Exception) { "" }
+            conn.disconnect()
+
+            if (code in 200..299 && respBody.isNotEmpty()) {
+                val respJson = JSONObject(respBody)
+                parseStateMachineResponse(respJson, currentTrackUri = track.uri)
+            }
+
+            Log.d(TAG, "track-playback state API status: $code ($debugSource) for '${track.name}' (pos: ${reportedPosition}ms, seq: $seq)")
+
+            // 4. On initial load, trigger Pathfinder entity query and decorate context tracks
+            if (debugSource == "before_track_load") {
+                fetchEntitiesForRecentlyPlayed(track.uri)
+                if (stateMachineQueueTracks.isNotEmpty()) {
+                    decorateContextTracks(stateMachineQueueTracks.map { it.uri })
                 }
             }
 
@@ -1752,6 +2080,24 @@ class SpotifyWebClient {
 
     suspend fun fetchAutoplayQueue(currentTrack: SpotifyTrack): List<SpotifyTrack> = withContext(Dispatchers.IO) {
         try {
+            // First check if state_machine tracks are populated from track-playback state responses
+            val smTracks = stateMachineQueueTracks.toList()
+            if (smTracks.isNotEmpty()) {
+                val filtered = smTracks.filter { it.uri != currentTrack.uri && !it.name.equals(currentTrack.name, ignoreCase = true) }
+                if (filtered.isNotEmpty()) {
+                    Log.d(TAG, "Autoplay queue returning ${filtered.size} tracks from track-playback state_machine")
+                    return@withContext filtered
+                }
+            }
+
+            // Next check if nextTrackFromStateMachine is present
+            val nextTrack = nextTrackFromStateMachine
+            if (nextTrack != null && nextTrack.uri != currentTrack.uri) {
+                Log.d(TAG, "Autoplay queue returning nextTrackFromStateMachine: ${nextTrack.name}")
+                return@withContext listOf(nextTrack)
+            }
+
+            // Fallback to searching context
             val query = if (currentTrack.artist.isNotBlank()) "artist:\"${currentTrack.artist}\"" else currentTrack.name
             val results = searchTracks(query).getOrDefault(emptyList())
             results.filter { it.uri != currentTrack.uri && !it.name.equals(currentTrack.name, ignoreCase = true) }
@@ -1793,33 +2139,15 @@ class SpotifyWebClient {
                         }
                     }
 
-                    // Process manifest track cluster notifications
-                    if (text.contains("file_ids_mp4")) {
+                    // Process manifest track cluster notifications / state machine payloads
+                    if (text.contains("state_machine") || text.contains("file_ids_mp4")) {
                         val payloads = json.optJSONArray("payloads")
                         if (payloads != null) {
                             for (p in 0 until payloads.length()) {
-                                val sm = payloads.getJSONObject(p).optJSONObject("state_machine")
-                                val smId = sm?.optString("state_machine_id")
-                                if (!smId.isNullOrEmpty()) {
-                                    activeStateMachineId = smId
-                                    Log.d(TAG, "Captured active state_machine_id: $smId")
-                                }
-                                val states = sm?.optJSONArray("states")
-                                if (states != null && states.length() > 0) {
-                                    val sId = states.getJSONObject(0).optString("state_id")
-                                    if (sId.isNotEmpty()) activeStateId = sId
-                                }
-                                val tracks = sm?.optJSONArray("tracks") ?: continue
-                                for (i in 0 until tracks.length()) {
-                                    val tObj = tracks.getJSONObject(i)
-                                    val uri = tObj.optJSONObject("metadata")?.optString("uri")
-                                    val fileIdsMp4 = tObj.optJSONObject("manifest")?.optJSONArray("file_ids_mp4")
-                                    val fileId = fileIdsMp4?.optJSONObject(0)?.optString("file_id")
-                                    if (!uri.isNullOrEmpty() && !fileId.isNullOrEmpty()) {
-                                        Log.d(TAG, "Dealer manifest resolved: $uri -> $fileId")
-                                        audioFileMap[uri] = fileId
-                                        pendingTrackResolutions[uri]?.complete(fileId)
-                                    }
+                                val pObj = payloads.getJSONObject(p)
+                                val sm = pObj.optJSONObject("state_machine")
+                                if (sm != null) {
+                                    parseStateMachineResponse(pObj)
                                 }
                             }
                         }
