@@ -36,6 +36,7 @@ import coil.compose.AsyncImage
 import com.shashwat.stopify.data.SpotifyPlaylistSummary
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
+import com.shashwat.stopify.data.StopifyDownloadManager
 import com.shashwat.stopify.ui.theme.ShapeExtraLargeIncreased
 import com.shashwat.stopify.ui.theme.ShapeLargeIncreased
 import kotlinx.coroutines.launch
@@ -52,9 +53,17 @@ fun TrackOptionsMenu(
     onViewAlbum: (() -> Unit)? = null,
     onViewArtist: (() -> Unit)? = null,
     onToggleFavorite: (() -> Unit)? = null,
-    isFavorite: Boolean = false
+    isFavorite: Boolean = false,
+    onToggleDownload: (() -> Unit)? = null,
+    isDownloaded: Boolean? = null
 ) {
     if (!expanded) return
+
+    val context = LocalContext.current
+    val downloadManager = remember { StopifyDownloadManager.getInstance(context) }
+    val downloadedSet by downloadManager.downloadedTrackIds.collectAsState()
+    val effectivelyDownloaded = isDownloaded ?: downloadedSet.contains(track.id)
+    val coroutineScope = rememberCoroutineScope()
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -168,6 +177,21 @@ fun TrackOptionsMenu(
                     }
                 )
             }
+
+            // 5. Download / Remove Download
+            TrackOptionRow(
+                title = if (effectivelyDownloaded) "Remove Download" else "Download",
+                icon = if (effectivelyDownloaded) Icons.Rounded.FileDownloadDone else Icons.Rounded.Download,
+                iconTint = if (effectivelyDownloaded) Color(0xFF1DB954) else MaterialTheme.colorScheme.onSurfaceVariant,
+                onClick = {
+                    onDismissRequest()
+                    if (onToggleDownload != null) {
+                        onToggleDownload()
+                    } else {
+                        downloadManager.toggleDownload(track, coroutineScope)
+                    }
+                }
+            )
 
             // 5. Show Album
             if (onViewAlbum != null && track.album.isNotBlank()) {

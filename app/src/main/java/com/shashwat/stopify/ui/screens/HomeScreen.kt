@@ -64,6 +64,12 @@ fun SimpHomeScreen(
         }
     }
 
+    LaunchedEffect(homeData, isLoading) {
+        if (homeData == null && !isLoading) {
+            onRefresh()
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()

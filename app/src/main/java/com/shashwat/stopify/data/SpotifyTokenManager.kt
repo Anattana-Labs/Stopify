@@ -12,8 +12,11 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -33,6 +36,9 @@ object SpotifyTokenManager {
 
     private val _isRefreshingState = MutableStateFlow(false)
     val isRefreshingState: StateFlow<Boolean> = _isRefreshingState.asStateFlow()
+
+    private val _tokenRefreshEvents = MutableSharedFlow<String>(extraBufferCapacity = 5)
+    val tokenRefreshEvents: SharedFlow<String> = _tokenRefreshEvents.asSharedFlow()
 
     private val pendingCallbacks = mutableListOf<(String?) -> Unit>()
 
@@ -267,6 +273,7 @@ object SpotifyTokenManager {
         prefs.edit().putString("spotify_access_token", token).apply()
 
         Log.d(TAG, "Persisted new Spotify Bearer Access Token successfully")
+        _tokenRefreshEvents.tryEmit(token)
 
         if (wasRefreshing || pendingCallbacks.isNotEmpty()) {
             val callbacks = ArrayList(pendingCallbacks)

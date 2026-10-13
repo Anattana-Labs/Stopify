@@ -4,8 +4,10 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.*
@@ -15,12 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.shashwat.stopify.data.SpotifyTrack
+import com.shashwat.stopify.data.StopifyDownloadManager
 
 @Composable
 fun SimpTrackItem(
@@ -31,8 +35,14 @@ fun SimpTrackItem(
     onClick: () -> Unit,
     onMoreClick: () -> Unit,
     modifier: Modifier = Modifier,
-    showCover: Boolean = (index == null)
+    showCover: Boolean = (index == null),
+    isDownloaded: Boolean? = null
 ) {
+    val context = LocalContext.current
+    val downloadManager = remember { StopifyDownloadManager.getInstance(context) }
+    val downloadedSet by downloadManager.downloadedTrackIds.collectAsState()
+    val downloaded = isDownloaded ?: downloadedSet.contains(track.id)
+
     val backgroundColor by animateColorAsState(
         targetValue = if (isCurrentTrack) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f)
@@ -116,13 +126,32 @@ fun SimpTrackItem(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(1.dp))
-            Text(
-                text = track.artist,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (downloaded) {
+                    Box(
+                        modifier = Modifier
+                            .size(13.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1DB954)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowDownward,
+                            contentDescription = "Downloaded",
+                            tint = Color.Black,
+                            modifier = Modifier.size(9.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(5.dp))
+                }
+                Text(
+                    text = track.artist,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         // Duration if available

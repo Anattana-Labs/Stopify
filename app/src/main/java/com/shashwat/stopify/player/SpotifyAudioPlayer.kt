@@ -186,6 +186,16 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
         )
 
         try {
+            val localAudio = com.shashwat.stopify.data.StopifyDownloadManager.getInstance(appContext).getDownloadedAudioFile(track.id)
+            val effectiveAudioUri = if (localAudio != null && localAudio.exists()) {
+                Log.d(TAG, "Playing track from offline local file: ${localAudio.absolutePath}")
+                Uri.fromFile(localAudio)
+            } else if (audioUrl.startsWith("file://")) {
+                Uri.parse(audioUrl)
+            } else {
+                Uri.parse(audioUrl)
+            }
+
             val drmHeaders = mapOf(
                 "authorization" to "Bearer $accessToken",
                 "client-token" to (clientToken?.ifEmpty { null } ?: SpotifyWebClient.CLIENT_TOKEN),
@@ -210,7 +220,7 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
 
             val mediaItem = MediaItem.Builder()
                 .setMediaId(track.id)
-                .setUri(Uri.parse(audioUrl))
+                .setUri(effectiveAudioUri)
                 .setMediaMetadata(mediaMetadata)
                 .setDrmConfiguration(drmConfiguration)
                 .build()

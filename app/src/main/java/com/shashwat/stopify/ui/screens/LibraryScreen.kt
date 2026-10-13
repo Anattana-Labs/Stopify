@@ -41,6 +41,7 @@ import com.shashwat.stopify.data.SpotifyPlaylistSummary
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyUserProfile
 import com.shashwat.stopify.data.SpotifyWebClient
+import com.shashwat.stopify.data.StopifyDownloadManager
 import com.shashwat.stopify.player.PlaybackState
 import com.shashwat.stopify.ui.components.CreatePlaylistDialog
 import com.shashwat.stopify.ui.components.SimpTrackItem
@@ -49,6 +50,7 @@ import kotlinx.coroutines.launch
 
 enum class LibraryFilter(val label: String) {
     ALL("All"),
+    DOWNLOADED("Downloaded"),
     PLAYLISTS("Playlists"),
     LIKED("Liked Songs"),
     ARTISTS("Artists"),
@@ -214,6 +216,20 @@ fun SimpLibraryScreen(
         } else {
             displayArtists.filter {
                 it.name.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
+    val downloadManager = remember { StopifyDownloadManager.getInstance(context) }
+    val downloadedTracks by downloadManager.downloadedTracks.collectAsState()
+    val filteredDownloads = remember(downloadedTracks, searchQuery) {
+        if (searchQuery.isBlank()) {
+            downloadedTracks
+        } else {
+            downloadedTracks.filter {
+                it.name.contains(searchQuery, ignoreCase = true) ||
+                        it.artist.contains(searchQuery, ignoreCase = true) ||
+                        it.album.contains(searchQuery, ignoreCase = true)
             }
         }
     }
@@ -551,6 +567,72 @@ fun SimpLibraryScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // ── DOWNLOADED SONGS SECTION ─────────────────────────────
+            if (selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.DOWNLOADED) {
+                if (filteredDownloads.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF1DB954)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ArrowDownward,
+                                        contentDescription = null,
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Downloaded",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            }
+
+                            Text(
+                                text = "${filteredDownloads.size} songs",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    items(filteredDownloads) { dlTrack ->
+                        val isCurrent = playbackState.currentTrack?.uri == dlTrack.uri
+                        SimpTrackItem(
+                            track = dlTrack,
+                            isPlaying = isCurrent && playbackState.isPlaying,
+                            isCurrentTrack = isCurrent,
+                            onClick = { onPlayTrack(dlTrack) },
+                            onMoreClick = { selectedOptionTrack = dlTrack },
+                            showCover = true,
+                            isDownloaded = true
+                        )
+                    }
+                } else if (selectedFilter == LibraryFilter.DOWNLOADED) {
+                    item {
+                        EmptyLibraryState(
+                            title = "No downloads yet",
+                            subtitle = "Songs you download for offline playback will appear here",
+                            actionLabel = null,
+                            onAction = {}
+                        )
                     }
                 }
             }

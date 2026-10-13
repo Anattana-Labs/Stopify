@@ -94,6 +94,9 @@ class MainActivity : ComponentActivity() {
             !token.isNullOrEmpty()
         }
 
+        // Initialize download manager with spotifyClient
+        com.shashwat.stopify.data.StopifyDownloadManager.getInstance(this).client = spotifyClient
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
@@ -274,6 +277,8 @@ fun SimpMusicApp(
     prefs: android.content.SharedPreferences? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val appContext = context.applicationContext
     var currentTab by remember { mutableStateOf(NavigationTab.HOME) }
     var homeData by remember { mutableStateOf<SpotifyHomeData?>(null) }
     var isHomeLoading by remember { mutableStateOf(false) }
@@ -421,6 +426,27 @@ fun SimpMusicApp(
         }
 
         coroutineScope.launch {
+            val downloadManager = com.shashwat.stopify.data.StopifyDownloadManager.getInstance(appContext)
+            val localAudio = downloadManager.getDownloadedAudioFile(track.id)
+            if (localAudio != null && localAudio.exists()) {
+                val token = client.getAccessToken().getOrElse { SpotifyWebClient.FALLBACK_BEARER_TOKEN }
+                statusLog = "Playing offline '${track.name}'"
+                player.playTrack(track, android.net.Uri.fromFile(localAudio).toString(), token, client.customClientToken)
+
+                if (addToHistory) {
+                    coroutineScope.launch {
+                        client.reportPlaybackToApi(track, 0L, prefs)
+                        client.connectService.updateConnectClusterState(
+                            track = track,
+                            isPlaying = true,
+                            positionMs = 0L,
+                            deviceId = SpotifyWebClient.getDeviceId(prefs)
+                        )
+                    }
+                }
+                return@launch
+            }
+
             statusLog = "Resolving stream for '${track.name}'..."
             val streamRes = client.resolveTrackAudioStream(track.uri)
             if (streamRes.isSuccess) {
@@ -668,6 +694,13 @@ fun SimpMusicApp(
 
     LaunchedEffect(Unit) {
         loadHome()
+    }
+
+    // Automatically reload home and remote recents whenever Spotify token refreshes
+    LaunchedEffect(Unit) {
+        SpotifyTokenManager.tokenRefreshEvents.collect {
+            loadHome()
+        }
     }
 
     fun performSearch(query: String) {
