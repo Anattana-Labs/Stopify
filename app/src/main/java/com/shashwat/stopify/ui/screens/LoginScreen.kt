@@ -594,6 +594,9 @@ fun SpotifyLoginWebView(
                         }
                     }
                     cookieManager.flush()
+                } else {
+                    cookieManager.removeAllCookies(null)
+                    cookieManager.flush()
                 }
 
                 webChromeClient = object : android.webkit.WebChromeClient() {
