@@ -1,6 +1,7 @@
 package com.shashwat.stopify.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.Interaction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+
+import androidx.compose.ui.text.font.FontWeight
 
 enum class NavigationTab(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Rounded.Home),
@@ -46,9 +49,8 @@ fun SimpBottomNavigationBar(
     )
 
     val navSurface = MaterialTheme.colorScheme.surface
-    val navPrimary = MaterialTheme.colorScheme.primary
     val navOnSurface = MaterialTheme.colorScheme.onSurface
-    val navUnselected = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+    val navUnselected = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
 
     Box(
         contentAlignment = Alignment.BottomCenter,
@@ -58,51 +60,52 @@ fun SimpBottomNavigationBar(
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        navSurface.copy(alpha = 0.65f),
-                        navSurface.copy(alpha = 0.95f),
+                        navSurface.copy(alpha = 0.85f),
+                        navSurface.copy(alpha = 0.98f),
                         navSurface
                     ),
                     startY = 0f
                 )
             )
-            .padding(top = 16.dp)
     ) {
-        NavigationBar(
+        Row(
             modifier = Modifier
+                .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp)
-                .fillMaxWidth(),
-            containerColor = Color.Transparent,
-            windowInsets = WindowInsets(0, 0, 0, 0)
+                .height(52.dp)
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             navItems.forEach { item ->
                 val isSelected = currentTab == item
-                NavigationBarItem(
-                    selected = isSelected,
-                    icon = {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.title,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    label = {
-                        Text(
-                            text = item.title,
-                            fontSize = 11.sp,
-                            fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
-                            color = if (isSelected) navPrimary else navUnselected
-                        )
-                    },
-                    onClick = { onTabSelect(item) },
-                    alwaysShowLabel = true,
-                    interactionSource = NoRippleInteractionSource(),
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = navPrimary,
-                        unselectedIconColor = navUnselected,
-                        indicatorColor = navPrimary.copy(alpha = 0.12f)
+                val contentColor = if (isSelected) navOnSurface else navUnselected
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = remember { NoRippleInteractionSource() },
+                            indication = null,
+                            onClick = { onTabSelect(item) }
+                        ),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.title,
+                        tint = contentColor,
+                        modifier = Modifier.size(22.dp)
                     )
-                )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = item.title,
+                        fontSize = 10.5.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = contentColor
+                    )
+                }
             }
         }
     }

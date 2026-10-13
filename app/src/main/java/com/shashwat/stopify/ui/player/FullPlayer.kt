@@ -649,19 +649,31 @@ fun SpotifyColorLyricsCard(
                     }
                 }
 
-                FilledTonalIconButton(
-                    onClick = onExpand,
-                    modifier = Modifier.size(34.dp),
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = highlightColor.copy(alpha = 0.12f),
-                        contentColor = highlightColor
-                    )
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = highlightColor.copy(alpha = 0.18f),
+                    modifier = Modifier.clickable { onExpand() }
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Fullscreen,
-                        contentDescription = "Full screen lyrics",
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = "MORE",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            ),
+                            color = highlightColor
+                        )
+                        Icon(
+                            imageVector = Icons.Rounded.OpenInFull,
+                            contentDescription = "Full screen lyrics",
+                            tint = highlightColor,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
                 }
             }
 

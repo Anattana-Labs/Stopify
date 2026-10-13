@@ -129,7 +129,7 @@ fun SimpBottomMiniPlayer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Horizontal draggable track block (Cover + Title + Artist)
@@ -167,9 +167,9 @@ fun SimpBottomMiniPlayer(
                     // Artwork
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
-                            .shadow(6.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.4f))
-                            .clip(RoundedCornerShape(8.dp))
+                            .size(38.dp)
+                            .shadow(4.dp, RoundedCornerShape(6.dp), spotColor = Color.Black.copy(alpha = 0.35f))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                         contentAlignment = Alignment.Center
                     ) {
@@ -185,12 +185,12 @@ fun SimpBottomMiniPlayer(
                                 imageVector = Icons.Rounded.Album,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
 
                     // Title & Artist with animated track transition and marquee
                     AnimatedContent(
@@ -207,7 +207,10 @@ fun SimpBottomMiniPlayer(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 text = currentTrack.name,
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                ),
                                 color = contentColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -215,10 +218,12 @@ fun SimpBottomMiniPlayer(
                                     .fillMaxWidth()
                                     .basicMarquee(iterations = Int.MAX_VALUE)
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+                            Spacer(modifier = Modifier.height(1.dp))
                             Text(
                                 text = currentTrack.artist,
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.5.sp
+                                ),
                                 color = contentSubColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -230,18 +235,18 @@ fun SimpBottomMiniPlayer(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(2.dp))
 
                 // Favorite / Heart Button
                 IconButton(
                     onClick = onToggleFavorite,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = if (isFavorite) "Unlike" else "Like",
                         tint = if (isFavorite) accentColor else contentSubColor,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
@@ -249,7 +254,7 @@ fun SimpBottomMiniPlayer(
                 IconButton(
                     onClick = onTogglePlayPause,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(36.dp)
                         .scale(playPauseScale)
                 ) {
                     Crossfade(
@@ -258,7 +263,7 @@ fun SimpBottomMiniPlayer(
                     ) { isBuffering ->
                         if (isBuffering) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(18.dp),
                                 color = accentColor,
                                 strokeWidth = 2.dp
                             )
@@ -267,7 +272,7 @@ fun SimpBottomMiniPlayer(
                                 imageVector = if (playbackState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
                                 tint = contentColor,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
@@ -276,13 +281,13 @@ fun SimpBottomMiniPlayer(
                 // Skip Next Button
                 IconButton(
                     onClick = onNextTrack,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.SkipNext,
                         contentDescription = "Next Track",
                         tint = contentSubColor,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -294,7 +299,7 @@ fun SimpBottomMiniPlayer(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(2.5.dp)
+                    .height(2.dp)
                     .background(if (isLightBg) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.15f))
             ) {
                 Box(

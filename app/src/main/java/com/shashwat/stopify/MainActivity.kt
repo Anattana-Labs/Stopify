@@ -936,7 +936,7 @@ fun SimpMusicApp(
     ) {
         // Mini Player
         playbackState.currentTrack?.let { currentTrack ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
                 SimpBottomMiniPlayer(
                     track = currentTrack,
                     playbackState = playbackState,

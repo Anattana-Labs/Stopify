@@ -207,19 +207,19 @@ fun SimpSearchScreen(
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(96.dp)
-                                            .clip(RoundedCornerShape(10.dp))
+                                            .height(76.dp)
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(Brush.linearGradient(cat1.gradientColors))
                                             .clickable {
                                                 onQueryChange(cat1.title)
                                                 onSearch(cat1.title)
                                             }
-                                            .padding(14.dp),
+                                            .padding(12.dp),
                                         contentAlignment = Alignment.TopStart
                                     ) {
                                         Text(
                                             text = cat1.title,
-                                            style = MaterialTheme.typography.titleMedium,
+                                            style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White
                                         )
@@ -230,19 +230,19 @@ fun SimpSearchScreen(
                                         Box(
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(96.dp)
-                                                .clip(RoundedCornerShape(10.dp))
+                                                .height(76.dp)
+                                                .clip(RoundedCornerShape(8.dp))
                                                 .background(Brush.linearGradient(cat2.gradientColors))
                                                 .clickable {
                                                     onQueryChange(cat2.title)
                                                     onSearch(cat2.title)
                                                 }
-                                                .padding(14.dp),
+                                                .padding(12.dp),
                                             contentAlignment = Alignment.TopStart
                                         ) {
                                             Text(
                                                 text = cat2.title,
-                                                style = MaterialTheme.typography.titleMedium,
+                                                style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White
                                             )
@@ -258,8 +258,8 @@ fun SimpSearchScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
-                    contentPadding = PaddingValues(bottom = 140.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 120.dp)
                 ) {
                     // 1. Artists Section
                     if ((selectedFilter == SearchFilter.ALL || selectedFilter == SearchFilter.ARTISTS) && artists.isNotEmpty()) {
