@@ -3,6 +3,9 @@ package com.shashwat.stopify.ui.screens
 import android.annotation.SuppressLint
 import android.content.Context
 import android.webkit.CookieManager
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -191,9 +194,14 @@ fun LoginScreen(
             ) {
                 if (selectedTab == 0) {
                     // Full Screen WebView
+                    val effectiveCookies = if (SpotifyWebClient.hasValidSpDc(cookieInputText)) {
+                        cookieInputText
+                    } else {
+                        client.customCookies ?: ""
+                    }
                     key(webViewReloadKey) {
                         SpotifyLoginWebView(
-                            initialCookies = client.customCookies ?: "",
+                            initialCookies = effectiveCookies,
                             onCookiesFound = { cookies ->
                                 if (SpotifyWebClient.hasValidSpDc(cookies)) {
                                     val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
@@ -545,12 +553,32 @@ fun SpotifyLoginWebView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
             WebView(ctx).apply {
+                layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundColor(android.graphics.Color.parseColor("#121212"))
+
+                val defaultUa = settings.userAgentString ?: ""
+                settings.userAgentString = if (defaultUa.contains("Android")) {
+                    defaultUa.replace("; wv", "").replace(Regex("""Version/\d+\.\d+\s*"""), "")
+                } else {
+                    "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+                }
+
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.databaseEnabled = true
                 settings.mediaPlaybackRequiresUserGesture = false
                 settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                settings.userAgentString = SpotifyWebClient.USER_AGENT
+                settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                settings.allowContentAccess = true
+                settings.allowFileAccess = true
+                settings.javaScriptCanOpenWindowsAutomatically = true
+                settings.setSupportMultipleWindows(false)
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+
                 val cookieManager = CookieManager.getInstance()
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
@@ -597,10 +625,42 @@ fun SpotifyLoginWebView(
                 addJavascriptInterface(StopifyBridge(), "StopifyBridge")
 
                 webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                        super.onPageStarted(view, url, favicon)
+                        // Polyfill requestStorageAccess so reCAPTCHA Enterprise does not get 'Permission denied'
+                        view?.evaluateJavascript(
+                            """
+                            (function() {
+                                try {
+                                    if (window.document) {
+                                        document.requestStorageAccess = function() { return Promise.resolve(); };
+                                        document.hasStorageAccess = function() { return Promise.resolve(true); };
+                                    }
+                                } catch(e) {}
+                            })();
+                            """.trimIndent(),
+                            null
+                        )
+                    }
+
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        val reqUrl = request?.url?.toString() ?: return false
+                        android.util.Log.d("SpotifyLoginWebView", "shouldOverrideUrlLoading: $reqUrl")
+                        if (reqUrl.startsWith("intent:") || reqUrl.startsWith("spotify:")) {
+                            return true
+                        }
+                        return false
+                    }
+
+                    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                        super.onReceivedError(view, request, error)
+                        android.util.Log.e("SpotifyLoginWebView", "onReceivedError: ${error?.errorCode} ${error?.description} for ${request?.url}")
+                    }
+
                     override fun shouldInterceptRequest(
                         view: WebView?,
-                        request: android.webkit.WebResourceRequest?
-                    ): android.webkit.WebResourceResponse? {
+                        request: WebResourceRequest?
+                    ): WebResourceResponse? {
                         val reqUrl = request?.url?.toString() ?: ""
                         val headers = request?.requestHeaders
 
@@ -631,23 +691,25 @@ fun SpotifyLoginWebView(
                             onCookiesFound(cookies)
                         }
 
-                        view?.evaluateJavascript(
-                            """
-                            (function() {
-                                try {
-                                    fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player')
-                                        .then(function(r) { return r.json(); })
-                                        .then(function(d) {
-                                            if (d && d.accessToken) {
-                                                window.StopifyBridge.onToken(d.accessToken);
-                                            }
-                                        })
-                                        .catch(function(e) {});
-                                } catch(e) {}
-                            })();
-                            """.trimIndent(),
-                            null
-                        )
+                        if (url?.contains("open.spotify.com") == true) {
+                            view?.evaluateJavascript(
+                                """
+                                (function() {
+                                    try {
+                                        fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player')
+                                            .then(function(r) { return r.json(); })
+                                            .then(function(d) {
+                                                if (d && d.accessToken) {
+                                                    window.StopifyBridge.onToken(d.accessToken);
+                                                }
+                                            })
+                                            .catch(function(e) {});
+                                    } catch(e) {}
+                                })();
+                                """.trimIndent(),
+                                null
+                            )
+                        }
                     }
                 }
 
