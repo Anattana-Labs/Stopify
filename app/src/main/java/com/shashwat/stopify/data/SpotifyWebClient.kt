@@ -3791,4 +3791,13 @@ class SpotifyWebClient {
 
     suspend fun fetchColorLyrics(trackId: String, coverUrl: String? = null): Result<SpotifyColorLyrics> =
         lyricsService.fetchColorLyrics(trackId, coverUrl)
+
+    suspend fun fetchCanvasUrl(trackId: String): String? {
+        val token = getAccessToken().getOrElse { customAccessToken ?: FALLBACK_BEARER_TOKEN }
+        return SpotifyCanvas.fetchCanvasUrl(
+            trackId = trackId,
+            accessToken = token,
+            clientToken = customClientToken ?: CLIENT_TOKEN
+        )
+    }
 }

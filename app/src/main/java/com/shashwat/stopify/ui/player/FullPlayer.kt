@@ -18,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -68,6 +69,7 @@ fun SimpFullPlayer(
     onToggleFavorite: (SpotifyTrack) -> Unit = {},
     isFavoriteTrack: Boolean = false,
     isFavorite: ((SpotifyTrack) -> Boolean)? = null,
+    canvasUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
     var isScrubbing by remember { mutableStateOf(false) }
@@ -80,9 +82,21 @@ fun SimpFullPlayer(
 
     var colorLyrics by remember { mutableStateOf<SpotifyColorLyrics?>(null) }
     var isLyricsLoading by remember { mutableStateOf(false) }
+    var activeCanvasUrl by remember { mutableStateOf(canvasUrl) }
+
+    LaunchedEffect(canvasUrl) {
+        activeCanvasUrl = canvasUrl
+    }
 
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+
+    // Fetch Spotify Canvas if not preloaded
+    LaunchedEffect(track.id, client) {
+        if (canvasUrl == null && client != null) {
+            activeCanvasUrl = client.fetchCanvasUrl(track.id)
+        }
+    }
 
     // Fetch Spotify Color Lyrics
     LaunchedEffect(track.id, client) {
@@ -132,6 +146,28 @@ fun SimpFullPlayer(
                 )
             )
     ) {
+        if (activeCanvasUrl != null) {
+            // Spotify Canvas: looping video fills the full screen behind controls
+            CanvasVideo(
+                url = activeCanvasUrl!!,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.50f),
+                                Color.Black.copy(alpha = 0.10f),
+                                Color.Black.copy(alpha = 0.35f),
+                                Color.Black.copy(alpha = 0.80f),
+                            )
+                        )
+                    )
+            )
+        }
+
         val screenHeight = maxHeight
 
         Column(
@@ -207,20 +243,20 @@ fun SimpFullPlayer(
                     }
                 )
 
-                // 2. Large Cover Artwork (SimpMusic Classic: 8dp subtle corners, big square)
+                // 2. Large Cover Artwork (Hidden when Canvas is active to show looping video)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
                         .aspectRatio(1f)
                         .shadow(
-                            elevation = 6.dp,
+                            elevation = if (activeCanvasUrl != null) 0.dp else 6.dp,
                             shape = RoundedCornerShape(8.dp),
                             spotColor = Color.Black.copy(alpha = 0.5f),
                             ambientColor = Color.Transparent
                         )
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color.DarkGray.copy(alpha = 0.3f)),
+                        .background(if (activeCanvasUrl != null) Color.Transparent else Color.DarkGray.copy(alpha = 0.3f)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (!track.coverUrl.isNullOrEmpty()) {
@@ -228,13 +264,15 @@ fun SimpFullPlayer(
                             model = track.coverUrl,
                             contentDescription = track.name,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .alpha(if (activeCanvasUrl != null) 0f else 1f)
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.Album,
                             contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.3f),
+                            tint = Color.White.copy(alpha = if (activeCanvasUrl != null) 0f else 0.3f),
                             modifier = Modifier.size(96.dp)
                         )
                     }

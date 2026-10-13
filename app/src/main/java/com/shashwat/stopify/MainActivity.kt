@@ -340,16 +340,18 @@ fun SimpMusicApp(
         }
     }
 
-    // Lyrics background color for miniplayer and full player synchronization
+    // Lyrics background color and Spotify Canvas URL for player synchronization
     var currentTrackLyricsColor by remember { mutableStateOf<Color?>(null) }
+    var currentCanvasUrl by remember { mutableStateOf<String?>(null) }
     var hasReported30sScrobble by remember { mutableStateOf(false) }
     var hasReportedStartedPlaying by remember { mutableStateOf(false) }
 
-    // Fetch color lyrics for the current track whenever it changes
+    // Fetch color lyrics and canvas for the current track whenever it changes
     LaunchedEffect(playbackState.currentTrack?.id) {
         val current = playbackState.currentTrack
         hasReported30sScrobble = false
         hasReportedStartedPlaying = false
+        currentCanvasUrl = null
         if (current != null) {
             val cached = client.getCachedColorLyrics(current.id)
             if (cached != null) {
@@ -360,8 +362,10 @@ fun SimpMusicApp(
                     currentTrackLyricsColor = argbToColor(res.getOrThrow().backgroundColor)
                 }
             }
+            currentCanvasUrl = client.fetchCanvasUrl(current.id)
         } else {
             currentTrackLyricsColor = null
+            currentCanvasUrl = null
         }
     }
 
@@ -871,6 +875,7 @@ fun SimpMusicApp(
                     track = currentTrack,
                     playbackState = playbackState,
                     client = client,
+                    canvasUrl = currentCanvasUrl,
                     onTogglePlayPause = {
                         if (playbackState.isPlaying) player.pause() else player.resume()
                     },
