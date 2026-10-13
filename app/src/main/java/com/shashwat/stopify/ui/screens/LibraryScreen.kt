@@ -52,9 +52,8 @@ enum class LibraryFilter(val label: String) {
     ALL("All"),
     DOWNLOADED("Downloaded"),
     PLAYLISTS("Playlists"),
-    LIKED("Liked Songs"),
-    ARTISTS("Artists"),
-    RECENTS("Recently Played")
+    FOLDERS("Folders"),
+    LIKED("Liked Songs")
 }
 
 enum class LibrarySort(val label: String) {
@@ -160,31 +159,17 @@ fun SimpLibraryScreen(
         }
     }
 
-    // Spotify remote recents directly from Spotify
-    val displayRecents = remember(spotifyRecents, playbackHistory.toList()) {
-        if (spotifyRecents.isNotEmpty()) spotifyRecents else playbackHistory.toList()
-    }
-
-    // Derive artists from recent tracks & playlists
-    val displayArtists = remember(displayRecents) {
-        displayRecents
-            .filter { it.artist.isNotBlank() }
-            .distinctBy { it.artist.lowercase() }
-            .map {
-                LibraryArtistItem(
-                    uri = it.artistUri ?: "spotify:artist:${it.id}",
-                    name = it.artist,
-                    coverUrl = it.coverUrl
-                )
-            }
-    }
-
-    // Filter and sort playlists
-    val filteredPlaylists = remember(playlists, searchQuery, selectedSort) {
+    // Filter and sort playlists & folders
+    val filteredPlaylists = remember(playlists, searchQuery, selectedSort, selectedFilter) {
+        val byFilter = when (selectedFilter) {
+            LibraryFilter.PLAYLISTS -> playlists.filter { !it.isFolder }
+            LibraryFilter.FOLDERS -> playlists.filter { it.isFolder }
+            else -> playlists
+        }
         val filtered = if (searchQuery.isBlank()) {
-            playlists
+            byFilter
         } else {
-            playlists.filter {
+            byFilter.filter {
                 it.name.contains(searchQuery, ignoreCase = true) ||
                         it.ownerName.contains(searchQuery, ignoreCase = true)
             }
@@ -193,30 +178,6 @@ fun SimpLibraryScreen(
             LibrarySort.NAME -> filtered.sortedBy { it.name.lowercase() }
             LibrarySort.CREATOR -> filtered.sortedBy { it.ownerName.lowercase() }
             LibrarySort.RECENTS -> filtered
-        }
-    }
-
-    // Filter tracks
-    val filteredRecents = remember(displayRecents, searchQuery) {
-        if (searchQuery.isBlank()) {
-            displayRecents
-        } else {
-            displayRecents.filter {
-                it.name.contains(searchQuery, ignoreCase = true) ||
-                        it.artist.contains(searchQuery, ignoreCase = true) ||
-                        it.album.contains(searchQuery, ignoreCase = true)
-            }
-        }
-    }
-
-    // Filter artists
-    val filteredArtists = remember(displayArtists, searchQuery) {
-        if (searchQuery.isBlank()) {
-            displayArtists
-        } else {
-            displayArtists.filter {
-                it.name.contains(searchQuery, ignoreCase = true)
-            }
         }
     }
 
@@ -637,8 +598,8 @@ fun SimpLibraryScreen(
                 }
             }
 
-            // ── PLAYLISTS SECTION ────────────────────────────────────
-            if (selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.PLAYLISTS) {
+            // ── PLAYLISTS & FOLDERS SECTION ──────────────────────────
+            if (selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.PLAYLISTS || selectedFilter == LibraryFilter.FOLDERS) {
                 if (isLoadingPlaylists) {
                     item {
                         Box(
@@ -654,7 +615,7 @@ fun SimpLibraryScreen(
                             )
                         }
                     }
-                } else if (filteredPlaylists.isEmpty() && selectedFilter == LibraryFilter.PLAYLISTS) {
+                } else if (filteredPlaylists.isEmpty() && (selectedFilter == LibraryFilter.PLAYLISTS || selectedFilter == LibraryFilter.FOLDERS)) {
                     item {
                         EmptyLibraryState(
                             title = if (searchQuery.isNotEmpty()) "No results found" else "No playlists yet",
@@ -697,85 +658,6 @@ fun SimpLibraryScreen(
                                 }
                             }
                         }
-                    }
-                }
-            }
-
-            // ── ARTISTS SECTION (Shown when ALL or ARTISTS) ───────────
-            if ((selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.ARTISTS) && filteredArtists.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Artists",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = "${filteredArtists.size} artists",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                items(filteredArtists) { artistItem ->
-                    ArtistListItem(
-                        artist = artistItem,
-                        accentColor = accentGreen,
-                        onClick = { onViewArtist(artistItem.uri, artistItem.name) }
-                    )
-                }
-            }
-
-            // ── RECENTLY PLAYED SECTION ──────────────────────────────
-            if (selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.RECENTS) {
-                if (filteredRecents.isNotEmpty()) {
-                    item {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Recently Played",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-
-                            Text(
-                                text = "${filteredRecents.size} tracks",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    items(filteredRecents) { histTrack ->
-                        val isCurrent = playbackState.currentTrack?.uri == histTrack.uri
-                        SimpTrackItem(
-                            track = histTrack,
-                            isPlaying = isCurrent && playbackState.isPlaying,
-                            isCurrentTrack = isCurrent,
-                            onClick = { onPlayTrack(histTrack) },
-                            onMoreClick = { selectedOptionTrack = histTrack }
-                        )
-                    }
-                } else if (selectedFilter == LibraryFilter.RECENTS) {
-                    item {
-                        EmptyLibraryState(
-                            title = "No recently played tracks",
-                            subtitle = "Songs you listen to will show up here",
-                            actionLabel = null,
-                            onAction = {}
-                        )
                     }
                 }
             }
@@ -1020,6 +902,13 @@ fun PlaylistListItem(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+            } else if (playlist.isFolder) {
+                Icon(
+                    imageVector = Icons.Rounded.Folder,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(32.dp)
+                )
             } else {
                 Icon(
                     imageVector = Icons.Rounded.MusicNote,
@@ -1042,8 +931,13 @@ fun PlaylistListItem(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(2.dp))
+            val sub = if (playlist.isFolder) {
+                "Folder • ${if (playlist.trackCount > 0) "${playlist.trackCount} items" else "Spotify"}"
+            } else {
+                "Playlist • ${playlist.ownerName} • ${playlist.trackCount} tracks"
+            }
             Text(
-                text = "Playlist • ${playlist.ownerName} • ${playlist.trackCount} tracks",
+                text = sub,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -1094,6 +988,13 @@ fun PlaylistGridCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+            } else if (playlist.isFolder) {
+                Icon(
+                    imageVector = Icons.Rounded.Folder,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(42.dp)
+                )
             } else {
                 Icon(
                     imageVector = Icons.Rounded.MusicNote,
@@ -1141,7 +1042,7 @@ fun PlaylistGridCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "${playlist.trackCount} tracks",
+                text = if (playlist.isFolder) "Folder" else "${playlist.trackCount} tracks",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

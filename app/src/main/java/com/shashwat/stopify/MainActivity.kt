@@ -85,9 +85,6 @@ class MainActivity : ComponentActivity() {
             showLoadingModal = savedAccessToken.isNullOrEmpty()
         )
 
-        // Load persisted playback history from SharedPreferences
-        spotifyClient.loadHistoryFromPrefs(prefs)
-
         // Set up the token refresh hook for automatic background generation when an API gives up (401)
         spotifyClient.tokenRefreshHook = {
             val token = SpotifyTokenManager.awaitTokenRefresh(this@MainActivity, spotifyClient)
@@ -333,6 +330,15 @@ fun SimpMusicApp(
                 val list = recentsRes.getOrThrow()
                 playbackHistory.clear()
                 playbackHistory.addAll(list.distinctBy { it.uri })
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val downloadManager = com.shashwat.stopify.data.StopifyDownloadManager.getInstance(appContext)
+        downloadManager.downloadStatusMessage.collect { msg ->
+            if (!msg.isNullOrEmpty()) {
+                statusLog = msg
             }
         }
     }

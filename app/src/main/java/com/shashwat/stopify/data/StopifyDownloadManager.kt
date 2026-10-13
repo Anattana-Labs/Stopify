@@ -51,6 +51,11 @@ class StopifyDownloadManager private constructor(private val appContext: Context
     private val _downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
     val downloadProgress: StateFlow<Map<String, Float>> = _downloadProgress.asStateFlow()
 
+    private val managerScope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+
+    private val _downloadStatusMessage = MutableStateFlow<String?>(null)
+    val downloadStatusMessage: StateFlow<String?> = _downloadStatusMessage.asStateFlow()
+
     private val activeDownloads = ConcurrentHashMap<String, Boolean>()
 
     @Volatile
@@ -60,17 +65,27 @@ class StopifyDownloadManager private constructor(private val appContext: Context
         loadDownloadedTracks()
     }
 
-    fun toggleDownload(track: SpotifyTrack, scope: CoroutineScope, clientOverride: SpotifyWebClient? = null) {
+    fun toggleDownload(track: SpotifyTrack, clientOverride: SpotifyWebClient? = null) {
         if (isDownloaded(track.id)) {
             deleteDownload(track.id)
+            _downloadStatusMessage.value = "Removed download: '${track.name}'"
         } else {
             val activeClient = clientOverride ?: client
             if (activeClient != null) {
-                scope.launch {
-                    downloadTrack(track, activeClient)
+                _downloadStatusMessage.value = "Downloading '${track.name}'..."
+                managerScope.launch {
+                    val res = downloadTrack(track, activeClient)
+                    if (res.isSuccess) {
+                        _downloadStatusMessage.value = "Downloaded '${track.name}'"
+                    } else {
+                        val err = res.exceptionOrNull()?.message ?: "Unknown error"
+                        _downloadStatusMessage.value = "Download failed: $err"
+                        Log.e(TAG, "Download failed for ${track.name}: $err")
+                    }
                 }
             } else {
                 Log.w(TAG, "Cannot start download: client is null")
+                _downloadStatusMessage.value = "Download failed: Spotify client not ready"
             }
         }
     }
@@ -165,13 +180,18 @@ class StopifyDownloadManager private constructor(private val appContext: Context
                 .header("User-Agent", SpotifyWebClient.USER_AGENT)
                 .header("Origin", "https://open.spotify.com")
                 .header("Referer", "https://open.spotify.com/")
+                .header("Accept", "*/*")
+                .header("Accept-Encoding", "identity")
                 .build()
 
             val response = okHttpClient.newCall(req).execute()
+            Log.d(TAG, "CDN HTTP response for '${track.name}': ${response.code}")
             if (!response.isSuccessful) {
+                val code = response.code
                 response.close()
                 cleanup(track.id, tempAudioFile)
-                return@withContext Result.failure(Exception("HTTP error ${response.code} downloading track"))
+                Log.e(TAG, "CDN error HTTP $code downloading ${track.name}")
+                return@withContext Result.failure(Exception("HTTP $code from Spotify CDN"))
             }
 
             val body = response.body ?: run {

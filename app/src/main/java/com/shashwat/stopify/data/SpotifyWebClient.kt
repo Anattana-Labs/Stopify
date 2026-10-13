@@ -426,7 +426,17 @@ class SpotifyWebClient {
                     val fileId = fileIdsMp4?.optJSONObject(0)?.optString("file_id")
                     if (!fileId.isNullOrEmpty()) {
                         audioFileMap[uri] = fileId
+                        val cleanId = uri.removePrefix("spotify:track:")
+                        audioFileMap[cleanId] = fileId
+                        audioFileMap["spotify:track:$cleanId"] = fileId
                         pendingTrackResolutions[uri]?.complete(fileId)
+                        pendingTrackResolutions[cleanId]?.complete(fileId)
+                        pendingTrackResolutions["spotify:track:$cleanId"]?.complete(fileId)
+                        pendingTrackResolutions.forEach { (k, def) ->
+                            if (k.endsWith(cleanId) || cleanId.endsWith(k)) {
+                                def.complete(fileId)
+                            }
+                        }
                         Log.d(TAG, "State machine autoqueue track resolved: $uri -> $fileId")
                     }
 
@@ -1284,7 +1294,7 @@ class SpotifyWebClient {
             }
             val payload = JSONObject().apply {
                 put("variables", JSONObject().apply {
-                    put("filters", JSONArray().apply { put("Playlists") })
+                    put("filters", JSONArray())
                     put("order", JSONObject.NULL)
                     put("textFilter", "")
                     put("features", JSONArray().apply {
@@ -1293,12 +1303,12 @@ class SpotifyWebClient {
                         put("PRERELEASES")
                         put("EVENTS")
                     })
-                    put("limit", 50)
+                    put("limit", 100)
                     put("offset", 0)
                     put("flatten", true)
                     put("expandedFolders", JSONArray())
                     put("folderUri", JSONObject.NULL)
-                    put("includeFoldersWhenFlattening", false)
+                    put("includeFoldersWhenFlattening", true)
                 })
                 put("operationName", "libraryV3")
                 put("extensions", JSONObject().apply {
@@ -1323,10 +1333,11 @@ class SpotifyWebClient {
                         val typeName = itemWrapper.optString("__typename")
                         if (typeName == "LibraryPseudoPlaylistResponseWrapper") continue // Handled separately (Liked Songs)
                         val uri = itemWrapper.optString("uri", itemWrapper.optString("_uri"))
-                        if (uri.isEmpty() || !uri.contains("playlist")) continue
+                        val isFolder = uri.contains("folder") || typeName.contains("Folder", ignoreCase = true)
+                        if (uri.isEmpty() || (!uri.contains("playlist") && !isFolder)) continue
                         val id = uri.substringAfterLast(":")
-                        val name = itemData.optString("name", itemWrapper.optString("name", "Playlist"))
-                        val ownerName = itemData.optJSONObject("ownerV2")?.optJSONObject("data")?.optString("name") ?: "Spotify"
+                        val name = itemData.optString("name", itemWrapper.optString("name", if (isFolder) "Folder" else "Playlist"))
+                        val ownerName = if (isFolder) "Folder" else (itemData.optJSONObject("ownerV2")?.optJSONObject("data")?.optString("name") ?: "Spotify")
                         val imagesArr = itemData.optJSONObject("images")?.optJSONArray("items")
                         val coverUrl = imagesArr?.optJSONObject(0)?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")
                             ?: itemData.optJSONArray("images")?.optJSONObject(0)?.optString("url")
@@ -1335,7 +1346,7 @@ class SpotifyWebClient {
                         }
 
                         if (results.none { it.uri == uri || it.id == id }) {
-                            results.add(SpotifyPlaylistSummary(id, uri, name, ownerName, coverUrl, total))
+                            results.add(SpotifyPlaylistSummary(id, uri, name, ownerName, coverUrl, total, isFolder = isFolder))
                         }
                     }
                 }
@@ -3972,9 +3983,9 @@ class SpotifyWebClient {
                 }
 
                 // Await manifest notification from Dealer WebSocket
-                fileId = withTimeoutOrNull(8000L) {
+                fileId = withTimeoutOrNull(15000L) {
                     deferred.await()
-                } ?: audioFileMap[trackUri]
+                } ?: audioFileMap[trackUri] ?: audioFileMap[trackUri.removePrefix("spotify:track:")]
 
             } finally {
                 pendingTrackResolutions.remove(trackUri)

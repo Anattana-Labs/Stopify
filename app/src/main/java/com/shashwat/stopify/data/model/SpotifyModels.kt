@@ -78,7 +78,8 @@ data class SpotifyPlaylistSummary(
     val name: String,
     val ownerName: String,
     val coverUrl: String?,
-    val trackCount: Int
+    val trackCount: Int,
+    val isFolder: Boolean = false
 )
 
 data class SpotifyLyricLine(

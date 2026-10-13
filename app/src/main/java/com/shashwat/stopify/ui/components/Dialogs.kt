@@ -188,7 +188,7 @@ fun TrackOptionsMenu(
                     if (onToggleDownload != null) {
                         onToggleDownload()
                     } else {
-                        downloadManager.toggleDownload(track, coroutineScope)
+                        downloadManager.toggleDownload(track)
                     }
                 }
             )
