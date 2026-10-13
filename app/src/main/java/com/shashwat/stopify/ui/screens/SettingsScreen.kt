@@ -2,7 +2,6 @@ package com.shashwat.stopify.ui.screens
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,14 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.shashwat.stopify.data.SpotifyTokenManager
 import com.shashwat.stopify.data.SpotifyTrack
@@ -35,102 +33,18 @@ import com.shashwat.stopify.ui.theme.AppThemeMode
 import com.shashwat.stopify.ui.theme.ThemeColorMode
 import kotlinx.coroutines.launch
 
-// Spotui-style section title (green accent, bold, small)
 @Composable
-private fun SectionTitle(text: String) {
+private fun SettingsSectionHeader(title: String) {
     Text(
-        text = text,
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
-        fontSize = 13.sp,
         fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+        modifier = Modifier.padding(start = 8.dp, top = 20.dp, bottom = 8.dp)
     )
 }
 
-// Spotui-style switch row
-@Composable
-private fun SettingsSwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            if (subtitle.isNotEmpty()) {
-                Text(subtitle, color = Color(0xFFB3B3B3), fontSize = 12.sp)
-            }
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                uncheckedThumbColor = Color(0xFFB3B3B3),
-                uncheckedTrackColor = Color(0xFF333333),
-            ),
-        )
-    }
-}
-
-// Spotui-style info row (no badge, just label + value)
-@Composable
-private fun SettingsInfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.5f))
-        Text(
-            value,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            color = Color.White.copy(alpha = 0.85f)
-        )
-    }
-}
-
-// Spotui-style source/option row with check mark
-@Composable
-private fun SourceSettingRow(
-    title: String,
-    subtitle: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .background(if (selected) Color(0xFF1A1A20) else Color.Transparent)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = Color(0xFFB3B3B3), fontSize = 12.sp)
-        }
-        if (selected) {
-            Icon(
-                Icons.Rounded.Check,
-                contentDescription = "Selected",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SimpSettingsScreen(
     client: SpotifyWebClient,
@@ -182,186 +96,217 @@ fun SimpSettingsScreen(
 
     LaunchedEffect(Unit) { reloadRecents() }
 
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val background = MaterialTheme.colorScheme.background
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(background)
-    ) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            )
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .padding(bottom = bottomPadding)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = bottomPadding + 16.dp)
         ) {
-            // ── TOP APP BAR ──────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(top = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // ── 1. ACCOUNT ──────────────────────────────────────────
+            SettingsSectionHeader("Account")
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White,
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .size(26.dp)
-                        .clickable { onBack() }
-                )
-                Text(
-                    text = "Settings",
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // ── ACCOUNT ──────────────────────────────────────────────
-            SectionTitle("Account")
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF3A3A3A)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (!userProfile?.avatarUrl.isNullOrEmpty()) {
-                        AsyncImage(
-                            model = userProfile!!.avatarUrl,
-                            contentDescription = "Avatar",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.Person,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(30.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = userProfile?.displayName ?: "Spotify User",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (!userProfile?.email.isNullOrBlank()) {
-                        Text(userProfile!!.email, color = Color.Gray, fontSize = 13.sp)
-                    }
-                    if (!userProfile?.product.isNullOrBlank()) {
+                ListItem(
+                    headlineContent = {
                         Text(
-                            "Spotify ${userProfile!!.product}",
-                            color = primaryColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
+                            text = userProfile?.displayName ?: "Spotify User",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    }
-                }
-            }
+                    },
+                    supportingContent = {
+                        val subText = when {
+                            !userProfile?.email.isNullOrBlank() -> userProfile!!.email
+                            !userProfile?.product.isNullOrBlank() -> "Spotify ${userProfile!!.product}"
+                            else -> "Connected via Web Session"
+                        }
+                        Text(
+                            text = subText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingContent = {
+                        if (!userProfile?.avatarUrl.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = userProfile!!.avatarUrl,
+                                contentDescription = "Avatar",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                            )
+                        } else {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    trailingContent = {
+                        if (!userProfile?.product.isNullOrBlank()) {
+                            SuggestionChip(
+                                onClick = {},
+                                label = { Text(userProfile!!.product) }
+                            )
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
 
-            HorizontalDivider(color = Color(0xFF2A2A2A), modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
 
-            // Manage login
-            Text(
-                text = if (userProfile != null || !client.customAccessToken.isNullOrEmpty()) "Manage Login" else "Sign In",
-                color = primaryColor,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onOpenCookieManager() }
-                    .padding(vertical = 12.dp)
-            )
-
-            if (userProfile != null || !client.customAccessToken.isNullOrEmpty()) {
-                Text(
-                    text = "Log out",
-                    color = Color(0xFFE57373),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable {
-                            prefs.edit().remove("spotify_cookies").remove("spotify_access_token").apply()
-                            client.updateCookies("")
-                            tokenDisplay = null
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = onOpenCookieManager,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Key,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (userProfile != null || !client.customAccessToken.isNullOrEmpty()) "Manage Login" else "Sign In")
+                    }
+
+                    if (userProfile != null || !client.customAccessToken.isNullOrEmpty()) {
+                        OutlinedButton(
+                            onClick = {
+                                prefs.edit().remove("spotify_cookies").remove("spotify_access_token").apply()
+                                client.updateCookies("")
+                                tokenDisplay = null
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("Log out")
                         }
-                        .padding(vertical = 12.dp)
-                )
+                    }
+                }
             }
 
-            // ── SESSION ─────────────────────────────────────────────
-            SectionTitle("Session & Token")
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // ── 2. SESSION & TOKEN ──────────────────────────────────
+            SettingsSectionHeader("Session & Token")
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column {
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            text = "Bearer Access Token",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            text = if (!tokenDisplay.isNullOrEmpty()) "Live authenticated session" else "Not generated",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Rounded.VpnKey,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (!tokenDisplay.isNullOrEmpty()) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+                        ) {
+                            Text(
+                                text = if (!tokenDisplay.isNullOrEmpty()) "ACTIVE" else "IDLE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (!tokenDisplay.isNullOrEmpty()) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                if (tokenStatusMsg.isNotEmpty()) {
                     Text(
-                        "Bearer Access Token",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (!tokenDisplay.isNullOrEmpty()) "Live in background" else "Not yet generated",
-                        color = if (!tokenDisplay.isNullOrEmpty()) primaryColor else Color(0xFFB3B3B3),
-                        fontSize = 12.sp
+                        text = tokenStatusMsg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
                 }
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = if (!tokenDisplay.isNullOrEmpty()) primaryColor.copy(alpha = 0.2f) else Color(0xFF333333)
-                ) {
-                    Text(
-                        text = if (!tokenDisplay.isNullOrEmpty()) "ACTIVE" else "IDLE",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (!tokenDisplay.isNullOrEmpty()) primaryColor else Color.Gray,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                }
-            }
-            if (tokenStatusMsg.isNotEmpty()) {
-                Text(tokenStatusMsg, color = primaryColor, fontSize = 12.sp)
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = if (isRefreshingToken) "Refreshing…" else "Refresh Token",
-                    color = primaryColor,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(enabled = !isRefreshingToken) {
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = {
                             isRefreshingToken = true
                             tokenStatusMsg = "Refreshing in background..."
                             SpotifyTokenManager.refreshAccessTokenInBackground(context, client) { newToken ->
@@ -373,170 +318,447 @@ fun SimpSettingsScreen(
                                     tokenStatusMsg = "Background refresh failed."
                                 }
                             }
-                        }
-                        .padding(vertical = 12.dp)
-                )
-                Text(
-                    text = "Web / Cookies",
-                    color = primaryColor,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { onOpenCookieManager() }
-                        .padding(vertical = 12.dp)
-                )
-            }
-
-            // ── AUDIO & PLAYBACK ─────────────────────────────────────
-            SectionTitle("Audio & Playback")
-            SettingsSwitchRow(
-                title = "Normalize Volume",
-                subtitle = "Equalize loud and quiet tracks",
-                checked = normalizeVolume,
-                onCheckedChange = {
-                    normalizeVolume = it
-                    prefs.edit().putBoolean("pref_normalize_volume", it).apply()
-                }
-            )
-            HorizontalDivider(color = Color(0xFF222222), modifier = Modifier.padding(vertical = 2.dp))
-            SettingsSwitchRow(
-                title = "Gapless Playback",
-                subtitle = "Seamless audio transitions between songs",
-                checked = gaplessPlayback,
-                onCheckedChange = {
-                    gaplessPlayback = it
-                    prefs.edit().putBoolean("pref_gapless_playback", it).apply()
-                }
-            )
-
-            // ── DISPLAY ─────────────────────────────────────────────
-            SectionTitle("Display")
-            SettingsSwitchRow(
-                title = "Canvas",
-                subtitle = "Show looping video animations in the player",
-                checked = canvasToggleLocal,
-                onCheckedChange = {
-                    canvasToggleLocal = it
-                    prefs.edit().putBoolean("pref_canvas_enabled", it).apply()
-                    onCanvasToggle(it)
-                }
-            )
-            HorizontalDivider(color = Color(0xFF222222), modifier = Modifier.padding(vertical = 2.dp))
-            Text(
-                text = "Display Mode",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-            listOf(
-                Triple("Auto", "Device system", currentColorMode == ThemeColorMode.SYSTEM) to { onColorModeChange(ThemeColorMode.SYSTEM) },
-                Triple("Dark", "Always dark", currentColorMode == ThemeColorMode.DARK) to { onColorModeChange(ThemeColorMode.DARK) },
-                Triple("Light", "Clean light", currentColorMode == ThemeColorMode.LIGHT) to { onColorModeChange(ThemeColorMode.LIGHT) }
-            ).forEach { (triple, action) ->
-                val (title, subtitle, selected) = triple
-                SourceSettingRow(title = title, subtitle = subtitle, selected = selected, onClick = action)
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "Accent & Palette",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-            listOf(
-                Triple("Dynamic", "Luxury Orange & Artwork", currentThemeMode == AppThemeMode.DYNAMIC) to { onThemeChange(AppThemeMode.DYNAMIC) },
-                Triple("Monochrome", "Minimal Slate", currentThemeMode == AppThemeMode.MONOCHROME) to { onThemeChange(AppThemeMode.MONOCHROME) },
-                Triple("Pitch Black (AMOLED)", "Pure black #000000", currentThemeMode == AppThemeMode.AMOLED) to { onThemeChange(AppThemeMode.AMOLED) }
-            ).forEach { (triple, action) ->
-                val (title, subtitle, selected) = triple
-                SourceSettingRow(title = title, subtitle = subtitle, selected = selected, onClick = action)
-            }
-
-            // ── HISTORY & SYNC ───────────────────────────────────────
-            SectionTitle("History & Sync")
-            SettingsSwitchRow(
-                title = "Sync Played Tracks",
-                subtitle = "Post playback pings to Spotify account",
-                checked = syncSpotifyHistory,
-                onCheckedChange = {
-                    syncSpotifyHistory = it
-                    prefs.edit().putBoolean("pref_sync_history", it).apply()
-                }
-            )
-            HorizontalDivider(color = Color(0xFF222222), modifier = Modifier.padding(vertical = 2.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { showRecentsSection = !showRecentsSection }
-                    .padding(vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text("Spotify Account Recents", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    Text("${spotifyRecents.size} tracks fetched", color = Color(0xFFB3B3B3), fontSize = 12.sp)
-                }
-                Icon(
-                    imageVector = if (showRecentsSection) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                    contentDescription = null,
-                    tint = Color(0xFFB3B3B3)
-                )
-            }
-            AnimatedVisibility(visible = showRecentsSection) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (isRecentsLoading) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = primaryColor)
-                        }
-                    } else if (spotifyRecents.isEmpty()) {
-                        Text(
-                            "No Spotify recents recorded yet.",
-                            color = Color(0xFFB3B3B3),
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(vertical = 8.dp)
+                        },
+                        enabled = !isRefreshingToken,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
                         )
-                    } else {
-                        spotifyRecents.take(5).forEach { track ->
-                            Row(
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (isRefreshingToken) "Refreshing…" else "Refresh Token")
+                    }
+
+                    OutlinedButton(
+                        onClick = onOpenCookieManager,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Web / Cookies")
+                    }
+                }
+            }
+
+            // ── 3. PLAYBACK & AUDIO ─────────────────────────────────
+            SettingsSectionHeader("Playback & Audio")
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            text = "Normalize Volume",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            text = "Equalize loud and quiet tracks automatically",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.VolumeUp,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = normalizeVolume,
+                            onCheckedChange = {
+                                normalizeVolume = it
+                                prefs.edit().putBoolean("pref_normalize_volume", it).apply()
+                            }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            text = "Gapless Playback",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            text = "Seamless audio transitions between consecutive songs",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Rounded.GraphicEq,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = gaplessPlayback,
+                            onCheckedChange = {
+                                gaplessPlayback = it
+                                prefs.edit().putBoolean("pref_gapless_playback", it).apply()
+                            }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            text = "Canvas",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            text = "Display looping background animations in the player",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Rounded.VideoLibrary,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = canvasToggleLocal,
+                            onCheckedChange = {
+                                canvasToggleLocal = it
+                                prefs.edit().putBoolean("pref_canvas_enabled", it).apply()
+                                onCanvasToggle(it)
+                            }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+            }
+
+            // ── 4. APPEARANCE & DISPLAY ─────────────────────────────
+            SettingsSectionHeader("Appearance & Display")
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Display Mode",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                )
+
+                val colorModes = listOf(
+                    "System" to ThemeColorMode.SYSTEM,
+                    "Dark" to ThemeColorMode.DARK,
+                    "Light" to ThemeColorMode.LIGHT
+                )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    colorModes.forEachIndexed { index, (label, mode) ->
+                        SegmentedButton(
+                            selected = currentColorMode == mode,
+                            onClick = { onColorModeChange(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = colorModes.size)
+                        ) {
+                            Text(label)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+
+                Text(
+                    text = "Color Palette",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                )
+
+                val themeModes = listOf(
+                    "Dynamic" to AppThemeMode.DYNAMIC,
+                    "Slate" to AppThemeMode.MONOCHROME,
+                    "AMOLED" to AppThemeMode.AMOLED
+                )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    themeModes.forEachIndexed { index, (label, mode) ->
+                        SegmentedButton(
+                            selected = currentThemeMode == mode,
+                            onClick = { onThemeChange(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = themeModes.size)
+                        ) {
+                            Text(label)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            // ── 5. HISTORY & SYNC ───────────────────────────────────
+            SettingsSectionHeader("History & Sync")
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            text = "Sync Played Tracks",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            text = "Record playback history to your Spotify account",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Rounded.Sync,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = syncSpotifyHistory,
+                            onCheckedChange = {
+                                syncSpotifyHistory = it
+                                prefs.edit().putBoolean("pref_sync_history", it).apply()
+                            }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            text = "Spotify Account Recents",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            text = "${spotifyRecents.size} tracks fetched from Spotify",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Rounded.History,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        IconButton(onClick = { showRecentsSection = !showRecentsSection }) {
+                            Icon(
+                                imageVector = if (showRecentsSection) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    modifier = Modifier.clickable { showRecentsSection = !showRecentsSection },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                AnimatedVisibility(visible = showRecentsSection) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (isRecentsLoading) {
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { onPlayTrack(track) }
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                AsyncImage(
-                                    model = track.coverUrl,
-                                    contentDescription = track.name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp))
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = MaterialTheme.colorScheme.primary
                                 )
-                                Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(track.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(track.artist, color = Color(0xFFB3B3B3), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                IconButton(onClick = { onPlayTrack(track) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", tint = primaryColor, modifier = Modifier.size(18.dp))
-                                }
+                            }
+                        } else if (spotifyRecents.isEmpty()) {
+                            Text(
+                                text = "No Spotify recents recorded yet.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        } else {
+                            spotifyRecents.take(5).forEach { track ->
+                                ListItem(
+                                    headlineContent = {
+                                        Text(
+                                            text = track.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    },
+                                    supportingContent = {
+                                        Text(
+                                            text = track.artist,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    },
+                                    leadingContent = {
+                                        AsyncImage(
+                                            model = track.coverUrl,
+                                            contentDescription = track.name,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                        )
+                                    },
+                                    trailingContent = {
+                                        IconButton(onClick = { onPlayTrack(track) }) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.PlayArrow,
+                                                contentDescription = "Play",
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { onPlayTrack(track) },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // ── ABOUT ────────────────────────────────────────────────
-            SectionTitle("About & Engine")
-            SettingsInfoRow("App Version", "Stopify 1.2.0 (Build 43)")
-            SettingsInfoRow("DRM Engine", "Widevine L3 Software CDM")
-            SettingsInfoRow("Audio Engine", "AndroidX Media3 ExoPlayer")
-            SettingsInfoRow("Client Platform", "Web Player 4.80 (Harmony API)")
-            Spacer(Modifier.height(40.dp))
+            // ── 6. ABOUT & ENGINE ───────────────────────────────────
+            SettingsSectionHeader("About & Engine")
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                ListItem(
+                    headlineContent = { Text("App Version", style = MaterialTheme.typography.bodyMedium) },
+                    trailingContent = {
+                        Text(
+                            "Stopify 1.2.0 (Build 43)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                ListItem(
+                    headlineContent = { Text("DRM Engine", style = MaterialTheme.typography.bodyMedium) },
+                    trailingContent = {
+                        Text(
+                            "Widevine L3 Software CDM",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                ListItem(
+                    headlineContent = { Text("Audio Engine", style = MaterialTheme.typography.bodyMedium) },
+                    trailingContent = {
+                        Text(
+                            "AndroidX Media3 ExoPlayer",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                ListItem(
+                    headlineContent = { Text("Connect Engine", style = MaterialTheme.typography.bodyMedium) },
+                    trailingContent = {
+                        Text(
+                            "Spotify Web Player (Harmony API)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+            }
         }
     }
 }
+

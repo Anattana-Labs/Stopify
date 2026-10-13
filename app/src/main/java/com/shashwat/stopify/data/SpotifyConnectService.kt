@@ -190,38 +190,84 @@ class SpotifyConnectService(
                         })
                     })
                     if (track != null) {
-                        put("player_state", JSONObject().apply {
-                            put("timestamp", System.currentTimeMillis())
-                            put("context_uri", track.albumUri ?: track.uri)
-                            put("track", JSONObject().apply {
-                                put("uri", track.uri)
-                                put("uid", "")
-                                put("name", track.name)
-                                put("album", JSONObject().apply {
-                                    put("name", track.album)
-                                    put("uri", track.albumUri ?: "")
-                                })
-                                put("artists", JSONArray().apply {
-                                    put(JSONObject().apply {
-                                        put("name", track.artist)
-                                        put("uri", track.artistUri ?: "")
-                                    })
-                                })
-                                put("metadata", JSONObject().apply {
-                                    put("title", track.name)
-                                    put("artist_name", track.artist)
-                                    put("album_title", track.album)
+                        val trackMetadata = JSONObject().apply {
+                            put("title", track.name)
+                            put("artist_name", track.artist)
+                            put("album_title", track.album)
+                            if (!track.coverUrl.isNullOrEmpty()) {
+                                put("image_url", track.coverUrl)
+                                put("image_large_url", track.coverUrl)
+                                put("image_small_url", track.coverUrl)
+                                put("image_xlarge_url", track.coverUrl)
+                            }
+                            put("duration", track.durationMs.toString())
+                            put("entity_uri", track.uri)
+                        }
+
+                        val contextTrackObj = JSONObject().apply {
+                            put("uri", track.uri)
+                            put("uid", track.id)
+                            put("metadata", trackMetadata)
+                        }
+
+                        val trackObj = JSONObject().apply {
+                            put("uri", track.uri)
+                            put("uid", track.id)
+                            put("name", track.name)
+                            put("provider", "context")
+                            put("duration_ms", track.durationMs)
+                            put("contextTrack", contextTrackObj)
+                            put("context_track", contextTrackObj)
+                            put("metadata", trackMetadata)
+                            put("album", JSONObject().apply {
+                                put("name", track.album)
+                                put("uri", track.albumUri ?: "")
+                                put("images", JSONArray().apply {
                                     if (!track.coverUrl.isNullOrEmpty()) {
-                                        put("image_url", track.coverUrl)
+                                        put(JSONObject().apply { put("url", track.coverUrl) })
                                     }
                                 })
                             })
+                            put("artists", JSONArray().apply {
+                                put(JSONObject().apply {
+                                    put("name", track.artist)
+                                    put("uri", track.artistUri ?: "")
+                                })
+                            })
+                        }
+
+                        put("player_state", JSONObject().apply {
+                            put("timestamp", System.currentTimeMillis())
+                            put("context_uri", track.albumUri ?: track.uri)
+                            put("contextUri", track.albumUri ?: track.uri)
+                            put("context", JSONObject().apply {
+                                put("uri", track.albumUri ?: track.uri)
+                                put("metadata", JSONObject())
+                            })
+                            put("track", trackObj)
+                            put("item", trackObj)
+                            put("track_window", JSONObject().apply {
+                                put("current_track", trackObj)
+                                put("previous_tracks", JSONArray())
+                                put("next_tracks", JSONArray())
+                            })
                             put("playback_speed", if (isPlaying) 1.0 else 0.0)
+                            put("playbackSpeed", if (isPlaying) 1.0 else 0.0)
                             put("position_as_of_timestamp", positionMs)
+                            put("positionAsOfTimestamp", positionMs)
                             put("duration", track.durationMs)
                             put("is_playing", isPlaying)
+                            put("isPlaying", isPlaying)
                             put("is_paused", !isPlaying)
+                            put("isPaused", !isPlaying)
+                            put("is_buffering", false)
+                            put("isBuffering", false)
+                            put("has_context", true)
+                            put("hasContext", true)
                             put("play_origin", JSONObject().apply {
+                                put("feature_identifier", "stopify")
+                            })
+                            put("playOrigin", JSONObject().apply {
                                 put("feature_identifier", "stopify")
                             })
                         })

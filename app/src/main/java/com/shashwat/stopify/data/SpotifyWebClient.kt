@@ -60,6 +60,7 @@ class SpotifyWebClient {
         const val ADD_TO_LIBRARY_HASH = "7c5a69420e2bfae3da5cc4e14cbc8bb3f6090f80afc00ffc179177f19be3f33d"
         const val REMOVE_FROM_LIBRARY_HASH = "7c5a69420e2bfae3da5cc4e14cbc8bb3f6090f80afc00ffc179177f19be3f33d"
         const val PROFILE_ATTRIBUTES_HASH = "53bcb064f6cd18c23f752bc324a791194d20df612d8e1239c735144ab0399ced"
+        const val RECENTS_HASH = "698be5892a3cc95331deebeff463d05dfdd5febf5254bea30b895b5a93dfb584"
 
         // Working fallback Bearer token from web session
         const val FALLBACK_BEARER_TOKEN = "BQDyP_PgW1Uj_1SVWN4PgYEDZ1wgIj2Dohsrx8jXZiXpxofEgaAqyImnIFyRCJ9_MtAWm2bUUyMFbpUaf_X1KCa9YnP24UgtRNzoU6q21uytBgXaKbMKISMlWGBkRwuG4QACxXbnaHkm-gBm8VPIVyopxU6GYPxxRtyuVxRk1yDBE27cNQJNdsETLt0dAGvTzB36iWQR8YFBSoLsvRGmvOSMHcxXad0fD8zg_Zt6muogKnlHAnIn0Q9kQN_lqwb3o7ipmbOqrMQ-7TVJaz4nkIF0GI5kIIHd8AdOaO9foLcF3RyjhKfI9r6yDcv5LR1iLqpgluuBasbhIObAGhUhrSpBYltpzTtKCGuBq_7n4_6H03ysecKrUEe2UVD8w3SfA_dJ8tN9RRajljHIbu-K"
@@ -1080,29 +1081,45 @@ class SpotifyWebClient {
             loadHistoryFromPrefs(prefs)
         }
         val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
-        val list = mutableListOf<SpotifyTrack>()
+        val clientToken = customClientToken ?: CLIENT_TOKEN
+        val pathfinderTracks = mutableListOf<SpotifyTrack>()
 
-        // 1. Local playback history always comes first so newly played songs are immediately visible
-        list.addAll(playbackHistory)
-
-        // 2. Fetch from Spotify recently-played endpoint (spclient.wg.spotify.com/recently-played/v3 as used in Spotify Web Player)
+        // 1. Fetch live recents from official Spotify Pathfinder GraphQL recents query
         try {
-            val clientToken = customClientToken ?: CLIENT_TOKEN
-            val userId = prefs?.getString("user_profile_id", null) ?: "31dgtnegwnonpz7pbb62523oc5ny"
-            val url = URL("https://spclient.wg.spotify.com/recently-played/v3/user/${java.net.URLEncoder.encode(userId, "UTF-8")}/recently-played?format=json&offset=0&limit=50&filter=default,collection-new-episodes")
+            val url = URL("https://api-partner.spotify.com/pathfinder/v2/query")
             val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
+                requestMethod = "POST"
+                doOutput = true
                 connectTimeout = 8000
                 readTimeout = 8000
-                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("authorization", "Bearer $token")
                 setRequestProperty("client-token", clientToken)
-                setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("User-Agent", USER_AGENT)
-                setRequestProperty("Origin", "https://open.spotify.com")
-                setRequestProperty("Referer", "https://open.spotify.com/")
+                setRequestProperty("content-type", "application/json;charset=UTF-8")
+                setRequestProperty("accept", "application/json")
                 setRequestProperty("app-platform", APP_PLATFORM)
                 setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                setRequestProperty("origin", "https://open.spotify.com")
+                setRequestProperty("referer", "https://open.spotify.com/")
+                setRequestProperty("user-agent", USER_AGENT)
             }
+
+            val payload = JSONObject().apply {
+                put("variables", JSONObject().apply {
+                    put("uris", JSONArray().apply { put("spotify:list:recents:page") })
+                    put("offset", 0)
+                    put("limit", 100)
+                })
+                put("operationName", "recents")
+                put("extensions", JSONObject().apply {
+                    put("persistedQuery", JSONObject().apply {
+                        put("version", 1)
+                        put("sha256Hash", RECENTS_HASH)
+                    })
+                })
+            }
+
+            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payload.toString()) }
+
             val responseCode = conn.responseCode
             val respBody = try {
                 val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
@@ -1110,43 +1127,103 @@ class SpotifyWebClient {
             } catch (e: Exception) { "" }
             conn.disconnect()
 
-            Log.d(TAG, "Spotify recently-played HTTP Status: $responseCode, length: ${respBody.length}")
+            Log.d(TAG, "Pathfinder recents HTTP Status: $responseCode, length: ${respBody.length}")
 
             if (responseCode in 200..299 && respBody.isNotEmpty()) {
                 val json = JSONObject(respBody)
-                val playContexts = json.optJSONArray("playContexts")
-                if (playContexts != null) {
-                    val trackUrisToDecorate = mutableListOf<String>()
-                    for (i in 0 until playContexts.length()) {
-                        val ctx = playContexts.getJSONObject(i)
-                        val tUri = ctx.optString("lastPlayedTrackUri", "")
-                        if (tUri.startsWith("spotify:track:") && list.none { it.uri == tUri }) {
-                            trackUrisToDecorate.add(tUri)
-                        }
-                    }
-                    if (trackUrisToDecorate.isNotEmpty()) {
-                        val decorated = decorateContextTracks(trackUrisToDecorate)
-                        for (dt in decorated) {
-                            if (list.none { it.uri == dt.uri }) {
-                                list.add(dt)
+                val lists = json.optJSONObject("data")?.optJSONArray("lists")
+                if (lists != null && lists.length() > 0) {
+                    val itemsArray = lists.optJSONObject(0)?.optJSONObject("items")?.optJSONArray("items")
+                    if (itemsArray != null) {
+                        for (i in 0 until itemsArray.length()) {
+                            val itemObj = itemsArray.optJSONObject(i) ?: continue
+                            val entity = itemObj.optJSONObject("entity") ?: continue
+                            val entityData = entity.optJSONObject("data") ?: continue
+                            val uri = entity.optString("_uri", entityData.optString("uri", ""))
+                            if (uri.isEmpty()) continue
+
+                            val entityType = entityData.optJSONObject("entityTypeTrait")?.optString("type", "") ?: ""
+                            val isTrack = entityType == "ENTITY_TYPE_TRACK" || uri.startsWith("spotify:track:")
+
+                            if (isTrack) {
+                                val trackId = uri.removePrefix("spotify:track:")
+                                val identity = entityData.optJSONObject("identityTrait")
+                                val name = identity?.optString("name", "Unknown Track") ?: "Unknown Track"
+
+                                val contribItems = identity?.optJSONObject("contributors")?.optJSONArray("items")
+                                val artist = if (contribItems != null && contribItems.length() > 0) {
+                                    (0 until contribItems.length())
+                                        .mapNotNull { contribItems.optJSONObject(it)?.optString("name") }
+                                        .filter { it.isNotBlank() }
+                                        .joinToString(", ")
+                                } else "Unknown Artist"
+
+                                val albumName = identity?.optJSONObject("contentHierarchyParent")
+                                    ?.optJSONObject("identityTrait")
+                                    ?.optString("name") ?: ""
+
+                                val visualTrait = entityData.optJSONObject("visualIdentityTrait")
+                                val squareCover = visualTrait?.optJSONObject("squareCoverImage")
+                                val sources = squareCover?.optJSONObject("image")?.optJSONObject("data")?.optJSONArray("sources")
+                                var coverUrl = ""
+                                if (sources != null && sources.length() > 0) {
+                                    coverUrl = sources.optJSONObject(0)?.optString("url") ?: ""
+                                }
+                                if (coverUrl.isEmpty()) {
+                                    val origInstances = squareCover?.optJSONArray("originalInstances")
+                                    if (origInstances != null && origInstances.length() > 0) {
+                                        coverUrl = origInstances.optJSONObject(0)?.optJSONObject("flatFile")?.optString("cdnUrl") ?: ""
+                                    }
+                                }
+
+                                val durationSec = entityData.optJSONObject("consumptionExperienceTrait")
+                                    ?.optJSONObject("duration")
+                                    ?.optLong("seconds", 0L) ?: 0L
+                                val durationMs = durationSec * 1000L
+
+                                val track = SpotifyTrack(
+                                    id = trackId,
+                                    name = name,
+                                    artist = artist,
+                                    album = albumName,
+                                    coverUrl = coverUrl,
+                                    durationMs = durationMs,
+                                    uri = uri
+                                )
+                                if (pathfinderTracks.none { it.uri == uri }) {
+                                    pathfinderTracks.add(track)
+                                }
                             }
                         }
                     }
                 }
-                historyManager.mergeRemoteHistory(list, prefs)
             } else if (responseCode == 429) {
-                Log.w(TAG, "Spotify recently-played rate limited (429), relying strictly on local history")
+                Log.w(TAG, "Pathfinder recents rate limited (429)")
             }
-            Log.d(TAG, "Fetched ${list.size} tracks for recently played (online + local)")
         } catch (e: Exception) {
-            Log.w(TAG, "Error fetching online recents, returning local recents", e)
+            Log.w(TAG, "Error fetching Pathfinder recents", e)
+        }
+
+        // 2. Merge Pathfinder remote recents with local playback history
+        val list = mutableListOf<SpotifyTrack>()
+        list.addAll(pathfinderTracks)
+
+        // Ensure newly played in-session local tracks remain at the front
+        for (localTrack in playbackHistory.asReversed()) {
+            list.removeAll { it.uri == localTrack.uri }
+            list.add(0, localTrack)
+        }
+
+        if (list.isEmpty()) {
+            list.addAll(playbackHistory)
         }
 
         if (prefs != null && list.isNotEmpty()) {
             historyManager.mergeRemoteHistory(list, prefs)
         }
 
-        Result.success(playbackHistory.ifEmpty { list })
+        Log.d(TAG, "Total recents loaded: ${list.size} (Pathfinder: ${pathfinderTracks.size}, Local: ${playbackHistory.size})")
+        Result.success(list)
     }
 
     suspend fun fetchUserPlaylists(prefs: android.content.SharedPreferences? = null): Result<List<SpotifyPlaylistSummary>> = withContext(Dispatchers.IO) {

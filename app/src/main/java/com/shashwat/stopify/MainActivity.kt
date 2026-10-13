@@ -425,6 +425,12 @@ fun SimpMusicApp(
                     playbackHistory.add(0, track)
                     coroutineScope.launch {
                         client.reportPlaybackToApi(track, 0L, prefs)
+                        client.connectService.updateConnectClusterState(
+                            track = track,
+                            isPlaying = true,
+                            positionMs = 0L,
+                            deviceId = SpotifyWebClient.getDeviceId(prefs)
+                        )
                     }
                 }
 
@@ -629,7 +635,8 @@ fun SimpMusicApp(
             client.connectService.updateConnectClusterState(
                 track = currentTrack,
                 isPlaying = playbackState.isPlaying,
-                positionMs = playbackState.currentPositionMs
+                positionMs = playbackState.currentPositionMs,
+                deviceId = SpotifyWebClient.getDeviceId(prefs)
             )
         }
     }
