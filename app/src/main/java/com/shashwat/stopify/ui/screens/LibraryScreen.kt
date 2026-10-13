@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -222,122 +223,70 @@ fun SimpLibraryScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ── TOP HEADER BAR ───────────────────────────────────────
+            // ── TOP HEADER BAR (Spotui style) ────────────────────────
             item {
                 Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(top = 4.dp, bottom = 8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        // User Avatar with accent border
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .shadow(6.dp, CircleShape, spotColor = accentGreen.copy(alpha = 0.4f))
-                                .clip(CircleShape)
-                                .background(Color(0xFF222226))
-                                .border(1.5.dp, accentGreen, CircleShape)
-                                .clickable { onOpenSettings() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (!userProfile?.avatarUrl.isNullOrEmpty()) {
-                                AsyncImage(
-                                    model = userProfile!!.avatarUrl,
-                                    contentDescription = "Profile",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Text(
-                                    text = (userProfile?.displayName?.firstOrNull() ?: 'S').uppercase(),
-                                    fontWeight = FontWeight.Bold,
-                                    color = accentGreen,
-                                    fontSize = 17.sp
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column {
-                            Text(
-                                text = "Your Library",
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White,
-                                letterSpacing = (-0.5).sp
-                            )
-                            Text(
-                                text = "${playlists.size} playlists • $likedTracksCount liked",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Color.White.copy(alpha = 0.55f)
-                            )
-                        }
-                    }
-
-                    // Header Action Buttons
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Search Button
-                        IconButton(
-                            onClick = {
+                    Text(
+                        text = "Your Library",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // Search icon
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = "Search library",
+                        tint = if (isSearchExpanded) accentGreen else Color.White,
+                        modifier = Modifier
+                            .padding(end = 14.dp)
+                            .size(22.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) {
                                 isSearchExpanded = !isSearchExpanded
                                 if (!isSearchExpanded) searchQuery = ""
                             },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isSearchExpanded) accentGreen.copy(alpha = 0.2f)
-                                    else Color.White.copy(alpha = 0.08f)
-                                )
-                        ) {
-                            Icon(
-                                imageVector = if (isSearchExpanded) Icons.Rounded.Close else Icons.Rounded.Search,
-                                contentDescription = "Search Library",
-                                tint = if (isSearchExpanded) accentGreen else Color.White,
-                                modifier = Modifier.size(20.dp)
+                    )
+                    // Grid / list toggle
+                    Icon(
+                        imageVector = if (viewMode == LibraryViewMode.LIST) Icons.Rounded.GridView else Icons.Rounded.FormatListBulleted,
+                        contentDescription = if (viewMode == LibraryViewMode.LIST) "Show as grid" else "Show as list",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .padding(end = 14.dp)
+                            .size(20.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                viewMode = if (viewMode == LibraryViewMode.LIST) LibraryViewMode.GRID else LibraryViewMode.LIST
+                            }
+                    )
+                    // Account avatar
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF3A3A3A))
+                            .clickable { onOpenSettings() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!userProfile?.avatarUrl.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = userProfile!!.avatarUrl,
+                                contentDescription = "Profile",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape)
                             )
-                        }
-
-                        // Create Playlist Button
-                        IconButton(
-                            onClick = { showCreatePlaylistDialog = true },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Add,
-                                contentDescription = "Create Playlist",
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        // Settings Button
-                        IconButton(
-                            onClick = onOpenSettings,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Settings,
-                                contentDescription = "Settings",
-                                tint = Color.White,
-                                modifier = Modifier.size(19.dp)
-                            )
+                        } else {
+                            Icon(Icons.Rounded.Person, contentDescription = "Account", tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -353,11 +302,10 @@ fun SimpLibraryScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF1E1E24))
-                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .padding(vertical = 0.dp, horizontal = 0.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF252525))
+                            .padding(horizontal = 12.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -456,16 +404,14 @@ fun SimpLibraryScreen(
                 }
             }
 
-            // ── SORTING & VIEW MODE TOGGLE ROW ───────────────────────
+            // ── SORTING ROW ───────────────────────────────────────────
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 2.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Sort Selector
                     Box {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -488,7 +434,6 @@ fun SimpLibraryScreen(
                                 color = Color.White.copy(alpha = 0.85f)
                             )
                         }
-
                         DropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false },
@@ -510,21 +455,6 @@ fun SimpLibraryScreen(
                                 )
                             }
                         }
-                    }
-
-                    // View Mode Toggle (Grid vs List)
-                    IconButton(
-                        onClick = {
-                            viewMode = if (viewMode == LibraryViewMode.LIST) LibraryViewMode.GRID else LibraryViewMode.LIST
-                        },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (viewMode == LibraryViewMode.LIST) Icons.Rounded.GridView else Icons.Rounded.FormatListBulleted,
-                            contentDescription = "Toggle View Mode",
-                            tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(20.dp)
-                        )
                     }
                 }
             }

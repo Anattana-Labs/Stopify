@@ -304,6 +304,7 @@ fun SimpMusicApp(
     var trackToAddToPlaylist by remember { mutableStateOf<SpotifyTrack?>(null) }
     var favoriteTrackIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var userProfile by remember { mutableStateOf<SpotifyUserProfile?>(null) }
+    var canvasEnabled by remember { mutableStateOf(prefs?.getBoolean("pref_canvas_enabled", true) ?: true) }
 
     // Initialize playback history and favorites purely from live Spotify data
     LaunchedEffect(Unit) {
@@ -362,7 +363,11 @@ fun SimpMusicApp(
                     currentTrackLyricsColor = argbToColor(res.getOrThrow().backgroundColor)
                 }
             }
-            currentCanvasUrl = client.fetchCanvasUrl(current.id)
+            if (canvasEnabled) {
+                currentCanvasUrl = client.fetchCanvasUrl(current.id)
+            } else {
+                currentCanvasUrl = null
+            }
         } else {
             currentTrackLyricsColor = null
             currentCanvasUrl = null
@@ -806,7 +811,9 @@ fun SimpMusicApp(
                 },
                 onToggleFavorite = onToggleFavoriteLambda,
                 isFavorite = { favoriteTrackIds.contains(it.id) },
-                userProfile = userProfile
+                userProfile = userProfile,
+                canvasEnabled = canvasEnabled,
+                onCanvasToggle = { canvasEnabled = it }
             )
         }
 
