@@ -41,7 +41,7 @@ class SpotifyWebClient {
 
         const val USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
         const val APP_PLATFORM = "WebPlayer"
-        const val SPOTIFY_APP_VERSION = "1.3.5.316.gd873ee9db135"
+        const val SPOTIFY_APP_VERSION = "1.3.6.121.g2b2ea800fe12"
 
         // Pathfinder persisted query hashes
         const val GET_TRACK_HASH = "a8ef9e9f02b836feb0da3003c31dbb30decc6f4b473ef89ca88c882386d668de"
@@ -66,6 +66,8 @@ class SpotifyWebClient {
         const val DEVICE_ID = "af6fd454eccef1714bc99a09a10c119366e8da1c"
 
         fun getDeviceId(prefs: android.content.SharedPreferences? = null): String {
+            val activeId = prefs?.getString("spotify_active_device_id", null)
+            if (!activeId.isNullOrBlank()) return activeId
             return DEVICE_ID
         }
 
@@ -209,6 +211,7 @@ class SpotifyWebClient {
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        .pingInterval(30, TimeUnit.SECONDS)
         .build()
 
     private var activeWebSocket: WebSocket? = null
@@ -238,6 +241,8 @@ class SpotifyWebClient {
     private var lastReportedTrackUri: String? = null
     @Volatile
     private var lastReportedPositionMs: Long = 0L
+    @Volatile
+    private var lastConnectPlayTrackUri: String? = null
 
     @Volatile
     var tokenRefreshHook: (suspend () -> Boolean)? = null
@@ -466,12 +471,6 @@ class SpotifyWebClient {
                 }
             }
 
-            val targetUri = currentTrackUri ?: lastReportedTrackUri
-            if (targetUri != null && parsedTracks.isNotEmpty() && parsedTracks.none { it.uri == targetUri }) {
-                Log.d(TAG, "Ignoring state_machine payload that does not contain active track $targetUri (tracks: ${parsedTracks.map { it.name }})")
-                return
-            }
-
             val newSm = smObj.optString("state_machine_id")
             if (!newSm.isNullOrEmpty()) {
                 activeStateMachineId = newSm
@@ -483,31 +482,41 @@ class SpotifyWebClient {
             val statesArr = smObj.optJSONArray("states")
 
             if (statesArr != null && statesArr.length() > 0) {
-                // If updated_state_ref not provided or out of range, find state matching current track URI
-                if (stateIdx !in 0 until statesArr.length()) {
-                    val targetUri = currentTrackUri ?: lastReportedTrackUri
-                    val matchTrackIdx = if (targetUri != null) parsedTracks.indexOfFirst { it.uri == targetUri } else -1
-                    if (matchTrackIdx >= 0) {
-                        for (s in 0 until statesArr.length()) {
-                            val st = statesArr.getJSONObject(s)
-                            if (st.optInt("track", -1) == matchTrackIdx) {
-                                stateIdx = s
-                                break
-                            }
-                        }
+                val targetUri = currentTrackUri ?: lastReportedTrackUri
+                val matchTrackIdx = if (targetUri != null) parsedTracks.indexOfFirst { it.uri == targetUri } else -1
+
+                var resolvedIdx = -1
+                // 1. If updated_state_ref corresponds to target track, use it directly
+                if (stateIdx in 0 until statesArr.length()) {
+                    val candidate = statesArr.getJSONObject(stateIdx)
+                    if (matchTrackIdx < 0 || candidate.optInt("track", -1) == matchTrackIdx) {
+                        resolvedIdx = stateIdx
                     }
-                    if (stateIdx !in 0 until statesArr.length()) {
-                        // Fallback to state with advance transition
-                        for (s in 0 until statesArr.length()) {
-                            val st = statesArr.getJSONObject(s)
-                            if (st.optJSONObject("transitions")?.optJSONObject("advance") != null) {
-                                stateIdx = s
-                                break
-                            }
-                        }
-                    }
-                    if (stateIdx !in 0 until statesArr.length()) stateIdx = 0
                 }
+                // 2. Otherwise find the state for target track in the machine
+                if (resolvedIdx < 0 && matchTrackIdx >= 0) {
+                    for (s in 0 until statesArr.length()) {
+                        val st = statesArr.getJSONObject(s)
+                        if (st.optInt("track", -1) == matchTrackIdx) {
+                            resolvedIdx = s
+                            break
+                        }
+                    }
+                }
+                // 3. Fallback: state with advance transition or default stateIdx
+                if (resolvedIdx < 0) {
+                    for (s in 0 until statesArr.length()) {
+                        val st = statesArr.getJSONObject(s)
+                        if (st.optJSONObject("transitions")?.optJSONObject("advance") != null) {
+                            resolvedIdx = s
+                            break
+                        }
+                    }
+                }
+                if (resolvedIdx < 0) {
+                    resolvedIdx = if (stateIdx in 0 until statesArr.length()) stateIdx else 0
+                }
+                stateIdx = resolvedIdx
 
                 val currentStateObj = statesArr.getJSONObject(stateIdx)
                 val sId = currentStateObj.optString("state_id")
@@ -760,15 +769,17 @@ class SpotifyWebClient {
             val seq = ++stateSeqNum
             val now = System.currentTimeMillis()
 
-            // 1. If starting new track (and not a continuous auto-advance of the same queue), trigger connect-state player command
-            if (debugSource == "before_track_load" && !isAutoAdvanceTransition) {
+            // 1. If starting new track and connect play command has not been issued yet, trigger it
+            if (debugSource == "before_track_load" && !isAutoAdvanceTransition && lastConnectPlayTrackUri != track.uri) {
+                lastConnectPlayTrackUri = track.uri
                 try {
                     connectService.sendConnectPlayerCommand("play", track.uri, currentDeviceId, currentDeviceId)
-                    // Brief delay to allow Dealer WebSocket to receive and parse the state machine for this track
                     delay(250)
                 } catch (ce: Exception) {
                     Log.w(TAG, "Error in connect-state play command", ce)
                 }
+            } else if (debugSource == "before_track_load") {
+                lastConnectPlayTrackUri = track.uri
             }
 
             // 2. Melody Telemetry batch reporting
@@ -1038,6 +1049,10 @@ class SpotifyWebClient {
                 parseStateMachineResponse(respJson, currentTrackUri = track.uri)
             } else if (code !in 200..299) {
                 Log.w(TAG, "track-playback state API error ($code): $respBody")
+                if (code == 400 || code == 502) {
+                    // Reset registration flag to force fresh sequence number recovery on next report
+                    isDeviceRegistered = false
+                }
             }
 
             Log.d(TAG, "track-playback state API status: $code ($debugSource) for '${track.name}' (pos: ${reportedPosition}ms, seq: $seq)")
@@ -1067,10 +1082,11 @@ class SpotifyWebClient {
         // 1. Local playback history always comes first so newly played songs are immediately visible
         list.addAll(playbackHistory)
 
-        // 2. Fetch from Spotify recently-played endpoint to merge account plays from other devices
+        // 2. Fetch from Spotify recently-played endpoint (spclient.wg.spotify.com/recently-played/v3 as used in Spotify Web Player)
         try {
             val clientToken = customClientToken ?: CLIENT_TOKEN
-            val url = URL("https://api.spotify.com/v1/me/player/recently-played?limit=50")
+            val userId = prefs?.getString("user_profile_id", null) ?: "31dgtnegwnonpz7pbb62523oc5ny"
+            val url = URL("https://spclient.wg.spotify.com/recently-played/v3/user/${java.net.URLEncoder.encode(userId, "UTF-8")}/recently-played?format=json&offset=0&limit=50&filter=default,collection-new-episodes")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 8000
@@ -1093,42 +1109,25 @@ class SpotifyWebClient {
 
             Log.d(TAG, "Spotify recently-played HTTP Status: $responseCode, length: ${respBody.length}")
 
-            if (responseCode == 401) {
-                invalidateTokens()
-            } else if (responseCode in 200..299 && respBody.isNotEmpty()) {
+            if (responseCode in 200..299 && respBody.isNotEmpty()) {
                 val json = JSONObject(respBody)
-                val items = json.optJSONArray("items") ?: JSONArray()
-                for (i in 0 until items.length()) {
-                    val item = items.getJSONObject(i)
-                    val tObj = item.optJSONObject("track") ?: continue
-                    val uri = tObj.optString("uri", "")
-                    val name = tObj.optString("name", "Unknown Track")
-                    val durationMs = tObj.optLong("duration_ms", 0L)
-                    val artistsArr = tObj.optJSONArray("artists")
-                    val artistNames = mutableListOf<String>()
-                    if (artistsArr != null) {
-                        for (j in 0 until artistsArr.length()) {
-                            val a = artistsArr.getJSONObject(j).optString("name")
-                            if (!a.isNullOrEmpty()) artistNames.add(a)
+                val playContexts = json.optJSONArray("playContexts")
+                if (playContexts != null) {
+                    val trackUrisToDecorate = mutableListOf<String>()
+                    for (i in 0 until playContexts.length()) {
+                        val ctx = playContexts.getJSONObject(i)
+                        val tUri = ctx.optString("lastPlayedTrackUri", "")
+                        if (tUri.startsWith("spotify:track:") && list.none { it.uri == tUri }) {
+                            trackUrisToDecorate.add(tUri)
                         }
                     }
-                    val artist = artistNames.joinToString(", ").ifEmpty { "Artist" }
-                    val albumObj = tObj.optJSONObject("album")
-                    val albumName = albumObj?.optString("name", "Album") ?: "Album"
-                    val coverUrl = albumObj?.optJSONArray("images")?.optJSONObject(0)?.optString("url")
-                    if (uri.isNotEmpty() && list.none { it.uri == uri }) {
-                        list.add(
-                            SpotifyTrack(
-                                id = uri.substringAfterLast(":"),
-                                uri = uri,
-                                name = name,
-                                artist = artist,
-                                album = albumName,
-                                coverUrl = coverUrl,
-                                durationMs = durationMs,
-                                albumUri = albumObj?.optString("uri")
-                            )
-                        )
+                    if (trackUrisToDecorate.isNotEmpty()) {
+                        val decorated = decorateContextTracks(trackUrisToDecorate)
+                        for (dt in decorated) {
+                            if (list.none { it.uri == dt.uri }) {
+                                list.add(dt)
+                            }
+                        }
                     }
                 }
                 historyManager.mergeRemoteHistory(list, prefs)
@@ -2149,12 +2148,29 @@ class SpotifyWebClient {
     private fun connectDealer(token: String) {
         if (activeWebSocket != null) return
 
-        val wsUrl = "wss://gae2-dealer.g2.spotify.com/?access_token=$token"
-        val request = Request.Builder().url(wsUrl).build()
+        val wsUrl = "wss://dealer.spotify.com/?access_token=$token"
+        val reqBuilder = Request.Builder()
+            .url(wsUrl)
+            .addHeader("User-Agent", USER_AGENT)
+            .addHeader("Origin", "https://open.spotify.com")
+        val cookies = customCookies
+        if (!cookies.isNullOrBlank()) {
+            reqBuilder.addHeader("Cookie", cookies)
+        }
+        val request = reqBuilder.build()
 
         activeWebSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "Dealer WebSocket connected successfully")
+                val connId = response.header("Spotify-Connection-Id")
+                    ?: response.header("x-spotify-connection-id")
+                if (!connId.isNullOrEmpty() && dealerConnectionId == null) {
+                    dealerConnectionId = connId
+                    Log.d(TAG, "Captured Dealer connection ID from onOpen: $connId")
+                    if (!connectionIdDeferred.isCompleted) {
+                        connectionIdDeferred.complete(connId)
+                    }
+                }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -2162,6 +2178,7 @@ class SpotifyWebClient {
                     val json = JSONObject(text)
                     val headers = json.optJSONObject("headers")
                     val connId = headers?.optString("Spotify-Connection-Id")
+                        ?: headers?.optString("x-spotify-connection-id")
                     if (!connId.isNullOrEmpty() && dealerConnectionId == null) {
                         dealerConnectionId = connId
                         Log.d(TAG, "Captured Dealer connection ID: $connId")
@@ -2194,8 +2211,9 @@ class SpotifyWebClient {
                 dealerConnectionId = null
                 isDeviceRegistered = false
                 if (!connectionIdDeferred.isCompleted) {
-                    connectionIdDeferred = CompletableDeferred()
+                    connectionIdDeferred.completeExceptionally(t)
                 }
+                connectionIdDeferred = CompletableDeferred()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -2283,6 +2301,14 @@ class SpotifyWebClient {
             conn.disconnect()
 
             isDeviceRegistered = (code in 200..299)
+            if (isDeviceRegistered && respBody.isNotEmpty()) {
+                val regJson = JSONObject(respBody)
+                val initialSeq = regJson.optInt("initial_seq_num", -1)
+                if (initialSeq > 0) {
+                    stateSeqNum = initialSeq
+                    Log.d(TAG, "Device registered: synchronized stateSeqNum to initial_seq_num=$initialSeq")
+                }
+            }
             Log.d(TAG, "Device registration HTTP status: $code, body: $respBody, success=$isDeviceRegistered")
             isDeviceRegistered
         } catch (e: Exception) {
@@ -3663,7 +3689,8 @@ class SpotifyWebClient {
             pendingTrackResolutions[trackUri] = deferred
 
             try {
-                val playUrl = URL("https://gae2-spclient.spotify.com/connect-state/v1/player/command/from/$DEVICE_ID/to/$DEVICE_ID")
+                val targetDevId = getDeviceId()
+                val playUrl = URL("https://gae2-spclient.spotify.com/connect-state/v1/player/command/from/$targetDevId/to/$targetDevId")
                 val cmdId = UUID.randomUUID().toString().replace("-", "")
                 val playPayload = JSONObject().apply {
                     put("command", JSONObject().apply {
@@ -3708,6 +3735,7 @@ class SpotifyWebClient {
                 OutputStreamWriter(conn.outputStream).use { it.write(playPayload.toString()) }
                 val code = conn.responseCode
                 conn.disconnect()
+                lastConnectPlayTrackUri = trackUri
                 Log.d(TAG, "Triggered connect-state play command for $trackUri. Code: $code")
 
                 if (code == 410 || code == 404) {
