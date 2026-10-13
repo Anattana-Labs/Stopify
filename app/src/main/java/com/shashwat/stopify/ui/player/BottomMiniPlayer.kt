@@ -88,6 +88,9 @@ fun SimpBottomMiniPlayer(
 
     val shape = RoundedCornerShape(8.dp)
     val accentColor = MaterialTheme.colorScheme.primary
+    val isLightBg = (targetBgColor.red * 0.299f + targetBgColor.green * 0.587f + targetBgColor.blue * 0.114f) > 0.55f
+    val contentColor = if (isLightBg) MaterialTheme.colorScheme.onSurface else Color.White
+    val contentSubColor = if (isLightBg) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.7f)
 
     Box(
         modifier = modifier
@@ -167,7 +170,7 @@ fun SimpBottomMiniPlayer(
                             .size(46.dp)
                             .shadow(6.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.4f))
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF282828)),
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                         contentAlignment = Alignment.Center
                     ) {
                         if (!track.coverUrl.isNullOrEmpty()) {
@@ -205,7 +208,7 @@ fun SimpBottomMiniPlayer(
                             Text(
                                 text = currentTrack.name,
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = Color.White,
+                                color = contentColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier
@@ -216,7 +219,7 @@ fun SimpBottomMiniPlayer(
                             Text(
                                 text = currentTrack.artist,
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                color = Color.White.copy(alpha = 0.7f),
+                                color = contentSubColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier
@@ -237,7 +240,7 @@ fun SimpBottomMiniPlayer(
                     Icon(
                         imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = if (isFavorite) "Unlike" else "Like",
-                        tint = if (isFavorite) accentColor else Color.White.copy(alpha = 0.75f),
+                        tint = if (isFavorite) accentColor else contentSubColor,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -263,7 +266,7 @@ fun SimpBottomMiniPlayer(
                             Icon(
                                 imageVector = if (playbackState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                                tint = Color.White,
+                                tint = contentColor,
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -278,7 +281,7 @@ fun SimpBottomMiniPlayer(
                     Icon(
                         imageVector = Icons.Rounded.SkipNext,
                         contentDescription = "Next Track",
-                        tint = Color.White.copy(alpha = 0.85f),
+                        tint = contentSubColor,
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -292,7 +295,7 @@ fun SimpBottomMiniPlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.5.dp)
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(if (isLightBg) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.15f))
             ) {
                 Box(
                     modifier = Modifier

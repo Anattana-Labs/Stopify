@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -128,8 +129,24 @@ fun SimpFullPlayer(
         colorLyrics?.let { argbToColor(it.highlightTextColor) } ?: Color.White
     }
 
-    val playerBackdropColor = Color(0xFF121212)
-    val gradientTopColor = lyricsBgColor ?: Color(0xFF282828)
+    val themePrimary = MaterialTheme.colorScheme.primary
+    val themeSurface = MaterialTheme.colorScheme.surface
+    val isLightMode = (themeSurface.red * 0.299f + themeSurface.green * 0.587f + themeSurface.blue * 0.114f) > 0.52f
+
+    val playerBackdropColor = if (isLightMode && activeCanvasUrl == null) {
+        MaterialTheme.colorScheme.surface
+    } else {
+        Color(0xFF121212)
+    }
+
+    val defaultGradientTop = if (isLightMode && activeCanvasUrl == null) MaterialTheme.colorScheme.surfaceContainerHigh else Color(0xFF282828)
+    val gradientTopColor = remember(lyricsBgColor, themePrimary, themeSurface, isLightMode, defaultGradientTop) {
+        lyricsBgColor?.let { blendThemeTint(it, themePrimary, themeSurface, !isLightMode) }
+            ?: defaultGradientTop
+    }
+
+    val playerContentColor = if (isLightMode && activeCanvasUrl == null) MaterialTheme.colorScheme.onSurface else Color.White
+    val playerContentSubColor = if (isLightMode && activeCanvasUrl == null) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.7f)
 
     BoxWithConstraints(
         modifier = modifier
@@ -200,7 +217,7 @@ fun SimpFullPlayer(
                                 text = "PLAYING FROM " + if (track.album.isNotBlank()) "ALBUM" else "PLAYLIST",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.7f),
+                                color = playerContentSubColor,
                                 letterSpacing = 1.2.sp
                             )
                             Spacer(modifier = Modifier.height(2.dp))
@@ -208,7 +225,7 @@ fun SimpFullPlayer(
                                 text = track.album.ifEmpty { "Stopify" },
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.White,
+                                color = playerContentColor,
                                 maxLines = 1,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.basicMarquee()
@@ -223,7 +240,7 @@ fun SimpFullPlayer(
                             Icon(
                                 imageVector = Icons.Rounded.KeyboardArrowDown,
                                 contentDescription = "Collapse",
-                                tint = Color.White,
+                                tint = playerContentColor,
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -236,7 +253,7 @@ fun SimpFullPlayer(
                             Icon(
                                 imageVector = Icons.Rounded.MoreVert,
                                 contentDescription = "Options",
-                                tint = Color.White,
+                                tint = playerContentColor,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -329,7 +346,7 @@ fun SimpFullPlayer(
                             text = track.name,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = playerContentColor,
                             maxLines = 1,
                             modifier = Modifier.basicMarquee()
                         )
@@ -337,7 +354,7 @@ fun SimpFullPlayer(
                         Text(
                             text = track.artist,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = playerContentSubColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -352,7 +369,7 @@ fun SimpFullPlayer(
                         Icon(
                             imageVector = if (currentIsFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                             contentDescription = "Save",
-                            tint = if (currentIsFav) accentColor else Color.White,
+                            tint = if (currentIsFav) accentColor else playerContentColor,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -375,9 +392,9 @@ fun SimpFullPlayer(
                             onSeekTo((scrubProgress * durationMs).toLong())
                         },
                         colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color.White,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.25f)
+                            thumbColor = playerContentColor,
+                            activeTrackColor = playerContentColor,
+                            inactiveTrackColor = playerContentColor.copy(alpha = 0.25f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -391,12 +408,12 @@ fun SimpFullPlayer(
                         Text(
                             text = formatTimeMs(currentPositionMs),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f)
+                            color = playerContentSubColor
                         )
                         Text(
                             text = formatTimeMs(durationMs),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f)
+                            color = playerContentSubColor
                         )
                     }
                 }
@@ -413,7 +430,7 @@ fun SimpFullPlayer(
                     onToggleRepeat = { isRepeat = !isRepeat },
                     isLoading = playbackState.isBuffering,
                     activeColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
+                    contentColor = playerContentColor,
                     horizontalPadding = 20.dp
                 )
 
@@ -437,13 +454,13 @@ fun SimpFullPlayer(
                                 if (albUri != null) onViewAlbum(albUri)
                             }
                         ) {
-                            Icon(imageVector = Icons.Rounded.Info, tint = Color.White, contentDescription = "Info")
+                            Icon(imageVector = Icons.Rounded.Info, tint = playerContentColor, contentDescription = "Info")
                         }
                         IconButton(
                             modifier = Modifier.size(26.dp),
                             onClick = {}
                         ) {
-                            Icon(imageVector = Icons.Rounded.Headphones, tint = Color.White, contentDescription = "Output")
+                            Icon(imageVector = Icons.Rounded.Headphones, tint = playerContentColor, contentDescription = "Output")
                         }
                     }
 
@@ -455,13 +472,13 @@ fun SimpFullPlayer(
                             modifier = Modifier.size(26.dp),
                             onClick = { onAddToPlaylist(track) }
                         ) {
-                            Icon(imageVector = Icons.Rounded.PlaylistAdd, tint = Color.White, contentDescription = "Add to playlist")
+                            Icon(imageVector = Icons.Rounded.PlaylistAdd, tint = playerContentColor, contentDescription = "Add to playlist")
                         }
                         IconButton(
                             modifier = Modifier.size(26.dp),
                             onClick = { showQueueOverlay = true }
                         ) {
-                            Icon(imageVector = Icons.Rounded.QueueMusic, tint = Color.White, contentDescription = "Queue")
+                            Icon(imageVector = Icons.Rounded.QueueMusic, tint = playerContentColor, contentDescription = "Queue")
                         }
                     }
                 }
@@ -561,16 +578,20 @@ fun SpotifyColorLyricsCard(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = remember(lyrics.backgroundColor) { argbToColor(lyrics.backgroundColor) }
-    val highlightColor = remember(lyrics.highlightTextColor) { argbToColor(lyrics.highlightTextColor) }
-    val normalTextColor = remember(lyrics.textColor) {
-        val c = argbToColor(lyrics.textColor)
-        if (c.red < 0.2f && c.green < 0.2f && c.blue < 0.2f) {
-            Color.White.copy(alpha = 0.45f)
-        } else {
-            c.copy(alpha = 0.7f)
-        }
+    val themePrimary = MaterialTheme.colorScheme.primary
+    val themeSurface = MaterialTheme.colorScheme.surface
+    val isDark = isSystemInDarkTheme()
+
+    val bgColor = remember(lyrics.backgroundColor, themePrimary, themeSurface, isDark) {
+        val raw = argbToColor(lyrics.backgroundColor)
+        blendThemeTint(raw, themePrimary, themeSurface, isDark)
     }
+
+    val lum = 0.299f * bgColor.red + 0.587f * bgColor.green + 0.114f * bgColor.blue
+    val isLightBg = lum > 0.5f
+
+    val highlightColor = if (isLightBg) Color(0xFF191C1E) else Color.White
+    val normalTextColor = if (isLightBg) Color(0xFF43474E).copy(alpha = 0.65f) else Color.White.copy(alpha = 0.45f)
 
     val activeIndex = remember(lyrics.lines, currentPositionMs) {
         lyrics.lines.indexOfLast { it.startTimeMs <= currentPositionMs }
@@ -585,9 +606,9 @@ fun SpotifyColorLyricsCard(
     }
 
     ElevatedCard(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = bgColor),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
         modifier = modifier
             .fillMaxWidth()
             .height(440.dp)
@@ -595,7 +616,7 @@ fun SpotifyColorLyricsCard(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(18.dp)
+                .padding(20.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -614,34 +635,37 @@ fun SpotifyColorLyricsCard(
                     )
                     if (lyrics.syncType == "LINE_SYNCED") {
                         Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = highlightColor.copy(alpha = 0.2f)
+                            shape = RoundedCornerShape(12.dp),
+                            color = highlightColor.copy(alpha = 0.15f)
                         ) {
                             Text(
                                 text = "SYNCED",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = highlightColor,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
                     }
                 }
 
-                IconButton(
+                FilledTonalIconButton(
                     onClick = onExpand,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(34.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = highlightColor.copy(alpha = 0.12f),
+                        contentColor = highlightColor
+                    )
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Fullscreen,
                         contentDescription = "Full screen lyrics",
-                        tint = highlightColor,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             LazyColumn(
                 state = listState,
@@ -654,16 +678,31 @@ fun SpotifyColorLyricsCard(
                     val isCurrent = index == activeIndex
                     val isPast = index < activeIndex
 
-                    Text(
-                        text = line.words.ifEmpty { "♪" },
-                        style = if (isCurrent) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isCurrent) highlightColor else if (isPast) highlightColor.copy(alpha = 0.65f) else normalTextColor,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onLineClick(line.startTimeMs) }
                             .padding(vertical = 4.dp)
-                    )
+                    ) {
+                        if (isCurrent) {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(24.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(themePrimary)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
+                        Text(
+                            text = line.words.ifEmpty { "♪" },
+                            style = if (isCurrent) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isCurrent) highlightColor else if (isPast) highlightColor.copy(alpha = 0.65f) else normalTextColor,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 

@@ -234,7 +234,7 @@ fun SimpLibraryScreen(
                     Text(
                         text = "Your Library",
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 22.sp,
                         modifier = Modifier.weight(1f),
                     )
@@ -242,7 +242,7 @@ fun SimpLibraryScreen(
                     Icon(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = "Search library",
-                        tint = if (isSearchExpanded) accentGreen else Color.White,
+                        tint = if (isSearchExpanded) accentGreen else MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier
                             .padding(end = 14.dp)
                             .size(22.dp)
@@ -258,7 +258,7 @@ fun SimpLibraryScreen(
                     Icon(
                         imageVector = if (viewMode == LibraryViewMode.LIST) Icons.Rounded.GridView else Icons.Rounded.FormatListBulleted,
                         contentDescription = if (viewMode == LibraryViewMode.LIST) "Show as grid" else "Show as list",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier
                             .padding(end = 14.dp)
                             .size(20.dp)
@@ -274,7 +274,7 @@ fun SimpLibraryScreen(
                         modifier = Modifier
                             .size(34.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF3A3A3A))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable { onOpenSettings() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -286,7 +286,7 @@ fun SimpLibraryScreen(
                                 modifier = Modifier.fillMaxSize().clip(CircleShape)
                             )
                         } else {
-                            Icon(Icons.Rounded.Person, contentDescription = "Account", tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Person, contentDescription = "Account", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -304,7 +304,7 @@ fun SimpLibraryScreen(
                             .fillMaxWidth()
                             .padding(vertical = 0.dp, horizontal = 0.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF252525))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                             .padding(horizontal = 12.dp)
                     ) {
                         Row(
@@ -323,7 +323,7 @@ fun SimpLibraryScreen(
                                     Text(
                                         text = "Find in Your Library...",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.White.copy(alpha = 0.45f)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                     )
                                 }
                                 BasicTextField(
@@ -331,7 +331,7 @@ fun SimpLibraryScreen(
                                     onValueChange = { searchQuery = it },
                                     singleLine = true,
                                     textStyle = TextStyle(
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Medium
                                     ),
@@ -343,7 +343,7 @@ fun SimpLibraryScreen(
                                 Icon(
                                     imageVector = Icons.Rounded.Clear,
                                     contentDescription = "Clear",
-                                    tint = Color.White.copy(alpha = 0.7f),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier
                                         .size(18.dp)
                                         .clickable { searchQuery = "" }
@@ -364,10 +364,10 @@ fun SimpLibraryScreen(
                         val isSelected = selectedFilter == filter
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) accentGreen else Color(0xFF222228),
+                            color = if (isSelected) accentGreen else MaterialTheme.colorScheme.surfaceContainerHigh,
                             border = if (isSelected) null else androidx.compose.foundation.BorderStroke(
                                 1.dp,
-                                Color.White.copy(alpha = 0.08f)
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                             ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
@@ -387,14 +387,14 @@ fun SimpLibraryScreen(
                                     text = filter.label,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                    color = if (isSelected) Color.Black else Color.White.copy(alpha = 0.9f)
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                 )
                                 if (isSelected && filter != LibraryFilter.ALL) {
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Icon(
                                         imageVector = Icons.Rounded.Close,
                                         contentDescription = "Clear filter",
-                                        tint = Color.Black,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
                                         modifier = Modifier.size(14.dp)
                                     )
                                 }
@@ -423,7 +423,7 @@ fun SimpLibraryScreen(
                             Icon(
                                 imageVector = Icons.Rounded.SwapVert,
                                 contentDescription = "Sort",
-                                tint = Color.White.copy(alpha = 0.7f),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -431,13 +431,13 @@ fun SimpLibraryScreen(
                                 text = selectedSort.label,
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Medium,
-                                color = Color.White.copy(alpha = 0.85f)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         DropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false },
-                            modifier = Modifier.background(Color(0xFF222228))
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
                         ) {
                             LibrarySort.values().forEach { sortOption ->
                                 DropdownMenuItem(
@@ -445,7 +445,7 @@ fun SimpLibraryScreen(
                                         Text(
                                             text = sortOption.label,
                                             fontWeight = if (selectedSort == sortOption) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (selectedSort == sortOption) accentGreen else Color.White
+                                            color = if (selectedSort == sortOption) accentGreen else MaterialTheme.colorScheme.onSurface
                                         )
                                     },
                                     onClick = {
@@ -464,11 +464,11 @@ fun SimpLibraryScreen(
                 item {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF16161B),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .shadow(8.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.6f))
+                            .shadow(6.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.2f))
                             .clickable { onPlayCollection("spotify:user:library:tracks", "Liked Songs") }
                     ) {
                         Row(
@@ -508,7 +508,7 @@ fun SimpLibraryScreen(
                                     text = "Liked Songs",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -524,7 +524,7 @@ fun SimpLibraryScreen(
                                     Text(
                                         text = "Playlist • $likedTracksCount songs",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White.copy(alpha = 0.65f)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -540,7 +540,7 @@ fun SimpLibraryScreen(
                                 Icon(
                                     imageVector = Icons.Rounded.PlayArrow,
                                     contentDescription = "Play Liked Songs",
-                                    tint = Color.Black,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -626,12 +626,12 @@ fun SimpLibraryScreen(
                             text = "Artists",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
                             text = "${filteredArtists.size} artists",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.55f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -659,13 +659,13 @@ fun SimpLibraryScreen(
                                 text = "Recently Played",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onBackground
                             )
 
                             Text(
                                 text = "${filteredRecents.size} tracks",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.55f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -718,7 +718,7 @@ fun SimpLibraryScreen(
             val pl = selectedOptionPlaylist!!
             ModalBottomSheet(
                 onDismissRequest = { selectedOptionPlaylist = null },
-                containerColor = Color(0xFF1C1C22),
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
             ) {
                 Column(
@@ -735,7 +735,7 @@ fun SimpLibraryScreen(
                             modifier = Modifier
                                 .size(56.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF26262E)),
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                             contentAlignment = Alignment.Center
                         ) {
                             if (!pl.coverUrl.isNullOrEmpty()) {
@@ -762,20 +762,20 @@ fun SimpLibraryScreen(
                                 text = pl.name,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "Playlist • ${pl.ownerName} • ${pl.trackCount} songs",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.65f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // Play Collection
@@ -801,7 +801,7 @@ fun SimpLibraryScreen(
                             text = "Play Playlist",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Medium,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -820,7 +820,7 @@ fun SimpLibraryScreen(
                         Icon(
                             imageVector = Icons.Rounded.DeleteOutline,
                             contentDescription = null,
-                            tint = Color(0xFFFF5252),
+                            tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(16.dp))
@@ -828,7 +828,7 @@ fun SimpLibraryScreen(
                             text = "Delete Playlist",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFFFF5252)
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
 
@@ -841,18 +841,18 @@ fun SimpLibraryScreen(
         if (playlistToDelete != null) {
             AlertDialog(
                 onDismissRequest = { playlistToDelete = null },
-                containerColor = Color(0xFF1E1E24),
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 title = {
                     Text(
                         text = "Delete Playlist?",
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 text = {
                     Text(
                         text = "Are you sure you want to delete '${playlistToDelete!!.name}'? This cannot be undone.",
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
                 confirmButton = {
@@ -869,7 +869,7 @@ fun SimpLibraryScreen(
                         Text(
                             text = "Delete",
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFF5252)
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
                 },
@@ -877,7 +877,7 @@ fun SimpLibraryScreen(
                     TextButton(onClick = { playlistToDelete = null }) {
                         Text(
                             text = "Cancel",
-                            color = Color.White.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -920,9 +920,9 @@ fun PlaylistListItem(
         Box(
             modifier = Modifier
                 .size(62.dp)
-                .shadow(4.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.5f))
+                .shadow(4.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.2f))
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF222226)),
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {
             if (!playlist.coverUrl.isNullOrEmpty()) {
@@ -949,7 +949,7 @@ fun PlaylistListItem(
                 text = playlist.name,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -957,7 +957,7 @@ fun PlaylistListItem(
             Text(
                 text = "Playlist • ${playlist.ownerName} • ${playlist.trackCount} tracks",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -967,7 +967,7 @@ fun PlaylistListItem(
             Icon(
                 imageVector = Icons.Rounded.MoreVert,
                 contentDescription = "Options",
-                tint = Color.White.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -986,8 +986,8 @@ fun PlaylistGridCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF141418))
-            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
             .clickable { onClick() }
             .padding(10.dp)
     ) {
@@ -996,7 +996,7 @@ fun PlaylistGridCard(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF24242A)),
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {
             if (!playlist.coverUrl.isNullOrEmpty()) {
@@ -1028,7 +1028,7 @@ fun PlaylistGridCard(
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = "Play",
-                    tint = Color.Black,
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -1040,7 +1040,7 @@ fun PlaylistGridCard(
             text = playlist.name,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -1055,7 +1055,7 @@ fun PlaylistGridCard(
             Text(
                 text = "${playlist.trackCount} tracks",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -1064,7 +1064,7 @@ fun PlaylistGridCard(
             Icon(
                 imageVector = Icons.Rounded.MoreVert,
                 contentDescription = "Options",
-                tint = Color.White.copy(alpha = 0.5f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .size(18.dp)
                     .clickable { onMoreClick() }
@@ -1092,9 +1092,9 @@ fun ArtistListItem(
         Box(
             modifier = Modifier
                 .size(58.dp)
-                .shadow(4.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.5f))
+                .shadow(4.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.2f))
                 .clip(CircleShape)
-                .background(Color(0xFF222228)),
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {
             if (!artist.coverUrl.isNullOrEmpty()) {
@@ -1121,7 +1121,7 @@ fun ArtistListItem(
                 text = artist.name,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1129,7 +1129,7 @@ fun ArtistListItem(
             Text(
                 text = "Artist",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -1145,8 +1145,8 @@ fun EmptyLibraryState(
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF141418),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.06f)),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
@@ -1162,13 +1162,13 @@ fun EmptyLibraryState(
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.06f)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.MusicNote,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.4f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -1179,7 +1179,7 @@ fun EmptyLibraryState(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -1187,7 +1187,7 @@ fun EmptyLibraryState(
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
 
@@ -1197,7 +1197,7 @@ fun EmptyLibraryState(
                     onClick = onAction,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.Black
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     shape = RoundedCornerShape(20.dp)
                 ) {

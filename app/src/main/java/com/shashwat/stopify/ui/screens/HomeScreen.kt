@@ -148,7 +148,7 @@ fun SimpHomeScreen(
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = "Refresh",
-                            tint = Color.White.copy(alpha = 0.8f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -201,12 +201,12 @@ fun SimpHomeScreen(
                                 text = "Recently played",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
                                 text = "${recentlyPlayed.size} tracks",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.65f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
@@ -225,14 +225,12 @@ fun SimpHomeScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(164.dp)
-                                            .shadow(4.dp, RoundedCornerShape(6.dp), spotColor = Color.Black.copy(alpha = 0.45f))
+                                            .shadow(4.dp, RoundedCornerShape(6.dp), spotColor = Color.Black.copy(alpha = 0.25f))
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(Color(0xFF242424))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                                             .border(
                                                 0.75.dp,
-                                                Brush.verticalGradient(
-                                                    listOf(Color.White.copy(0.2f), Color.White.copy(0.05f))
-                                                ),
+                                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                                                 RoundedCornerShape(6.dp)
                                             )
                                     ) {
@@ -272,7 +270,7 @@ fun SimpHomeScreen(
                                             Icon(
                                                 imageVector = Icons.Rounded.PlayArrow,
                                                 contentDescription = "Play",
-                                                tint = Color.Black,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         }
@@ -284,7 +282,7 @@ fun SimpHomeScreen(
                                         text = rTrack.name,
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -292,7 +290,7 @@ fun SimpHomeScreen(
                                     Text(
                                         text = rTrack.artist,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White.copy(alpha = 0.65f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -312,14 +310,14 @@ fun SimpHomeScreen(
                                 .width(160.dp)
                                 .height(22.dp),
                             shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF282828)
+                            color = MaterialTheme.colorScheme.surfaceContainer
                         ) {}
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             items(4) {
                                 Surface(
                                     modifier = Modifier.size(150.dp),
                                     shape = RoundedCornerShape(12.dp),
-                                    color = Color(0xFF222222)
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh
                                 ) {}
                             }
                         }
@@ -335,7 +333,7 @@ fun SimpHomeScreen(
                             text = section.title,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
 
                         LazyRow(
@@ -371,7 +369,7 @@ private fun QuickPlayCard(
 ) {
     Surface(
         shape = RoundedCornerShape(4.dp),
-        color = Color(0xFF2A2A2A),
+        color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = modifier
             .height(52.dp)
             .clip(RoundedCornerShape(4.dp))
@@ -384,7 +382,7 @@ private fun QuickPlayCard(
             Box(
                 modifier = Modifier
                     .size(58.dp)
-                    .background(Color(0xFF333333)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center
             ) {
                 if (!track.coverUrl.isNullOrEmpty()) {
@@ -410,7 +408,7 @@ private fun QuickPlayCard(
                 text = track.name,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 fontSize = 12.5.sp,
@@ -426,14 +424,14 @@ private fun QuickPlayCard(
                     .padding(end = 8.dp)
                     .size(30.dp)
                     .shadow(4.dp, CircleShape, spotColor = qpPrimary.copy(alpha = 0.5f))
-                    .clip(CircleShape)
-                    .background(qpPrimary),
+                .clip(CircleShape)
+                .background(qpPrimary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = "Play",
-                    tint = Color.Black,
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(18.dp)
                 )
             }

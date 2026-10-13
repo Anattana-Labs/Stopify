@@ -154,7 +154,7 @@ fun SimpSearchScreen(
                         val isSelected = selectedFilter == filter
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) searchPrimary else Color.White.copy(alpha = 0.08f),
+                            color = if (isSelected) searchPrimary else MaterialTheme.colorScheme.surfaceContainerHigh,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
                                 .clickable { selectedFilter = filter }
@@ -163,7 +163,7 @@ fun SimpSearchScreen(
                                 text = filter.label,
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.Black else Color.White,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
                             )
                         }
@@ -268,7 +268,7 @@ fun SimpSearchScreen(
                                 text = "Artists",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -289,7 +289,7 @@ fun SimpSearchScreen(
                                 text = "Albums",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -310,7 +310,7 @@ fun SimpSearchScreen(
                                 text = "Playlists",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -331,7 +331,7 @@ fun SimpSearchScreen(
                                 text = "Songs",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                         }
