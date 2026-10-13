@@ -14,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,16 +63,7 @@ fun FullScreenLyricsViewer(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        bgColor,
-                        bgColor.copy(alpha = 0.65f),
-                        Color(0xFF121212)
-                    )
-                )
-            )
+            .background(bgColor)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -143,7 +133,8 @@ fun FullScreenLyricsViewer(
                         Text(
                             text = "Couldn't find lyrics for this track",
                             color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 16.sp
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

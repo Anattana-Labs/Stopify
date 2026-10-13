@@ -308,7 +308,7 @@ fun SimpFullPlayer(
                             Text(
                                 text = activeLine.words,
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = lyricsHighlightColor,
                                 maxLines = 1,
                                 modifier = Modifier.basicMarquee()
@@ -587,6 +587,7 @@ fun SpotifyColorLyricsCard(
     ElevatedCard(
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = bgColor),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp),
         modifier = modifier
             .fillMaxWidth()
             .height(440.dp)
@@ -656,7 +657,7 @@ fun SpotifyColorLyricsCard(
                     Text(
                         text = line.words.ifEmpty { "♪" },
                         style = if (isCurrent) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                        fontWeight = FontWeight.Bold,
                         color = if (isCurrent) highlightColor else if (isPast) highlightColor.copy(alpha = 0.65f) else normalTextColor,
                         modifier = Modifier
                             .fillMaxWidth()
