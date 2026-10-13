@@ -726,9 +726,6 @@ class SpotifyWebClient {
         isFinished: Boolean = false,
         debugSourceOverride: String? = null
     ): Result<Boolean> = withContext(Dispatchers.IO) {
-        // Record in local history cache immediately so track appears at top of Recently Played
-        addLocalHistoryTrack(track, prefs)
-
         val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
         val currentDeviceId = getDeviceId(prefs)
@@ -1077,9 +1074,6 @@ class SpotifyWebClient {
     }
 
     suspend fun fetchSpotifyRecentlyPlayed(prefs: android.content.SharedPreferences? = null): Result<List<SpotifyTrack>> = withContext(Dispatchers.IO) {
-        if (prefs != null && playbackHistory.isEmpty()) {
-            loadHistoryFromPrefs(prefs)
-        }
         val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
         val pathfinderTracks = mutableListOf<SpotifyTrack>()
@@ -1204,25 +1198,65 @@ class SpotifyWebClient {
             Log.w(TAG, "Error fetching Pathfinder recents", e)
         }
 
-        // 2. Merge Pathfinder remote recents with local playback history
-        val list = mutableListOf<SpotifyTrack>()
-        list.addAll(pathfinderTracks)
-
-        // Ensure newly played in-session local tracks remain at the front
-        for (localTrack in playbackHistory.asReversed()) {
-            list.removeAll { it.uri == localTrack.uri }
-            list.add(0, localTrack)
+        // 2. Fallback to Spotify Web API recently-played if Pathfinder returned empty
+        if (pathfinderTracks.isEmpty()) {
+            try {
+                val apiUrl = URL("https://api.spotify.com/v1/me/player/recently-played?limit=50")
+                val apiConn = (apiUrl.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    setRequestProperty("Authorization", "Bearer $token")
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", USER_AGENT)
+                }
+                val apiCode = apiConn.responseCode
+                if (apiCode in 200..299) {
+                    val body = apiConn.inputStream.bufferedReader().readText()
+                    val root = JSONObject(body)
+                    val items = root.optJSONArray("items")
+                    if (items != null) {
+                        for (i in 0 until items.length()) {
+                            val trackObj = items.optJSONObject(i)?.optJSONObject("track") ?: continue
+                            val id = trackObj.optString("id")
+                            if (id.isEmpty()) continue
+                            val uri = trackObj.optString("uri", "spotify:track:$id")
+                            val name = trackObj.optString("name", "Unknown Track")
+                            val durationMs = trackObj.optLong("duration_ms", 0L)
+                            val artistsArr = trackObj.optJSONArray("artists")
+                            val artist = if (artistsArr != null && artistsArr.length() > 0) {
+                                (0 until artistsArr.length()).mapNotNull { artistsArr.optJSONObject(it)?.optString("name") }.joinToString(", ")
+                            } else "Unknown Artist"
+                            val albumObj = trackObj.optJSONObject("album")
+                            val albumName = albumObj?.optString("name") ?: ""
+                            val imagesArr = albumObj?.optJSONArray("images")
+                            val coverUrl = imagesArr?.optJSONObject(0)?.optString("url") ?: ""
+                            val track = SpotifyTrack(
+                                id = id,
+                                name = name,
+                                artist = artist,
+                                album = albumName,
+                                coverUrl = coverUrl,
+                                durationMs = durationMs,
+                                uri = uri
+                            )
+                            if (pathfinderTracks.none { it.uri == uri }) {
+                                pathfinderTracks.add(track)
+                            }
+                        }
+                    }
+                }
+                apiConn.disconnect()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching Web API recently-played fallback", e)
+            }
         }
 
-        if (list.isEmpty()) {
-            list.addAll(playbackHistory)
-        }
+        // Pure Spotify remote recents without any local disk storage or local merging
+        val list = pathfinderTracks.distinctBy { it.uri }
+        historyManager.setRemoteHistory(list)
 
-        if (prefs != null && list.isNotEmpty()) {
-            historyManager.mergeRemoteHistory(list, prefs)
-        }
-
-        Log.d(TAG, "Total recents loaded: ${list.size} (Pathfinder: ${pathfinderTracks.size}, Local: ${playbackHistory.size})")
+        Log.d(TAG, "Total remote Spotify recents loaded: ${list.size}")
         Result.success(list)
     }
 

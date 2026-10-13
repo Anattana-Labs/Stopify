@@ -137,6 +137,12 @@ fun SimpLibraryScreen(
                 likedTracksCount = client.favoriteTrackIds.size
             }
         }
+        coroutineScope.launch {
+            val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
+            if (recentsRes.isSuccess) {
+                spotifyRecents = recentsRes.getOrThrow()
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -152,9 +158,9 @@ fun SimpLibraryScreen(
         }
     }
 
-    // Merge session playback history with Spotify remote recents
-    val displayRecents = remember(playbackHistory.toList(), spotifyRecents) {
-        (playbackHistory + spotifyRecents).distinctBy { it.uri }
+    // Spotify remote recents directly from Spotify
+    val displayRecents = remember(spotifyRecents, playbackHistory.toList()) {
+        if (spotifyRecents.isNotEmpty()) spotifyRecents else playbackHistory.toList()
     }
 
     // Derive artists from recent tracks & playlists

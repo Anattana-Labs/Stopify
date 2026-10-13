@@ -311,6 +311,7 @@ fun SimpMusicApp(
         prefs?.let {
             client.loadFavoritesFromPrefs(it)
             favoriteTrackIds = it.getStringSet("favorite_tracks_set", emptySet())?.toSet() ?: emptySet()
+            it.edit().remove("local_playback_history_v2").apply()
         }
         playbackHistory.clear()
 
@@ -395,6 +396,13 @@ fun SimpMusicApp(
                     hasReported30sScrobble = true
                     coroutineScope.launch {
                         client.reportPlaybackProgress(track, playbackState.currentPositionMs, prefs, "played_threshold_reached")
+                        delay(2500)
+                        val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
+                        if (recentsRes.isSuccess) {
+                            val list = recentsRes.getOrThrow()
+                            playbackHistory.clear()
+                            playbackHistory.addAll(list.distinctBy { it.uri })
+                        }
                     }
                 }
             }
@@ -422,9 +430,6 @@ fun SimpMusicApp(
                 player.playTrack(track, streamUrl, token, client.customClientToken)
 
                 if (addToHistory) {
-                    client.addLocalHistoryTrack(track, prefs)
-                    playbackHistory.removeAll { it.uri == track.uri }
-                    playbackHistory.add(0, track)
                     coroutineScope.launch {
                         client.reportPlaybackToApi(track, 0L, prefs)
                         client.connectService.updateConnectClusterState(
@@ -650,6 +655,12 @@ fun SimpMusicApp(
             val res = client.fetchHomeSections()
             if (res.isSuccess) {
                 homeData = res.getOrThrow()
+            }
+            val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
+            if (recentsRes.isSuccess) {
+                val list = recentsRes.getOrThrow()
+                playbackHistory.clear()
+                playbackHistory.addAll(list.distinctBy { it.uri })
             }
             isHomeLoading = false
         }

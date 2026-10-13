@@ -15,58 +15,36 @@ class SpotifyHistoryManager {
         get() = synchronized(_playbackHistory) { _playbackHistory.toList() }
 
     fun loadHistoryFromPrefs(prefs: android.content.SharedPreferences) {
-        val jsonStr = prefs.getString("local_playback_history_v2", null) ?: return
+        // Do not load local history; purge legacy cache key if present
         try {
-            val arr = JSONArray(jsonStr)
-            val list = mutableListOf<SpotifyTrack>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                list.add(
-                    SpotifyTrack(
-                        id = obj.getString("id"),
-                        uri = obj.getString("uri"),
-                        name = obj.getString("name"),
-                        artist = obj.getString("artist"),
-                        album = obj.optString("album", ""),
-                        coverUrl = obj.optString("coverUrl").takeIf { it.isNotEmpty() },
-                        durationMs = obj.optLong("durationMs", 0L),
-                        albumUri = obj.optString("albumUri").takeIf { it.isNotEmpty() }
-                    )
-                )
-            }
-            synchronized(_playbackHistory) {
-                _playbackHistory.clear()
-                _playbackHistory.addAll(list)
+            if (prefs.contains("local_playback_history_v2")) {
+                prefs.edit().remove("local_playback_history_v2").apply()
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error loading history from prefs", e)
+            Log.w(TAG, "Error purging legacy local history", e)
         }
     }
 
     fun saveHistoryToPrefs(prefs: android.content.SharedPreferences) {
+        // Do not store history locally; ensure legacy key is removed
         try {
-            val arr = JSONArray()
-            val currentList = playbackHistory
-            for (track in currentList.take(50)) {
-                val obj = JSONObject().apply {
-                    put("id", track.id)
-                    put("uri", track.uri)
-                    put("name", track.name)
-                    put("artist", track.artist)
-                    put("album", track.album)
-                    put("coverUrl", track.coverUrl ?: "")
-                    put("durationMs", track.durationMs)
-                    put("albumUri", track.albumUri ?: "")
-                }
-                arr.put(obj)
+            if (prefs.contains("local_playback_history_v2")) {
+                prefs.edit().remove("local_playback_history_v2").apply()
             }
-            prefs.edit().putString("local_playback_history_v2", arr.toString()).apply()
         } catch (e: Exception) {
-            Log.w(TAG, "Error saving history to prefs", e)
+            Log.w(TAG, "Error clearing legacy history prefs", e)
+        }
+    }
+
+    fun setRemoteHistory(remoteTracks: List<SpotifyTrack>) {
+        synchronized(_playbackHistory) {
+            _playbackHistory.clear()
+            _playbackHistory.addAll(remoteTracks)
         }
     }
 
     fun addLocalHistoryTrack(track: SpotifyTrack, prefs: android.content.SharedPreferences? = null) {
+        // In-memory session tracking only, do not persist locally to disk
         synchronized(_playbackHistory) {
             _playbackHistory.removeAll { item: SpotifyTrack -> item.uri == track.uri }
             _playbackHistory.add(0, track)
@@ -74,28 +52,10 @@ class SpotifyHistoryManager {
                 _playbackHistory.removeAt(_playbackHistory.lastIndex)
             }
         }
-        if (prefs != null) {
-            saveHistoryToPrefs(prefs)
-        }
     }
 
     fun mergeRemoteHistory(remoteTracks: List<SpotifyTrack>, prefs: android.content.SharedPreferences? = null): List<SpotifyTrack> {
-        synchronized(_playbackHistory) {
-            // Keep local order for tracks that were just played locally, and append remote tracks not in local history
-            for (remoteTrack in remoteTracks) {
-                if (_playbackHistory.none { it.uri == remoteTrack.uri }) {
-                    _playbackHistory.add(remoteTrack)
-                }
-            }
-            if (_playbackHistory.size > 100) {
-                while (_playbackHistory.size > 100) {
-                    _playbackHistory.removeAt(_playbackHistory.lastIndex)
-                }
-            }
-        }
-        if (prefs != null) {
-            saveHistoryToPrefs(prefs)
-        }
+        setRemoteHistory(remoteTracks)
         return playbackHistory
     }
 }
