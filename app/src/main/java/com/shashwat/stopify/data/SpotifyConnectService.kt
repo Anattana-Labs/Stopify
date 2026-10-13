@@ -153,4 +153,108 @@ class SpotifyConnectService(
             Log.w(TAG, "Melody telemetry failed", e)
         }
     }
+
+    suspend fun updateConnectClusterState(
+        track: SpotifyTrack?,
+        isPlaying: Boolean,
+        positionMs: Long,
+        deviceId: String = SpotifyWebClient.DEVICE_ID
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        val token = client.getAccessToken().getOrNull() ?: client.customAccessToken ?: return@withContext Result.failure(Exception("No token"))
+        val clientToken = client.customClientToken ?: SpotifyWebClient.CLIENT_TOKEN
+        val connId = client.dealerConnectionId ?: ""
+
+        try {
+            val url = URL("https://gae2-spclient.spotify.com/connect-state/v1/devices/hobs_$deviceId")
+            val payload = JSONObject().apply {
+                put("member_type", "CONNECT_STATE")
+                put("device", JSONObject().apply {
+                    put("device_info", JSONObject().apply {
+                        put("can_play", true)
+                        put("volume", 65535)
+                        put("name", "Stopify Player")
+                        put("device_id", deviceId)
+                        put("device_type", "COMPUTER")
+                        put("device_software_version", "1.3.5")
+                        put("spirc_version", "3.2.6")
+                        put("capabilities", JSONObject().apply {
+                            put("can_be_player", true)
+                            put("gaia_eq_connect_id", true)
+                            put("supports_command_request", true)
+                            put("is_observable", true)
+                            put("volume_steps", 64)
+                            put("supported_types", JSONArray().apply {
+                                put("audio/episode")
+                                put("audio/track")
+                            })
+                        })
+                    })
+                    if (track != null) {
+                        put("player_state", JSONObject().apply {
+                            put("timestamp", System.currentTimeMillis())
+                            put("context_uri", track.albumUri ?: track.uri)
+                            put("track", JSONObject().apply {
+                                put("uri", track.uri)
+                                put("uid", "")
+                                put("name", track.name)
+                                put("album", JSONObject().apply {
+                                    put("name", track.album)
+                                    put("uri", track.albumUri ?: "")
+                                })
+                                put("artists", JSONArray().apply {
+                                    put(JSONObject().apply {
+                                        put("name", track.artist)
+                                        put("uri", track.artistUri ?: "")
+                                    })
+                                })
+                                put("metadata", JSONObject().apply {
+                                    put("title", track.name)
+                                    put("artist_name", track.artist)
+                                    put("album_title", track.album)
+                                    if (!track.coverUrl.isNullOrEmpty()) {
+                                        put("image_url", track.coverUrl)
+                                    }
+                                })
+                            })
+                            put("playback_speed", if (isPlaying) 1.0 else 0.0)
+                            put("position_as_of_timestamp", positionMs)
+                            put("duration", track.durationMs)
+                            put("is_playing", isPlaying)
+                            put("is_paused", !isPlaying)
+                            put("play_origin", JSONObject().apply {
+                                put("feature_identifier", "stopify")
+                            })
+                        })
+                    }
+                })
+            }
+
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                doOutput = true
+                connectTimeout = 5000
+                readTimeout = 5000
+                setRequestProperty("authorization", "Bearer $token")
+                setRequestProperty("client-token", clientToken)
+                setRequestProperty("content-type", "application/json;charset=UTF-8")
+                if (connId.isNotEmpty()) {
+                    setRequestProperty("x-spotify-connection-id", connId)
+                }
+                setRequestProperty("app-platform", SpotifyWebClient.APP_PLATFORM)
+                setRequestProperty("spotify-app-version", SpotifyWebClient.SPOTIFY_APP_VERSION)
+                setRequestProperty("origin", "https://open.spotify.com")
+                setRequestProperty("referer", "https://open.spotify.com/")
+                setRequestProperty("user-agent", SpotifyWebClient.USER_AGENT)
+            }
+
+            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+            val code = conn.responseCode
+            conn.disconnect()
+            Log.d(TAG, "Sent connect cluster state update (playing=$isPlaying, pos=${positionMs}ms): HTTP $code")
+            Result.success(code in 200..299)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed updating connect cluster state", e)
+            Result.failure(e)
+        }
+    }
 }

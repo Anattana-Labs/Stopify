@@ -286,6 +286,14 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
         exoPlayer?.play()
     }
 
+    fun play() {
+        exoPlayer?.play()
+    }
+
+    fun setVolume(volume: Float) {
+        exoPlayer?.volume = volume.coerceIn(0f, 1f)
+    }
+
     fun seekTo(positionMs: Long) {
         exoPlayer?.seekTo(positionMs)
     }

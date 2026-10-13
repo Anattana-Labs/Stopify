@@ -160,6 +160,9 @@ class SpotifyWebClient {
     val lyricsService = SpotifyLyricsService(this)
     val connectService = SpotifyConnectService(this)
 
+    @Volatile
+    var onRemoteCommandListener: SpotifyRemoteCommandListener? = null
+
     fun getCachedColorLyrics(trackId: String): SpotifyColorLyrics? {
         return lyricsService.getCachedColorLyrics(trackId)
     }
@@ -215,7 +218,7 @@ class SpotifyWebClient {
         .build()
 
     private var activeWebSocket: WebSocket? = null
-    private var dealerConnectionId: String? = null
+    internal var dealerConnectionId: String? = null
     private var isDeviceRegistered = false
     private var connectionIdDeferred = CompletableDeferred<String>()
 
@@ -2187,17 +2190,54 @@ class SpotifyWebClient {
                         }
                     }
 
-                    // Process manifest track cluster notifications / state machine payloads
-                    if (text.contains("state_machine") || text.contains("file_ids_mp4")) {
-                        val payloads = json.optJSONArray("payloads")
-                        if (payloads != null) {
-                            for (p in 0 until payloads.length()) {
-                                val pObj = payloads.getJSONObject(p)
-                                val sm = pObj.optJSONObject("state_machine")
-                                if (sm != null) {
-                                    parseStateMachineResponse(pObj)
+                    val payloads = extractPayloadObjects(json)
+                    for (pObj in payloads) {
+                        // 1. Process state_machine manifests / queue tracks
+                        val sm = pObj.optJSONObject("state_machine")
+                        if (sm != null) {
+                            parseStateMachineResponse(pObj)
+                        }
+
+                        // 2. Process Spotify Connect commands from remote clients (browser, mobile, etc.)
+                        val cmd = pObj.optJSONObject("command")
+                        if (cmd != null) {
+                            val endpoint = cmd.optString("endpoint")
+                            Log.d(TAG, "Received Connect remote command from Dealer: endpoint='$endpoint'")
+                            when (endpoint) {
+                                "pause" -> onRemoteCommandListener?.onPause()
+                                "resume" -> onRemoteCommandListener?.onResume()
+                                "play" -> {
+                                    val ctx = cmd.optJSONObject("context")?.optString("uri")
+                                    val options = cmd.optJSONObject("options")
+                                    val skipTrack = options?.optJSONObject("skip_to")?.optString("track_uri")
+                                    val seekTo = options?.optLong("seek_to", -1L) ?: -1L
+                                    onRemoteCommandListener?.onPlay(
+                                        contextUri = ctx,
+                                        trackUri = skipTrack?.ifEmpty { null } ?: ctx,
+                                        seekToMs = if (seekTo >= 0) seekTo else null
+                                    )
                                 }
+                                "seek_to" -> {
+                                    val options = cmd.optJSONObject("options")
+                                    val pos = options?.optLong("seek_to")
+                                        ?: cmd.optLong("value")
+                                        ?: pObj.optLong("value", -1L)
+                                    if (pos >= 0) onRemoteCommandListener?.onSeekTo(pos)
+                                }
+                                "skip_next" -> onRemoteCommandListener?.onSkipNext()
+                                "skip_prev" -> onRemoteCommandListener?.onSkipPrev()
+                                "set_volume" -> {
+                                    val v = cmd.optInt("volume", pObj.optInt("volume", -1))
+                                    if (v in 0..65535) onRemoteCommandListener?.onSetVolume(v.toFloat() / 65535f)
+                                }
+                                "transfer" -> onRemoteCommandListener?.onResume()
                             }
+                        }
+
+                        // 3. Standalone volume updates
+                        if (pObj.has("volume") && !pObj.has("command")) {
+                            val v = pObj.optInt("volume", -1)
+                            if (v in 0..65535) onRemoteCommandListener?.onSetVolume(v.toFloat() / 65535f)
                         }
                     }
                 } catch (e: Exception) {
@@ -2210,8 +2250,13 @@ class SpotifyWebClient {
                 activeWebSocket = null
                 dealerConnectionId = null
                 isDeviceRegistered = false
+                val is401 = (t is java.net.ProtocolException && t.message?.contains("401") == true) || response?.code == 401
+                if (is401) {
+                    Log.w(TAG, "Dealer 401 Unauthorized: invalidating cached tokens")
+                    invalidateTokens()
+                }
                 if (!connectionIdDeferred.isCompleted) {
-                    connectionIdDeferred.completeExceptionally(t)
+                    connectionIdDeferred.complete("")
                 }
                 connectionIdDeferred = CompletableDeferred()
             }
@@ -2222,10 +2267,36 @@ class SpotifyWebClient {
                 dealerConnectionId = null
                 isDeviceRegistered = false
                 if (!connectionIdDeferred.isCompleted) {
-                    connectionIdDeferred = CompletableDeferred()
+                    connectionIdDeferred.complete("")
                 }
+                connectionIdDeferred = CompletableDeferred()
             }
         })
+    }
+
+    private fun extractPayloadObjects(json: JSONObject): List<JSONObject> {
+        val list = mutableListOf<JSONObject>()
+        val arr = json.optJSONArray("payloads") ?: return list
+        for (i in 0 until arr.length()) {
+            val item = arr.opt(i)
+            if (item is JSONObject) {
+                list.add(item)
+            } else if (item is String) {
+                val str = item.trim()
+                if (str.startsWith("{")) {
+                    try { list.add(JSONObject(str)) } catch (e: Exception) {}
+                } else {
+                    try {
+                        val decodedBytes = android.util.Base64.decode(str, android.util.Base64.DEFAULT)
+                        val decodedStr = String(decodedBytes, Charsets.UTF_8).trim()
+                        if (decodedStr.startsWith("{")) {
+                            list.add(JSONObject(decodedStr))
+                        }
+                    } catch (e: Exception) {}
+                }
+            }
+        }
+        return list
     }
 
     internal suspend fun ensureDeviceRegistered(token: String, deviceId: String = DEVICE_ID): Boolean = withContext(Dispatchers.IO) {
@@ -2233,12 +2304,18 @@ class SpotifyWebClient {
 
         connectDealer(token)
 
-        val connId = dealerConnectionId ?: withTimeoutOrNull(6000L) {
-            connectionIdDeferred.await()
+        val connId = dealerConnectionId ?: try {
+            withTimeoutOrNull(8000L) {
+                val result = connectionIdDeferred.await()
+                result.ifEmpty { null }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception waiting for Dealer connection ID", e)
+            null
         }
 
-        if (connId == null) {
-            Log.e(TAG, "Timed out waiting for Dealer connection ID")
+        if (connId.isNullOrEmpty()) {
+            Log.e(TAG, "Timed out or failed waiting for Dealer connection ID")
             return@withContext false
         }
 
@@ -3679,10 +3756,14 @@ class SpotifyWebClient {
 
         // 2. If not known, issue connect-state play command to get manifest via Dealer WebSocket
         if (fileId == null) {
-            val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
-            val registered = ensureDeviceRegistered(token)
+            var token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
+            var registered = ensureDeviceRegistered(token)
             if (!registered) {
-                return@withContext Result.failure(Exception("Failed to register audio player device"))
+                token = getAccessToken(forceRefresh = true).getOrElse { FALLBACK_BEARER_TOKEN }
+                registered = ensureDeviceRegistered(token)
+                if (!registered) {
+                    return@withContext Result.failure(Exception("Failed to register audio player device"))
+                }
             }
 
             val deferred = CompletableDeferred<String>()
@@ -3738,7 +3819,15 @@ class SpotifyWebClient {
                 lastConnectPlayTrackUri = trackUri
                 Log.d(TAG, "Triggered connect-state play command for $trackUri. Code: $code")
 
-                if (code == 410 || code == 404) {
+                if (code == 401) {
+                    Log.w(TAG, "Play command returned 401 Unauthorized. Refreshing token...")
+                    invalidateTokens()
+                    val freshToken = getAccessToken(forceRefresh = true).getOrNull()
+                    if (freshToken != null) {
+                        token = freshToken
+                        ensureDeviceRegistered(token)
+                    }
+                } else if (code == 410 || code == 404) {
                     // Session or device expired on Dealer; force re-registration and retry command once
                     Log.w(TAG, "Device expired (HTTP $code). Re-registering with Dealer and retrying play command...")
                     isDeviceRegistered = false
@@ -3772,7 +3861,7 @@ class SpotifyWebClient {
                 }
 
                 // Await manifest notification from Dealer WebSocket
-                fileId = withTimeoutOrNull(4000L) {
+                fileId = withTimeoutOrNull(8000L) {
                     deferred.await()
                 } ?: audioFileMap[trackUri]
 
@@ -3787,6 +3876,16 @@ class SpotifyWebClient {
 
         Log.d(TAG, "Audio file ID resolved: $fileId. Fetching CDN URL...")
         resolveAudioCdn(fileId)
+    }
+
+    suspend fun preResolveTrack(trackUriOrId: String) = withContext(Dispatchers.IO) {
+        try {
+            val trackUri = if (trackUriOrId.startsWith("spotify:track:")) trackUriOrId else "spotify:track:$trackUriOrId"
+            if (audioFileMap.containsKey(trackUri)) return@withContext
+            resolveTrackAudioStream(trackUri)
+        } catch (e: Exception) {
+            Log.w(TAG, "Background pre-resolve failed for $trackUriOrId", e)
+        }
     }
 
     suspend fun getSeekTable(fileId: String): Result<JSONObject> = withContext(Dispatchers.IO) {
@@ -3829,3 +3928,14 @@ class SpotifyWebClient {
         )
     }
 }
+
+interface SpotifyRemoteCommandListener {
+    fun onPlay(contextUri: String?, trackUri: String?, seekToMs: Long?)
+    fun onPause()
+    fun onResume()
+    fun onSeekTo(positionMs: Long)
+    fun onSkipNext()
+    fun onSkipPrev()
+    fun onSetVolume(fraction: Float)
+}
+

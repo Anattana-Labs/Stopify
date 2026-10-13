@@ -428,6 +428,13 @@ fun SimpMusicApp(
                     }
                 }
 
+                // Pre-resolve the very next track in queue in background so subsequent playback is instant
+                playbackQueue.firstOrNull()?.let { nextQ ->
+                    coroutineScope.launch {
+                        client.preResolveTrack(nextQ.uri)
+                    }
+                }
+
                 // If queue is running low, proactively fetch autoqueue suggestions in background
                 if (isAutoQueueEnabled && playbackQueue.size < 3) {
                     coroutineScope.launch {
@@ -435,6 +442,8 @@ fun SimpMusicApp(
                         val filtered = autoTracks.filter { it.uri != track.uri && playbackQueue.none { q -> q.uri == it.uri } }
                         if (filtered.isNotEmpty()) {
                             playbackQueue.addAll(filtered)
+                            // Pre-resolve the first added track
+                            client.preResolveTrack(filtered.first().uri)
                         }
                     }
                 }
@@ -449,6 +458,10 @@ fun SimpMusicApp(
         if (playbackQueue.isNotEmpty()) {
             val next = playbackQueue.removeAt(0)
             playTrackInternal(next)
+            // Pre-resolve subsequent track
+            playbackQueue.firstOrNull()?.let { nextNext ->
+                coroutineScope.launch { client.preResolveTrack(nextNext.uri) }
+            }
         } else {
             val current = playbackState.currentTrack
             if (current != null && isAutoQueueEnabled) {
@@ -460,6 +473,7 @@ fun SimpMusicApp(
                         val next = filtered.first()
                         if (filtered.size > 1) {
                             playbackQueue.addAll(filtered.drop(1))
+                            playbackQueue.firstOrNull()?.let { client.preResolveTrack(it.uri) }
                         }
                         playTrackInternal(next)
                     }
@@ -483,7 +497,9 @@ fun SimpMusicApp(
     DisposableEffect(player) {
         player.onTrackCompleted = { completedTrack ->
             coroutineScope.launch {
-                client.reportPlaybackToApi(completedTrack, completedTrack.durationMs, prefs, isFinished = true)
+                launch {
+                    client.reportPlaybackToApi(completedTrack, completedTrack.durationMs, prefs, isFinished = true)
+                }
                 playNextTrack()
             }
         }
@@ -538,6 +554,84 @@ fun SimpMusicApp(
             return
         }
         statusLog = "Selected: ${item.name}"
+    }
+
+    // Spotify Connect Remote Control sync (handles play/pause/seek/skip from browser, desktop, phone)
+    DisposableEffect(client, player) {
+        client.onRemoteCommandListener = object : SpotifyRemoteCommandListener {
+            override fun onPlay(contextUri: String?, trackUri: String?, seekToMs: Long?) {
+                coroutineScope.launch {
+                    val target = trackUri ?: contextUri
+                    if (!target.isNullOrEmpty()) {
+                        if (target.contains(":track:")) {
+                            val remoteTrack = SpotifyTrack(
+                                id = target.removePrefix("spotify:track:"),
+                                uri = target,
+                                name = "Playing via Spotify Connect",
+                                artist = "",
+                                album = "",
+                                coverUrl = null,
+                                durationMs = 0L,
+                                isPlayable = true
+                            )
+                            playTrackInternal(remoteTrack)
+                            seekToMs?.let { if (it > 0) player.seekTo(it) }
+                        } else {
+                            playMediaItem(SpotifyMediaItem(
+                                id = target.substringAfterLast(":"),
+                                uri = target,
+                                name = "Remote Context",
+                                subtitle = "",
+                                coverUrl = null,
+                                type = if (target.contains(":album:")) SpotifyItemType.ALBUM else SpotifyItemType.PLAYLIST
+                            ))
+                        }
+                    } else {
+                        player.play()
+                    }
+                }
+            }
+
+            override fun onPause() {
+                player.pause()
+            }
+
+            override fun onResume() {
+                player.play()
+            }
+
+            override fun onSeekTo(positionMs: Long) {
+                player.seekTo(positionMs)
+            }
+
+            override fun onSkipNext() {
+                playNextTrack()
+            }
+
+            override fun onSkipPrev() {
+                playPreviousTrack()
+            }
+
+            override fun onSetVolume(fraction: Float) {
+                player.setVolume(fraction)
+            }
+        }
+
+        onDispose {
+            client.onRemoteCommandListener = null
+        }
+    }
+
+    // Proactively sync live playback state back to Spotify Connect cluster so browser UI updates
+    LaunchedEffect(playbackState.isPlaying, playbackState.currentTrack?.uri) {
+        val currentTrack = playbackState.currentTrack
+        if (currentTrack != null) {
+            client.connectService.updateConnectClusterState(
+                track = currentTrack,
+                isPlaying = playbackState.isPlaying,
+                positionMs = playbackState.currentPositionMs
+            )
+        }
     }
 
     fun loadHome() {
