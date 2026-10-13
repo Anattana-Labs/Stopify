@@ -71,6 +71,7 @@ fun SimpFullPlayer(
     isFavoriteTrack: Boolean = false,
     isFavorite: ((SpotifyTrack) -> Boolean)? = null,
     canvasUrl: String? = null,
+    canvasEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var isScrubbing by remember { mutableStateOf(false) }
@@ -83,19 +84,23 @@ fun SimpFullPlayer(
 
     var colorLyrics by remember { mutableStateOf<SpotifyColorLyrics?>(null) }
     var isLyricsLoading by remember { mutableStateOf(false) }
-    var activeCanvasUrl by remember { mutableStateOf(canvasUrl) }
+    var activeCanvasUrl by remember(canvasUrl, canvasEnabled) {
+        mutableStateOf(if (canvasEnabled) canvasUrl else null)
+    }
 
-    LaunchedEffect(canvasUrl) {
-        activeCanvasUrl = canvasUrl
+    LaunchedEffect(canvasUrl, canvasEnabled) {
+        activeCanvasUrl = if (canvasEnabled) canvasUrl else null
     }
 
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
-    // Fetch Spotify Canvas if not preloaded
-    LaunchedEffect(track.id, client) {
-        if (canvasUrl == null && client != null) {
+    // Fetch Spotify Canvas if enabled and not preloaded
+    LaunchedEffect(track.id, client, canvasEnabled) {
+        if (canvasEnabled && canvasUrl == null && client != null) {
             activeCanvasUrl = client.fetchCanvasUrl(track.id)
+        } else if (!canvasEnabled) {
+            activeCanvasUrl = null
         }
     }
 

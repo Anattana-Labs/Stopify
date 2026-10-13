@@ -347,12 +347,14 @@ fun SimpMusicApp(
     var hasReported30sScrobble by remember { mutableStateOf(false) }
     var hasReportedStartedPlaying by remember { mutableStateOf(false) }
 
-    // Fetch color lyrics and canvas for the current track whenever it changes
-    LaunchedEffect(playbackState.currentTrack?.id) {
+    // Fetch color lyrics and canvas for the current track whenever it changes or canvasEnabled changes
+    LaunchedEffect(playbackState.currentTrack?.id, canvasEnabled) {
         val current = playbackState.currentTrack
         hasReported30sScrobble = false
         hasReportedStartedPlaying = false
-        currentCanvasUrl = null
+        if (!canvasEnabled) {
+            currentCanvasUrl = null
+        }
         if (current != null) {
             val cached = client.getCachedColorLyrics(current.id)
             if (cached != null) {
@@ -914,7 +916,13 @@ fun SimpMusicApp(
                 isFavorite = { favoriteTrackIds.contains(it.id) },
                 userProfile = userProfile,
                 canvasEnabled = canvasEnabled,
-                onCanvasToggle = { canvasEnabled = it }
+                onCanvasToggle = { enabled ->
+                    canvasEnabled = enabled
+                    prefs?.edit()?.putBoolean("pref_canvas_enabled", enabled)?.apply()
+                    if (!enabled) {
+                        currentCanvasUrl = null
+                    }
+                }
             )
         }
 
@@ -983,7 +991,8 @@ fun SimpMusicApp(
                     track = currentTrack,
                     playbackState = playbackState,
                     client = client,
-                    canvasUrl = currentCanvasUrl,
+                    canvasUrl = if (canvasEnabled) currentCanvasUrl else null,
+                    canvasEnabled = canvasEnabled,
                     onTogglePlayPause = {
                         if (playbackState.isPlaying) player.pause() else player.resume()
                     },
