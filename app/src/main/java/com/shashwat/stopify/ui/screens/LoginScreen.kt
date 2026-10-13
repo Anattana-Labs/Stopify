@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.shashwat.stopify.data.SpotifyTokenManager
 import com.shashwat.stopify.data.SpotifyWebClient
 
 @Composable
@@ -46,7 +47,7 @@ fun LoginScreen(
     var statusMessage by remember { mutableStateOf("") }
     var isSuccess by remember { mutableStateOf(false) }
     var webViewReloadKey by remember { mutableIntStateOf(0) }
-    var hasSessionInWeb by remember { mutableStateOf(false) }
+    var hasSessionInWeb by remember { mutableStateOf(SpotifyWebClient.hasValidSpDc(client.customCookies)) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -194,13 +195,15 @@ fun LoginScreen(
                         SpotifyLoginWebView(
                             initialCookies = client.customCookies ?: "",
                             onCookiesFound = { cookies ->
-                                val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
-                                prefs.edit().putString("spotify_cookies", cookies).apply()
-                                client.updateCookies(cookies)
-                                onLoginSuccess(cookies)
-                                hasSessionInWeb = true
-                                statusMessage = "Session detected! Cookies saved."
-                                isSuccess = true
+                                if (SpotifyWebClient.hasValidSpDc(cookies)) {
+                                    val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
+                                    prefs.edit().putString("spotify_cookies", cookies).apply()
+                                    client.updateCookies(cookies)
+                                    onLoginSuccess(cookies)
+                                    hasSessionInWeb = true
+                                    statusMessage = "Session detected! Cookies saved."
+                                    isSuccess = true
+                                }
                             },
                             onTokenFound = { token ->
                                 val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
@@ -270,7 +273,8 @@ fun LoginScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            val hasSpDc = cookieInputText.contains("sp_dc")
+                            val hasSpDc = SpotifyWebClient.hasValidSpDc(cookieInputText) ||
+                                    (!cookieInputText.contains("=") && !cookieInputText.contains("\t") && cookieInputText.trim().length >= 20)
                             val hasBearer = cookieInputText.contains("BQ")
 
                             Surface(
@@ -403,11 +407,13 @@ fun LoginScreen(
                                     val c1 = cm.getCookie("https://open.spotify.com") ?: ""
                                     val c2 = cm.getCookie("https://accounts.spotify.com") ?: ""
                                     val combined = "$c1; $c2"
-                                    if (combined.contains("sp_dc")) {
+                                    if (SpotifyWebClient.hasValidSpDc(combined)) {
                                         val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
                                         prefs.edit().putString("spotify_cookies", combined).apply()
                                         client.updateCookies(combined)
                                         onLoginSuccess(combined)
+                                        SpotifyTokenManager.refreshAccessTokenInBackground(context, client, showLoadingModal = false)
+                                        hasSessionInWeb = true
                                         statusMessage = "Session saved! Ready to stream."
                                         isSuccess = true
                                     } else {
@@ -461,18 +467,34 @@ fun LoginScreen(
                                         }
 
                                         val parsed = SpotifyWebClient.parseCookieInput(cookieInputText)
-                                        if (parsed.isNotEmpty()) {
+                                        if (SpotifyWebClient.hasValidSpDc(parsed)) {
                                             prefs.edit().putString("spotify_cookies", parsed).apply()
                                             client.updateCookies(parsed)
                                             onLoginSuccess(parsed)
-                                        }
-
-                                        statusMessage = if (match != null) {
-                                            "Access token and cookies saved!"
+                                            val cm = CookieManager.getInstance()
+                                            for (pair in parsed.split(";")) {
+                                                val p = pair.trim()
+                                                if (p.isNotEmpty()) {
+                                                    cm.setCookie("https://open.spotify.com", p)
+                                                    cm.setCookie("https://accounts.spotify.com", p)
+                                                    cm.setCookie(".spotify.com", p)
+                                                }
+                                            }
+                                            cm.flush()
+                                            SpotifyTokenManager.refreshAccessTokenInBackground(context, client, showLoadingModal = false)
+                                            statusMessage = if (match != null) {
+                                                "Access token and cookies saved!"
+                                            } else {
+                                                "Cookies saved! Session active."
+                                            }
+                                            isSuccess = true
+                                        } else if (match != null) {
+                                            statusMessage = "Access token saved!"
+                                            isSuccess = true
                                         } else {
-                                            "Cookies saved successfully!"
+                                            statusMessage = "Invalid input: valid sp_dc cookie not found."
+                                            isSuccess = false
                                         }
-                                        isSuccess = true
                                     } else {
                                         statusMessage = "Please paste or import cookies first."
                                         isSuccess = false
@@ -525,26 +547,42 @@ fun SpotifyLoginWebView(
             WebView(ctx).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                settings.databaseEnabled = true
+                settings.mediaPlaybackRequiresUserGesture = false
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 settings.userAgentString = SpotifyWebClient.USER_AGENT
                 val cookieManager = CookieManager.getInstance()
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
 
-                val cookiesToSeed = initialCookies.ifEmpty { "sp_dc=${SpotifyWebClient.SP_DC}; sp_key=${SpotifyWebClient.SP_KEY}; sp_t=${SpotifyWebClient.SP_T}" }
-                for (pair in cookiesToSeed.split(";")) {
-                    val p = pair.trim()
-                    if (p.isNotEmpty()) {
-                        cookieManager.setCookie("https://open.spotify.com", p)
-                        cookieManager.setCookie("https://accounts.spotify.com", p)
-                        cookieManager.setCookie(".spotify.com", p)
+                val hasValidSession = SpotifyWebClient.hasValidSpDc(initialCookies)
+                if (hasValidSession) {
+                    for (pair in initialCookies.split(";")) {
+                        val p = pair.trim()
+                        if (p.isNotEmpty()) {
+                            cookieManager.setCookie("https://open.spotify.com", p)
+                            cookieManager.setCookie("https://accounts.spotify.com", p)
+                            cookieManager.setCookie(".spotify.com", p)
+                        }
+                    }
+                    cookieManager.flush()
+                }
+
+                webChromeClient = object : android.webkit.WebChromeClient() {
+                    override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
+                        request?.grant(request.resources)
+                    }
+
+                    override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage?): Boolean {
+                        android.util.Log.d("SpotifyLoginWebView", "JS: ${consoleMessage?.message()} (${consoleMessage?.sourceId()}:${consoleMessage?.lineNumber()})")
+                        return true
                     }
                 }
-                cookieManager.flush()
 
                 class StopifyBridge {
                     @android.webkit.JavascriptInterface
                     fun onToken(token: String?) {
-                        if (!token.isNullOrEmpty()) {
+                        if (!token.isNullOrEmpty() && token.startsWith("BQ")) {
                             post { onTokenFound(token) }
                         }
                     }
@@ -589,13 +627,35 @@ fun SpotifyLoginWebView(
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
                         val cookies = cookieManager.getCookie("https://open.spotify.com") ?: ""
-                        if (cookies.contains("sp_dc")) {
+                        if (SpotifyWebClient.hasValidSpDc(cookies)) {
                             onCookiesFound(cookies)
                         }
+
+                        view?.evaluateJavascript(
+                            """
+                            (function() {
+                                try {
+                                    fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player')
+                                        .then(function(r) { return r.json(); })
+                                        .then(function(d) {
+                                            if (d && d.accessToken) {
+                                                window.StopifyBridge.onToken(d.accessToken);
+                                            }
+                                        })
+                                        .catch(function(e) {});
+                                } catch(e) {}
+                            })();
+                            """.trimIndent(),
+                            null
+                        )
                     }
                 }
 
-                loadUrl("https://accounts.spotify.com/en/login?continue=https%3A%2F%2Fopen.spotify.com%2F")
+                if (hasValidSession) {
+                    loadUrl("https://open.spotify.com/")
+                } else {
+                    loadUrl("https://accounts.spotify.com/en/login?continue=https%3A%2F%2Fopen.spotify.com%2F")
+                }
             }
         }
     )

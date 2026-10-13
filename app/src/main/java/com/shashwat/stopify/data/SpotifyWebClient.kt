@@ -2,6 +2,7 @@ package com.shashwat.stopify.data
 
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -68,9 +69,26 @@ class SpotifyWebClient {
             return DEVICE_ID
         }
 
+        fun hasValidSpDc(cookies: String?): Boolean {
+            if (cookies.isNullOrBlank()) return false
+            val regex = Regex("""\bsp_dc=([^;\s]{20,})""")
+            return regex.containsMatchIn(cookies)
+        }
+
+        fun extractSpDc(cookies: String?): String? {
+            if (cookies.isNullOrBlank()) return null
+            val regex = Regex("""\bsp_dc=([^;\s]{20,})""")
+            return regex.find(cookies)?.groupValues?.get(1)
+        }
+
         fun parseCookieInput(input: String): String {
             val trimmed = input.trim()
             if (trimmed.isEmpty()) return ""
+
+            // If user pasted raw sp_dc token directly (e.g. 20+ chars, no '=')
+            if (!trimmed.contains("=") && !trimmed.contains("\t") && trimmed.length >= 20) {
+                return "sp_dc=$trimmed"
+            }
 
             val cookieMap = mutableMapOf<String, String>()
 
@@ -85,7 +103,9 @@ class SpotifyWebClient {
                     isNetscape = true
                     val name = parts[5].trim()
                     val value = parts[6].trim()
-                    cookieMap[name] = value
+                    if (value.isNotEmpty()) {
+                        cookieMap[name] = value
+                    }
                 }
             }
 
@@ -101,7 +121,9 @@ class SpotifyWebClient {
                 if (eqIdx > 0) {
                     val key = seg.substring(0, eqIdx).trim()
                     val value = seg.substring(eqIdx + 1).trim()
-                    cookieMap[key] = value
+                    if (value.isNotEmpty()) {
+                        cookieMap[key] = value
+                    }
                 }
             }
 
@@ -173,8 +195,15 @@ class SpotifyWebClient {
         }
 
         val parsed = parseCookieInput(trimmed)
-        customCookies = parsed
-        Log.d(TAG, "Updated Spotify cookies: ${parsed.take(50)}...")
+        if (parsed.isEmpty()) return
+
+        // Guard against wiping a valid sp_dc with an invalid/empty cookie string
+        if (hasValidSpDc(parsed) || !hasValidSpDc(customCookies)) {
+            customCookies = parsed
+            Log.d(TAG, "Updated Spotify cookies: ${parsed.take(50)}...")
+        } else {
+            Log.w(TAG, "Ignored cookie update: incoming cookies lack valid sp_dc while active session is valid")
+        }
     }
 
     private val okHttpClient = OkHttpClient.Builder()
@@ -373,12 +402,6 @@ class SpotifyWebClient {
     fun parseStateMachineResponse(respJson: JSONObject, currentTrackUri: String? = null) {
         try {
             val smObj = respJson.optJSONObject("state_machine") ?: return
-            val newSm = smObj.optString("state_machine_id")
-            if (!newSm.isNullOrEmpty()) {
-                activeStateMachineId = newSm
-                Log.d(TAG, "Captured active state_machine_id: $newSm")
-            }
-
             val parsedTracks = mutableListOf<SpotifyTrack>()
             val tracksArr = smObj.optJSONArray("tracks")
             if (tracksArr != null) {
@@ -441,6 +464,18 @@ class SpotifyWebClient {
                     )
                     parsedTracks.add(trackObj)
                 }
+            }
+
+            val targetUri = currentTrackUri ?: lastReportedTrackUri
+            if (targetUri != null && parsedTracks.isNotEmpty() && parsedTracks.none { it.uri == targetUri }) {
+                Log.d(TAG, "Ignoring state_machine payload that does not contain active track $targetUri (tracks: ${parsedTracks.map { it.name }})")
+                return
+            }
+
+            val newSm = smObj.optString("state_machine_id")
+            if (!newSm.isNullOrEmpty()) {
+                activeStateMachineId = newSm
+                Log.d(TAG, "Captured active state_machine_id: $newSm")
             }
 
             val updatedRef = respJson.optJSONObject("updated_state_ref")
@@ -701,12 +736,13 @@ class SpotifyWebClient {
             val currentSmId = activeStateMachineId ?: "ChTYh8P7GXEaL9SXQ9jMrnbW_sLlYQ"
 
             // Handle track transition state machine state update
-            val isTransitioningTrack = lastReportedTrackUri != null && lastReportedTrackUri != track.uri
-            if (isTransitioningTrack) {
-                if (!nextStateId.isNullOrEmpty()) {
-                    activeStateId = nextStateId!!
-                    nextStateId = null
-                }
+            val isAutoAdvanceTransition = nextTrackFromStateMachine?.uri == track.uri && !nextStateId.isNullOrEmpty()
+            if (isAutoAdvanceTransition) {
+                activeStateId = nextStateId!!
+                nextStateId = null
+                nextTrackFromStateMachine = null
+            } else if (lastReportedTrackUri != track.uri) {
+                nextStateId = null
                 nextTrackFromStateMachine = null
             }
             lastReportedTrackUri = track.uri
@@ -724,54 +760,12 @@ class SpotifyWebClient {
             val seq = ++stateSeqNum
             val now = System.currentTimeMillis()
 
-            // 1. If starting new manual track play (not auto-advance), trigger connect-state player command
-            if (debugSource == "before_track_load" && !isTransitioningTrack) {
+            // 1. If starting new track (and not a continuous auto-advance of the same queue), trigger connect-state player command
+            if (debugSource == "before_track_load" && !isAutoAdvanceTransition) {
                 try {
-                    val playCmdUrl = URL("https://gae2-spclient.spotify.com/connect-state/v1/player/command/from/$currentDeviceId/to/$currentDeviceId")
-                    val cmdId = UUID.randomUUID().toString().replace("-", "")
-                    val playCmdBody = JSONObject().apply {
-                        put("command", JSONObject().apply {
-                            put("context", JSONObject().apply {
-                                put("uri", track.uri)
-                                put("url", "context://${track.uri}")
-                                put("metadata", JSONObject())
-                            })
-                            put("play_origin", JSONObject().apply {
-                                put("feature_identifier", "search")
-                                put("feature_version", "web-player_2026-10-12_1791795388600_2b2ea800fe12")
-                                put("referrer_identifier", "search")
-                            })
-                            put("options", JSONObject().apply {
-                                put("license", "tft")
-                                put("skip_to", JSONObject())
-                                put("player_options_override", JSONObject())
-                            })
-                            put("logging_params", JSONObject().apply {
-                                put("page_instance_ids", JSONArray().apply { put("b5bed12a-02cd-4529-8659-da9f174cdeca") })
-                                put("interaction_ids", JSONArray().apply { put("ee768f0f-6e4c-49ed-8f17-338dad1a83f2") })
-                                put("command_id", cmdId)
-                            })
-                            put("endpoint", "play")
-                        })
-                    }
-
-                    val pConn = (playCmdUrl.openConnection() as HttpURLConnection).apply {
-                        requestMethod = "POST"
-                        doOutput = true
-                        connectTimeout = 5000
-                        readTimeout = 5000
-                        setRequestProperty("authorization", "Bearer $token")
-                        setRequestProperty("client-token", clientToken)
-                        setRequestProperty("content-type", "application/json")
-                        setRequestProperty("app-platform", APP_PLATFORM)
-                        setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
-                        setRequestProperty("referer", "https://open.spotify.com/")
-                        setRequestProperty("user-agent", USER_AGENT)
-                    }
-                    OutputStreamWriter(pConn.outputStream).use { it.write(playCmdBody.toString()) }
-                    val pCode = pConn.responseCode
-                    pConn.disconnect()
-                    Log.d(TAG, "connect-state play command status: $pCode for ${track.uri}")
+                    connectService.sendConnectPlayerCommand("play", track.uri, currentDeviceId, currentDeviceId)
+                    // Brief delay to allow Dealer WebSocket to receive and parse the state machine for this track
+                    delay(250)
                 } catch (ce: Exception) {
                     Log.w(TAG, "Error in connect-state play command", ce)
                 }
@@ -974,7 +968,7 @@ class SpotifyWebClient {
                 })
                 if (debugSource != "before_track_load") {
                     put("previous_position", reportedPosition)
-                } else if (isTransitioningTrack && lastReportedPositionMs > 0) {
+                } else if (isAutoAdvanceTransition && lastReportedPositionMs > 0) {
                     put("previous_position", lastReportedPositionMs)
                 }
                 if (debugSource == "track_data_finalized") {
@@ -1027,7 +1021,7 @@ class SpotifyWebClient {
 
             if (isFinished) {
                 lastReportedPositionMs = reportedPosition
-            } else if (debugSource == "before_track_load" && !isTransitioningTrack) {
+            } else if (debugSource == "before_track_load" && !isAutoAdvanceTransition) {
                 lastReportedPositionMs = 0L
             }
 
@@ -1049,7 +1043,7 @@ class SpotifyWebClient {
             Log.d(TAG, "track-playback state API status: $code ($debugSource) for '${track.name}' (pos: ${reportedPosition}ms, seq: $seq)")
 
             // 4. On initial manual load, trigger Pathfinder entity query and decorate context tracks
-            if (debugSource == "before_track_load" && !isTransitioningTrack) {
+            if (debugSource == "before_track_load" && !isAutoAdvanceTransition) {
                 fetchEntitiesForRecentlyPlayed(track.uri)
                 if (stateMachineQueueTracks.isNotEmpty()) {
                     decorateContextTracks(stateMachineQueueTracks.map { it.uri })

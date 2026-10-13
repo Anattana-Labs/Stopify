@@ -177,7 +177,7 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
         return player
     }
 
-    fun playTrack(track: SpotifyTrack, audioUrl: String, accessToken: String) {
+    fun playTrack(track: SpotifyTrack, audioUrl: String, accessToken: String, clientToken: String? = null) {
         Log.d(TAG, "Request to play track: '${track.name}' by '${track.artist}' with URL: $audioUrl")
 
         _playbackState.value = PlaybackState(
@@ -188,7 +188,7 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
         try {
             val drmHeaders = mapOf(
                 "authorization" to "Bearer $accessToken",
-                "client-token" to SpotifyWebClient.CLIENT_TOKEN,
+                "client-token" to (clientToken?.ifEmpty { null } ?: SpotifyWebClient.CLIENT_TOKEN),
                 "app-platform" to SpotifyWebClient.APP_PLATFORM,
                 "spotify-app-version" to SpotifyWebClient.SPOTIFY_APP_VERSION,
                 "origin" to "https://open.spotify.com",

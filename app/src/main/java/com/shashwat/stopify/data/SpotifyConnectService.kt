@@ -44,9 +44,9 @@ class SpotifyConnectService(
                         })
                     }
                     put("play_origin", JSONObject().apply {
-                        put("feature_identifier", "album")
-                        put("feature_version", "web-player_2026-10-09_1791504000000_d873ee9db135")
-                        put("referrer_identifier", "home")
+                        put("feature_identifier", "search")
+                        put("feature_version", "web-player_2026-10-12_1791795388600_2b2ea800fe12")
+                        put("referrer_identifier", "search")
                     })
                     put("options", JSONObject().apply {
                         put("license", "tft")
@@ -54,8 +54,8 @@ class SpotifyConnectService(
                         put("player_options_override", JSONObject())
                     })
                     put("logging_params", JSONObject().apply {
-                        put("page_instance_ids", JSONArray())
-                        put("interaction_ids", JSONArray())
+                        put("page_instance_ids", JSONArray().apply { put("b5bed12a-02cd-4529-8659-da9f174cdeca") })
+                        put("interaction_ids", JSONArray().apply { put("ee768f0f-6e4c-49ed-8f17-338dad1a83f2") })
                         put("command_id", cmdId)
                     })
                     put("endpoint", endpoint)

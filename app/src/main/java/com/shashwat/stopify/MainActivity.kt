@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
             spotifyClient.setClientToken(savedClientToken)
         }
         val savedCookies = prefs.getString("spotify_cookies", null)
-        if (!savedCookies.isNullOrEmpty()) {
+        if (!savedCookies.isNullOrEmpty() && SpotifyWebClient.hasValidSpDc(savedCookies)) {
             spotifyClient.updateCookies(savedCookies)
         }
         val savedAccessToken = prefs.getString("spotify_access_token", null)
@@ -284,7 +284,8 @@ fun SimpMusicApp(
     var showCookieDialog by remember { mutableStateOf(false) }
     var cookieDialogInitialTab by remember { mutableIntStateOf(0) }
     val hasCompletedOnboarding = prefs?.getBoolean("onboarding_completed", false) == true
-    val hasAnySession = !client.customCookies.isNullOrEmpty() || prefs?.getString("spotify_cookies", null)?.isNotEmpty() == true
+    val hasAnySession = SpotifyWebClient.hasValidSpDc(client.customCookies) || 
+            SpotifyWebClient.hasValidSpDc(prefs?.getString("spotify_cookies", null))
     var showOnboarding by remember { mutableStateOf(!hasCompletedOnboarding && !hasAnySession) }
     var showFullPlayer by remember { mutableStateOf(false) }
     val playbackState by player.playbackState.collectAsState()
@@ -407,7 +408,7 @@ fun SimpMusicApp(
                 val streamUrl = streamRes.getOrThrow()
                 val token = client.getAccessToken().getOrElse { SpotifyWebClient.FALLBACK_BEARER_TOKEN }
                 statusLog = "Playing '${track.name}'"
-                player.playTrack(track, streamUrl, token)
+                player.playTrack(track, streamUrl, token, client.customClientToken)
 
                 if (addToHistory) {
                     client.addLocalHistoryTrack(track, prefs)
@@ -943,7 +944,7 @@ fun SimpMusicApp(
                 initialTab = cookieDialogInitialTab,
                 onDismiss = {
                     showCookieDialog = false
-                    if (!client.customCookies.isNullOrEmpty() || prefs?.getString("spotify_cookies", null)?.isNotEmpty() == true) {
+                    if (SpotifyWebClient.hasValidSpDc(client.customCookies) || SpotifyWebClient.hasValidSpDc(prefs?.getString("spotify_cookies", null))) {
                         prefs?.edit()?.putBoolean("onboarding_completed", true)?.apply()
                         showOnboarding = false
                     }

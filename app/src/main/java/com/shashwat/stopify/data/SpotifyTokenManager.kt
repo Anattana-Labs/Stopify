@@ -60,8 +60,8 @@ object SpotifyTokenManager {
             val prefs = appContext.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
             val cookies = client.cookieHeaderString.ifEmpty { prefs.getString("spotify_cookies", "") ?: "" }
 
-            if (!cookies.contains("sp_dc")) {
-                Log.d(TAG, "No active session cookies to refresh, skipping background refresh")
+            if (!SpotifyWebClient.hasValidSpDc(cookies)) {
+                Log.d(TAG, "No valid sp_dc session cookies to refresh, skipping background refresh")
                 val callbacks = ArrayList(pendingCallbacks)
                 pendingCallbacks.clear()
                 callbacks.forEach { it(null) }
@@ -179,7 +179,7 @@ object SpotifyTokenManager {
                     
                     // Capture live cookies from open.spotify.com and accounts.spotify.com
                     val currentCookies = cookieManager.getCookie("https://open.spotify.com") ?: ""
-                    if (currentCookies.contains("sp_dc")) {
+                    if (SpotifyWebClient.hasValidSpDc(currentCookies)) {
                         Log.d(TAG, "Captured updated session cookies from WebView")
                         prefs.edit().putString("spotify_cookies", currentCookies).apply()
                         client.updateCookies(currentCookies)
