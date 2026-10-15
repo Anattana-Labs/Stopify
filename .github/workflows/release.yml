@@ -3,8 +3,9 @@ name: Build & Pre-release APKs
 on:
   push:
     tags:
-      - 'v*'
       - '1.0.0'
+      - 'v*'
+      - '[0-9]+*'
   workflow_dispatch:
     inputs:
       tag_name:
@@ -59,7 +60,7 @@ jobs:
         id: prepare_apks
         run: |
           mkdir -p release-apks
-          RAW_TAG="${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || 'v1.0.0' }}"
+          RAW_TAG="${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || '1.0.0' }}"
           echo "tag=$RAW_TAG" >> $GITHUB_OUTPUT
 
           for apk in app/build/outputs/apk/release/*.apk; do
