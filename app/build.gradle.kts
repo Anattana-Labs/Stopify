@@ -12,7 +12,7 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -44,8 +44,10 @@ android {
             )
             val localKeystore = file("${rootDir}/debug.keystore")
             val defaultKeystore = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            if (localKeystore.exists() || defaultKeystore.exists()) {
-                signingConfig = signingConfigs.getByName("debugConfig")
+            signingConfig = if (localKeystore.exists() || defaultKeystore.exists()) {
+                signingConfigs.getByName("debugConfig")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
     }
@@ -55,6 +57,14 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
+        }
     }
 }
 

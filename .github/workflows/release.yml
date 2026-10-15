@@ -1,0 +1,92 @@
+name: Build & Pre-release APKs
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '1.0.0'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for the release'
+        required: false
+        default: 'v1.0.0'
+      prerelease:
+        description: 'Publish as pre-release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release APKs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
+      - name: Ensure Debug Keystore Exists
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore \
+              -alias androiddebugkey -storepass android -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Build Release APKs
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Prepare APK Artifacts
+        id: prepare_apks
+        run: |
+          mkdir -p release-apks
+          RAW_TAG="${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || 'v1.0.0' }}"
+          echo "tag=$RAW_TAG" >> $GITHUB_OUTPUT
+
+          for apk in app/build/outputs/apk/release/*.apk; do
+            filename=$(basename "$apk")
+            clean_name=$(echo "$filename" | sed -E "s/^app-(.*)-release\.apk$/Stopify-${RAW_TAG}-\1.apk/")
+            if [ "$clean_name" = "$filename" ]; then
+              clean_name=$(echo "$filename" | sed -E "s/^app-release\.apk$/Stopify-${RAW_TAG}-universal.apk/")
+            fi
+            cp "$apk" "release-apks/$clean_name"
+            echo "Prepared $clean_name from $filename"
+          done
+          ls -la release-apks
+
+      - name: Upload APKs to Workflow Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stopify-apks-${{ steps.prepare_apks.outputs.tag }}
+          path: release-apks/*.apk
+
+      - name: Publish GitHub Pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.prepare_apks.outputs.tag }}
+          name: Stopify ${{ steps.prepare_apks.outputs.tag }}
+          prerelease: ${{ inputs.prerelease == null && true || inputs.prerelease }}
+          draft: false
+          generate_release_notes: true
+          files: release-apks/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
