@@ -3195,50 +3195,65 @@ class SpotifyWebClient {
         val clientToken = customClientToken ?: CLIENT_TOKEN
 
         try {
-            val url = URL("https://api-partner.spotify.com/pathfinder/v2/query")
-            val payload = JSONObject().apply {
-                put("variables", JSONObject().apply {
-                    put("uri", playlistUri)
-                    put("offset", 0)
-                    put("limit", 50)
-                    put("enableWatchFeedEntrypoint", true)
-                    put("includeEpisodeContentRatingsV2", true)
-                })
-                put("operationName", "fetchPlaylist")
-                put("extensions", JSONObject().apply {
-                    put("persistedQuery", JSONObject().apply {
-                        put("version", 1)
-                        put("sha256Hash", FETCH_PLAYLIST_HASH)
+            val trackList = mutableListOf<SpotifyTrack>()
+            val pageLimit = 50
+            var offset = 0
+
+            // Spotify's pathfinder fetchPlaylist query is paginated via offset/limit
+            // (confirmed against the live API: content.pagingInfo + content.totalCount
+            // are returned alongside content.items). Loop until a page comes back
+            // shorter than requested, instead of only ever reading the first page.
+            while (true) {
+                val url = URL("https://api-partner.spotify.com/pathfinder/v2/query")
+                val payload = JSONObject().apply {
+                    put("variables", JSONObject().apply {
+                        put("uri", playlistUri)
+                        put("offset", offset)
+                        put("limit", pageLimit)
+                        put("enableWatchFeedEntrypoint", true)
+                        put("includeEpisodeContentRatingsV2", true)
                     })
-                })
-            }
+                    put("operationName", "fetchPlaylist")
+                    put("extensions", JSONObject().apply {
+                        put("persistedQuery", JSONObject().apply {
+                            put("version", 1)
+                            put("sha256Hash", FETCH_PLAYLIST_HASH)
+                        })
+                    })
+                }
 
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                doOutput = true
-                connectTimeout = 15000
-                readTimeout = 15000
-                setRequestProperty("authorization", "Bearer $token")
-                setRequestProperty("client-token", clientToken)
-                setRequestProperty("content-type", "application/json;charset=UTF-8")
-                setRequestProperty("app-platform", APP_PLATFORM)
-                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
-                setRequestProperty("origin", "https://open.spotify.com")
-                setRequestProperty("referer", "https://open.spotify.com/")
-                setRequestProperty("user-agent", USER_AGENT)
-            }
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 15000
+                    readTimeout = 15000
+                    setRequestProperty("authorization", "Bearer $token")
+                    setRequestProperty("client-token", clientToken)
+                    setRequestProperty("content-type", "application/json;charset=UTF-8")
+                    setRequestProperty("app-platform", APP_PLATFORM)
+                    setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                    setRequestProperty("origin", "https://open.spotify.com")
+                    setRequestProperty("referer", "https://open.spotify.com/")
+                    setRequestProperty("user-agent", USER_AGENT)
+                }
 
-            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
-            val responseCode = conn.responseCode
-            val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
-            val responseBody = BufferedReader(InputStreamReader(stream)).readText()
-            conn.disconnect()
+                OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+                val responseCode = conn.responseCode
+                val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+                val responseBody = BufferedReader(InputStreamReader(stream)).readText()
+                conn.disconnect()
 
-            if (responseCode in 200..299) {
+                if (responseCode !in 200..299) {
+                    if (offset == 0) {
+                        return@withContext Result.failure(Exception("HTTP $responseCode: $responseBody"))
+                    }
+                    Log.w(TAG, "Playlist pagination stopped early at offset=$offset: HTTP $responseCode")
+                    break
+                }
+
                 val json = JSONObject(responseBody)
                 val playlistV2 = json.getJSONObject("data").getJSONObject("playlistV2")
                 val items = playlistV2.getJSONObject("content").getJSONArray("items")
-                val trackList = mutableListOf<SpotifyTrack>()
 
                 for (i in 0 until items.length()) {
                     val item = items.getJSONObject(i)
@@ -3279,10 +3294,18 @@ class SpotifyWebClient {
                         )
                     }
                 }
-                Result.success(trackList)
-            } else {
-                Result.failure(Exception("HTTP $responseCode: $responseBody"))
+
+                if (items.length() < pageLimit) break
+                offset += pageLimit
+
+                // Safety stop so a server-side anomaly can't loop forever.
+                if (offset >= 10000) {
+                    Log.w(TAG, "Playlist pagination safety stop at offset=$offset for $playlistUri")
+                    break
+                }
             }
+
+            Result.success(trackList)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -3623,114 +3646,144 @@ class SpotifyWebClient {
         val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
 
-        // 1. Try Pathfinder v2 query first
+        // 1. Try Pathfinder v2 query first (paginated: loop offset/limit until exhausted,
+        // instead of only ever reading the first page -- confirmed against the live API
+        // that content.pagingInfo / content.totalCount are returned alongside content.items)
         try {
-            val url = URL("https://api-partner.spotify.com/pathfinder/v2/query")
-            val payload = JSONObject().apply {
-                put("variables", JSONObject().apply {
-                    put("uri", canonicalUri)
-                    put("offset", 0)
-                    put("limit", 100)
-                    put("enableWatchFeedEntrypoint", true)
-                    put("includeEpisodeContentRatingsV2", true)
-                })
-                put("operationName", "fetchPlaylist")
-                put("extensions", JSONObject().apply {
-                    put("persistedQuery", JSONObject().apply {
-                        put("version", 1)
-                        put("sha256Hash", FETCH_PLAYLIST_HASH)
+            val pageLimit = 100
+            var offset = 0
+            var pName = "Playlist"
+            var pOwner = "Spotify"
+            var pDesc = ""
+            var pCover: String? = null
+            var headerCaptured = false
+            var firstPageOk = false
+            val trackList = mutableListOf<SpotifyTrack>()
+
+            while (true) {
+                val url = URL("https://api-partner.spotify.com/pathfinder/v2/query")
+                val payload = JSONObject().apply {
+                    put("variables", JSONObject().apply {
+                        put("uri", canonicalUri)
+                        put("offset", offset)
+                        put("limit", pageLimit)
+                        put("enableWatchFeedEntrypoint", true)
+                        put("includeEpisodeContentRatingsV2", true)
                     })
-                })
-            }
+                    put("operationName", "fetchPlaylist")
+                    put("extensions", JSONObject().apply {
+                        put("persistedQuery", JSONObject().apply {
+                            put("version", 1)
+                            put("sha256Hash", FETCH_PLAYLIST_HASH)
+                        })
+                    })
+                }
 
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                doOutput = true
-                connectTimeout = 15000
-                readTimeout = 15000
-                setRequestProperty("authorization", "Bearer $token")
-                setRequestProperty("client-token", clientToken)
-                setRequestProperty("content-type", "application/json;charset=UTF-8")
-                setRequestProperty("app-platform", APP_PLATFORM)
-                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
-                setRequestProperty("origin", "https://open.spotify.com")
-                setRequestProperty("referer", "https://open.spotify.com/")
-                setRequestProperty("user-agent", USER_AGENT)
-            }
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 15000
+                    readTimeout = 15000
+                    setRequestProperty("authorization", "Bearer $token")
+                    setRequestProperty("client-token", clientToken)
+                    setRequestProperty("content-type", "application/json;charset=UTF-8")
+                    setRequestProperty("app-platform", APP_PLATFORM)
+                    setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                    setRequestProperty("origin", "https://open.spotify.com")
+                    setRequestProperty("referer", "https://open.spotify.com/")
+                    setRequestProperty("user-agent", USER_AGENT)
+                }
 
-            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
-            val responseCode = conn.responseCode
-            val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
-            val responseBody = BufferedReader(InputStreamReader(stream)).readText()
-            conn.disconnect()
+                OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+                val responseCode = conn.responseCode
+                val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+                val responseBody = BufferedReader(InputStreamReader(stream)).readText()
+                conn.disconnect()
 
-            if (responseCode in 200..299) {
+                if (responseCode !in 200..299) {
+                    if (offset > 0) {
+                        Log.w(TAG, "Playlist pagination stopped early at offset=$offset: HTTP $responseCode")
+                    }
+                    break
+                }
+
                 val json = JSONObject(responseBody)
-                val playlistV2 = json.optJSONObject("data")?.optJSONObject("playlistV2")
-                if (playlistV2 != null) {
-                    val pName = playlistV2.optString("name", "Playlist")
-                    val pOwner = playlistV2.optJSONObject("ownerV2")?.optJSONObject("data")?.optString("name") ?: "Spotify"
-                    val pDesc = playlistV2.optString("description", "")
-                    val pCover = playlistV2.optJSONObject("images")?.optJSONArray("items")?.optJSONObject(0)?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")
+                val playlistV2 = json.optJSONObject("data")?.optJSONObject("playlistV2") ?: break
+                firstPageOk = true
 
-                    val items = playlistV2.optJSONObject("content")?.optJSONArray("items") ?: JSONArray()
-                    val trackList = mutableListOf<SpotifyTrack>()
+                if (!headerCaptured) {
+                    pName = playlistV2.optString("name", "Playlist")
+                    pOwner = playlistV2.optJSONObject("ownerV2")?.optJSONObject("data")?.optString("name") ?: "Spotify"
+                    pDesc = playlistV2.optString("description", "")
+                    pCover = playlistV2.optJSONObject("images")?.optJSONArray("items")?.optJSONObject(0)?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")
+                    headerCaptured = true
+                }
 
-                    for (i in 0 until items.length()) {
-                        val item = items.getJSONObject(i)
-                        val itemV2 = item.optJSONObject("itemV2") ?: continue
-                        val tData = itemV2.optJSONObject("data") ?: continue
-                        val uri = tData.optString("uri", "")
-                        val name = tData.optString("name", "Unknown Track")
-                        val durationMs = tData.optJSONObject("trackDuration")?.optLong("totalMilliseconds", 0L) ?: 0L
-                        val isPlayable = tData.optJSONObject("playability")?.optBoolean("playable", true) ?: true
+                val items = playlistV2.optJSONObject("content")?.optJSONArray("items") ?: JSONArray()
 
-                        val artistsArray = tData.optJSONObject("artists")?.optJSONArray("items")
-                        val artistNames = mutableListOf<String>()
-                        if (artistsArray != null) {
-                            for (j in 0 until artistsArray.length()) {
-                                val aName = artistsArray.getJSONObject(j).optJSONObject("profile")?.optString("name")
-                                if (!aName.isNullOrEmpty()) artistNames.add(aName)
-                            }
-                        }
-                        val artist = artistNames.joinToString(", ").ifEmpty { "Artist" }
+                for (i in 0 until items.length()) {
+                    val item = items.getJSONObject(i)
+                    val itemV2 = item.optJSONObject("itemV2") ?: continue
+                    val tData = itemV2.optJSONObject("data") ?: continue
+                    val uri = tData.optString("uri", "")
+                    val name = tData.optString("name", "Unknown Track")
+                    val durationMs = tData.optJSONObject("trackDuration")?.optLong("totalMilliseconds", 0L) ?: 0L
+                    val isPlayable = tData.optJSONObject("playability")?.optBoolean("playable", true) ?: true
 
-                        val albumObj = tData.optJSONObject("albumOfTrack")
-                        val albumName = albumObj?.optString("name", "Album") ?: "Album"
-                        val coverSources = albumObj?.optJSONObject("coverArt")?.optJSONArray("sources")
-                        val coverUrl = coverSources?.optJSONObject(0)?.optString("url") ?: pCover
-
-                        if (uri.isNotEmpty()) {
-                            trackList.add(
-                                SpotifyTrack(
-                                    id = uri.substringAfterLast(":"),
-                                    uri = uri,
-                                    name = name,
-                                    artist = artist,
-                                    album = albumName,
-                                    coverUrl = coverUrl,
-                                    durationMs = durationMs,
-                                    isPlayable = isPlayable
-                                )
-                            )
+                    val artistsArray = tData.optJSONObject("artists")?.optJSONArray("items")
+                    val artistNames = mutableListOf<String>()
+                    if (artistsArray != null) {
+                        for (j in 0 until artistsArray.length()) {
+                            val aName = artistsArray.getJSONObject(j).optJSONObject("profile")?.optString("name")
+                            if (!aName.isNullOrEmpty()) artistNames.add(aName)
                         }
                     }
+                    val artist = artistNames.joinToString(", ").ifEmpty { "Artist" }
 
-                    if (trackList.isNotEmpty()) {
-                        return@withContext Result.success(
-                            SpotifyPlaylistDetails(
-                                uri = canonicalUri,
-                                id = cleanId,
-                                name = pName,
-                                ownerName = pOwner,
-                                description = pDesc,
-                                coverUrl = pCover,
-                                trackCount = trackList.size,
-                                tracks = trackList
+                    val albumObj = tData.optJSONObject("albumOfTrack")
+                    val albumName = albumObj?.optString("name", "Album") ?: "Album"
+                    val coverSources = albumObj?.optJSONObject("coverArt")?.optJSONArray("sources")
+                    val coverUrl = coverSources?.optJSONObject(0)?.optString("url") ?: pCover
+
+                    if (uri.isNotEmpty()) {
+                        trackList.add(
+                            SpotifyTrack(
+                                id = uri.substringAfterLast(":"),
+                                uri = uri,
+                                name = name,
+                                artist = artist,
+                                album = albumName,
+                                coverUrl = coverUrl,
+                                durationMs = durationMs,
+                                isPlayable = isPlayable
                             )
                         )
                     }
                 }
+
+                if (items.length() < pageLimit) break
+                offset += pageLimit
+
+                // Safety stop so a server-side anomaly can't loop forever.
+                if (offset >= 10000) {
+                    Log.w(TAG, "Playlist pagination safety stop at offset=$offset for $canonicalUri")
+                    break
+                }
+            }
+
+            if (firstPageOk && trackList.isNotEmpty()) {
+                return@withContext Result.success(
+                    SpotifyPlaylistDetails(
+                        uri = canonicalUri,
+                        id = cleanId,
+                        name = pName,
+                        ownerName = pOwner,
+                        description = pDesc,
+                        coverUrl = pCover,
+                        trackCount = trackList.size,
+                        tracks = trackList
+                    )
+                )
             }
         } catch (e: Exception) {
             Log.w(TAG, "Pathfinder playlist fetch failed, trying Web API fallback", e)
