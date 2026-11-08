@@ -203,7 +203,7 @@ fun SimpLibraryScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 180.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // ── TOP HEADER BAR (Spotui style) ────────────────────────
@@ -215,10 +215,10 @@ fun SimpLibraryScreen(
                         .padding(top = 4.dp, bottom = 8.dp)
                 ) {
                     Text(
-                        text = "Your Library",
+                        text = "Library",
+                        style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 22.sp,
                         modifier = Modifier.weight(1f),
                     )
                     // Search icon
@@ -255,10 +255,10 @@ fun SimpLibraryScreen(
                     // Account avatar
                     Box(
                         modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable { onOpenSettings() },
+                            .clickable(onClickLabel = "Open settings") { onOpenSettings() },
                         contentAlignment = Alignment.Center
                     ) {
                         if (!userProfile?.avatarUrl.isNullOrEmpty()) {
@@ -266,7 +266,7 @@ fun SimpLibraryScreen(
                                 model = userProfile!!.avatarUrl,
                                 contentDescription = "Profile",
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                modifier = Modifier.fillMaxSize()
                             )
                         } else {
                             Icon(Icons.Rounded.Person, contentDescription = "Account", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))

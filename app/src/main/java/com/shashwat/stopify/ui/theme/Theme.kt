@@ -20,37 +20,37 @@ enum class ThemeColorMode(val label: String) {
     LIGHT("Light Mode")
 }
 
-// ── LUXURY PREMIUM ACOUSTIC ORANGE ────────────────────────────────────
-val PremiumOrange = Color(0xFFE4F55A) // Citron signal accent // High-end Sunset Amber Orange
+// ── "OXIDE" PALETTE: deep teal-black ground, coral signal, sand secondary ──
+val PremiumOrange = Color(0xFFFF6F61) // primary signal coral
 
 val PremiumOrangeDarkScheme = darkColorScheme(
-    primary = Color(0xFFE4F55A), onPrimary = Color(0xFF1A2000),
-    primaryContainer = Color(0xFF3A4500), onPrimaryContainer = Color(0xFFF1FF9E),
-    secondary = Color(0xFF8FD3E8), onSecondary = Color(0xFF00313D),
-    secondaryContainer = Color(0xFF1A3A46), onSecondaryContainer = Color(0xFFCDEFFA),
-    tertiary = Color(0xFFFF8F7A), onTertiary = Color(0xFF3F0D02),
-    surface = Color(0xFF0D1117), onSurface = Color(0xFFEDEBE4),
-    surfaceVariant = Color(0xFF1A212B), onSurfaceVariant = Color(0xFFADB5BF),
-    surfaceContainerLowest = Color(0xFF080B10), surfaceContainerLow = Color(0xFF111720),
-    surfaceContainer = Color(0xFF161D27), surfaceContainerHigh = Color(0xFF1E2733),
-    surfaceContainerHighest = Color(0xFF28323F),
-    background = Color(0xFF0A0E13), onBackground = Color(0xFFEDEBE4),
-    outline = Color(0xFF5B6674), outlineVariant = Color(0xFF28313D)
+    primary = Color(0xFFFF6F61), onPrimary = Color(0xFF3A0A05),
+    primaryContainer = Color(0xFF5C1F17), onPrimaryContainer = Color(0xFFFFDAD4),
+    secondary = Color(0xFFE9C46A), onSecondary = Color(0xFF2E2300),
+    secondaryContainer = Color(0xFF45380F), onSecondaryContainer = Color(0xFFFFEDB8),
+    tertiary = Color(0xFF7FD6C2), onTertiary = Color(0xFF00382F),
+    surface = Color(0xFF0F1718), onSurface = Color(0xFFE8EEEC),
+    surfaceVariant = Color(0xFF1A2829), onSurfaceVariant = Color(0xFF9FB0AE),
+    surfaceContainerLowest = Color(0xFF070D0E), surfaceContainerLow = Color(0xFF0D1516),
+    surfaceContainer = Color(0xFF142021), surfaceContainerHigh = Color(0xFF1B2A2C),
+    surfaceContainerHighest = Color(0xFF263638),
+    background = Color(0xFF0A1112), onBackground = Color(0xFFE8EEEC),
+    outline = Color(0xFF5E7476), outlineVariant = Color(0xFF223335)
 )
 
 val PremiumOrangeLightScheme = lightColorScheme(
-    primary = Color(0xFF4F5F00), onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE4F55A), onPrimaryContainer = Color(0xFF1A2000),
-    secondary = Color(0xFF1F6479), onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFCDEFFA), onSecondaryContainer = Color(0xFF001F28),
-    tertiary = Color(0xFFB5361F), onTertiary = Color(0xFFFFFFFF),
-    surface = Color(0xFFF6F5F0), onSurface = Color(0xFF14181E),
-    surfaceVariant = Color(0xFFE6E8E3), onSurfaceVariant = Color(0xFF454D57),
-    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF0EFE9),
-    surfaceContainer = Color(0xFFEAE9E2), surfaceContainerHigh = Color(0xFFE2E1DA),
-    surfaceContainerHighest = Color(0xFFD9D8D0),
-    background = Color(0xFFF6F5F0), onBackground = Color(0xFF14181E),
-    outline = Color(0xFF6C7580), outlineVariant = Color(0xFFCBCDC6)
+    primary = Color(0xFFB8321F), onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFFFDAD4), onPrimaryContainer = Color(0xFF3A0A05),
+    secondary = Color(0xFF7A5C00), onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFFFEDB8), onSecondaryContainer = Color(0xFF261A00),
+    tertiary = Color(0xFF00695A), onTertiary = Color(0xFFFFFFFF),
+    surface = Color(0xFFF2F4F1), onSurface = Color(0xFF101616),
+    surfaceVariant = Color(0xFFE1E7E4), onSurfaceVariant = Color(0xFF3F4D4C),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFEBEFEC),
+    surfaceContainer = Color(0xFFE4E9E6), surfaceContainerHigh = Color(0xFFDCE2DF),
+    surfaceContainerHighest = Color(0xFFD2D9D6),
+    background = Color(0xFFF2F4F1), onBackground = Color(0xFF101616),
+    outline = Color(0xFF627270), outlineVariant = Color(0xFFC3CCC9)
 )
 
 // ── MONOCHROME SCHEMES ────────────────────────────────────────────────

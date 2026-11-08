@@ -148,7 +148,7 @@ fun SimpArtistScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 120.dp)
+            contentPadding = PaddingValues(bottom = 180.dp)
         ) {
             // Top App Bar
             item {

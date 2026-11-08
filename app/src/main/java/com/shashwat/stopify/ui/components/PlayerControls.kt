@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.CircularProgressIndicator
@@ -88,15 +89,15 @@ fun SimpPlayerControlLayout(
             Box(
                 modifier = Modifier
                     .size(bigIcon.second)
-                    .clip(CircleShape)
-                    .background(contentColor)
+                    .clip(RoundedCornerShape(if (isSmallSize) 14.dp else 30.dp))
+                    .background(MaterialTheme.colorScheme.primary)
                     .clickable { onTogglePlayPause() },
                 contentAlignment = Alignment.Center
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(if (isSmallSize) 22.dp else 34.dp),
-                        color = MaterialTheme.colorScheme.surface,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 3.dp
                     )
                 } else {
@@ -104,7 +105,7 @@ fun SimpPlayerControlLayout(
                         Icon(
                             imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = if (playing) "Pause" else "Play",
-                            tint = MaterialTheme.colorScheme.surface,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(if (playing) 38.dp else 42.dp)
                         )
                     }

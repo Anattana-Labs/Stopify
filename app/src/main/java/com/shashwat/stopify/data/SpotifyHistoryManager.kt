@@ -8,6 +8,59 @@ import java.util.Collections
 class SpotifyHistoryManager {
     companion object {
         private const val TAG = "SpotifyHistoryManager"
+        private const val KEY = "stopify_history_v3"
+        private const val MAX = 100
+
+        /** Puts [track] at the front, removing any older entry of the same track. */
+        fun withPlay(current: List<SpotifyTrack>, track: SpotifyTrack): List<SpotifyTrack> =
+            (listOf(track) + current.filter { it.uri != track.uri }).take(MAX)
+
+        /**
+         * Local plays stay in front of Spotify's recents (they are newer than the last server sync);
+         * Spotify's list fills in plays made on other devices. Duplicates are collapsed by uri.
+         */
+        fun mergeWithRemote(local: List<SpotifyTrack>, remote: List<SpotifyTrack>): List<SpotifyTrack> {
+            val remoteUris = remote.map { it.uri }.toSet()
+            // Local entries that the server already knows about take the server's order.
+            val localOnly = local.takeWhile { it.uri !in remoteUris }
+            return (localOnly + remote + local).distinctBy { it.uri }.take(MAX)
+        }
+
+        fun saveLocal(prefs: android.content.SharedPreferences, list: List<SpotifyTrack>) {
+            try {
+                val arr = JSONArray()
+                list.take(MAX).forEach { t ->
+                    arr.put(JSONObject().apply {
+                        put("id", t.id); put("uri", t.uri); put("name", t.name)
+                        put("artist", t.artist); put("album", t.album)
+                        put("cover", t.coverUrl ?: ""); put("dur", t.durationMs)
+                        put("albumUri", t.albumUri ?: ""); put("artistUri", t.artistUri ?: "")
+                    })
+                }
+                prefs.edit().putString(KEY, arr.toString()).apply()
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not save history", e)
+            }
+        }
+
+        fun loadLocal(prefs: android.content.SharedPreferences): List<SpotifyTrack> {
+            return try {
+                val arr = JSONArray(prefs.getString(KEY, "[]") ?: "[]")
+                (0 until arr.length()).map { i ->
+                    val o = arr.getJSONObject(i)
+                    SpotifyTrack(
+                        id = o.optString("id"), uri = o.optString("uri"), name = o.optString("name"),
+                        artist = o.optString("artist"), album = o.optString("album"),
+                        coverUrl = o.optString("cover").ifEmpty { null },
+                        durationMs = o.optLong("dur"),
+                        albumUri = o.optString("albumUri").ifEmpty { null },
+                        artistUri = o.optString("artistUri").ifEmpty { null }
+                    )
+                }.filter { it.uri.isNotEmpty() }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
     }
 
     private val _playbackHistory = Collections.synchronizedList(mutableListOf<SpotifyTrack>())

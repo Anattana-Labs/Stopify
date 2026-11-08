@@ -37,10 +37,10 @@ import kotlinx.coroutines.launch
 private fun SettingsSectionHeader(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.secondary,
         fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(start = 8.dp, top = 20.dp, bottom = 8.dp)
+        modifier = Modifier.padding(start = 8.dp, top = 28.dp, bottom = 8.dp)
     )
 }
 
@@ -104,7 +104,7 @@ fun SimpSettingsScreen(
                 title = {
                     Text(
                         text = "Settings",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
                 },

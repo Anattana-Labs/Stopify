@@ -5,19 +5,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
-/** Radius scale: 6 chips/thumbs, 14 tiles, 22 sheets. Cards use a "notched" corner (see CardShape). */
+/** Radius scale: 8 thumbs, 12 tiles, 20 sheets, 28 dock. */
 val M3Shapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(14.dp),
-    large = RoundedCornerShape(22.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(20.dp),
     extraLarge = RoundedCornerShape(28.dp)
 )
 
-val ShapeLargeIncreased = RoundedCornerShape(14.dp)
-val ShapeExtraLargeIncreased = RoundedCornerShape(22.dp)
+val ShapeLargeIncreased = RoundedCornerShape(12.dp)
+val ShapeExtraLargeIncreased = RoundedCornerShape(20.dp)
 val ShapeExtraExtraLarge = RoundedCornerShape(28.dp)
 val ShapeFull = CircleShape
 
-/** Signature artwork shape: soft corners with one tight corner, like a sleeve edge. */
-val CardShape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomEnd = 22.dp, bottomStart = 4.dp)
+/** Artwork shape: even 12dp corners; the play badge sits on a cut corner. */
+val CardShape = RoundedCornerShape(12.dp)
+
+/** Dock: rounded top edge only, it is fused to the screen bottom. */
+val DockShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)

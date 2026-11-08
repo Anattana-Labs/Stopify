@@ -50,6 +50,9 @@ object SpotifyTokenManager {
         onComplete: ((String?) -> Unit)? = null
     ) {
         mainHandler.post {
+            // Token generation is always silent: never surface a blocking state to the user.
+            @Suppress("NAME_SHADOWING")
+            val showLoadingModal = false
             if (onComplete != null) {
                 pendingCallbacks.add(onComplete)
             }
@@ -303,7 +306,7 @@ object SpotifyTokenManager {
 
     suspend fun awaitTokenRefresh(context: Context, client: SpotifyWebClient): String? {
         val deferred = CompletableDeferred<String?>()
-        refreshAccessTokenInBackground(context, client, showLoadingModal = true) { token ->
+        refreshAccessTokenInBackground(context, client, showLoadingModal = false) { token ->
             deferred.complete(token)
         }
         return withTimeoutOrNull(20000) { deferred.await() }

@@ -2,6 +2,7 @@ package com.shashwat.stopify.ui.player
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -271,13 +272,8 @@ fun SimpFullPlayer(
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
                         .aspectRatio(1f)
-                        .shadow(
-                            elevation = if (activeCanvasUrl != null) 0.dp else 6.dp,
-                            shape = RoundedCornerShape(8.dp),
-                            spotColor = Color.Black.copy(alpha = 0.5f),
-                            ambientColor = Color.Transparent
-                        )
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(28.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
                         .background(if (activeCanvasUrl != null) Color.Transparent else Color.DarkGray.copy(alpha = 0.3f)),
                     contentAlignment = Alignment.Center
                 ) {
