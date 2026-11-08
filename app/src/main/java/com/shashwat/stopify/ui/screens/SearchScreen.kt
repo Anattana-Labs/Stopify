@@ -8,6 +8,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import com.shashwat.stopify.ui.components.PrismChip
+import com.shashwat.stopify.ui.components.ScreenHeader
+import com.shashwat.stopify.ui.theme.PrismTokens
+import com.shashwat.stopify.ui.theme.glassFill
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
@@ -43,14 +48,14 @@ enum class SearchFilter(val label: String) {
 data class BrowseCategory(val title: String, val gradientColors: List<Color>)
 
 private val BrowseCategories = listOf(
-    BrowseCategory("Pop", listOf(Color(0xFF8D67AB), Color(0xFFE8115B))),
-    BrowseCategory("Hip-Hop", listOf(Color(0xFFBA5D07), Color(0xFFBC5900))),
-    BrowseCategory("Rock", listOf(Color(0xFFE91429), Color(0xFF8B0000))),
-    BrowseCategory("Indie", listOf(Color(0xFF608108), Color(0xFF388E3C))),
-    BrowseCategory("Chill", listOf(Color(0xFF477D95), Color(0xFF1976D2))),
-    BrowseCategory("Dance / Electronic", listOf(Color(0xFF006450), Color(0xFF1ED760))),
-    BrowseCategory("Workout", listOf(Color(0xFF7358FF), Color(0xFF4A148C))),
-    BrowseCategory("Focus", listOf(Color(0xFF503750), Color(0xFF311B92)))
+    BrowseCategory("Pop", listOf(Color(0xFFB52A40), Color(0xFF76182B))),
+    BrowseCategory("Hip-Hop", listOf(Color(0xFFB3560E), Color(0xFF78380A))),
+    BrowseCategory("Rock", listOf(Color(0xFF8A6A00), Color(0xFF5C4600))),
+    BrowseCategory("Indie", listOf(Color(0xFF12875A), Color(0xFF0B5A3C))),
+    BrowseCategory("Chill", listOf(Color(0xFF1673B0), Color(0xFF0D4B78))),
+    BrowseCategory("Dance / Electronic", listOf(Color(0xFF0E8A8A), Color(0xFF075A66))),
+    BrowseCategory("Workout", listOf(Color(0xFF5B3FD6), Color(0xFF3A2699))),
+    BrowseCategory("Focus", listOf(Color(0xFF7A3FB5), Color(0xFF4C2377)))
 )
 
 @Composable
@@ -85,23 +90,15 @@ fun SimpSearchScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = PrismTokens.Space.gutter)
         ) {
-            Spacer(modifier = Modifier.height(10.dp))
+            ScreenHeader(title = "Search", start = 0.dp, end = 0.dp)
 
-            Text(
-                text = "Search",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Search text field
             OutlinedTextField(
@@ -129,12 +126,13 @@ fun SimpSearchScreen(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
+                shape = CircleShape,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedContainerColor = glassFill(2f),
+                    unfocusedContainerColor = glassFill(1.3f),
+                    focusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    cursorColor = MaterialTheme.colorScheme.primary,
                     focusedTextColor = MaterialTheme.colorScheme.onSurface,
                     unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                 ),
@@ -151,22 +149,11 @@ fun SimpSearchScreen(
                         .padding(vertical = 10.dp)
                 ) {
                     items(SearchFilter.values()) { filter ->
-                        val isSelected = selectedFilter == filter
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) searchPrimary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable { selectedFilter = filter }
-                        ) {
-                            Text(
-                                text = filter.label,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-                            )
-                        }
+                        PrismChip(
+                            selected = selectedFilter == filter,
+                            label = filter.label,
+                            onClick = { selectedFilter = filter }
+                        )
                     }
                 }
             } else {
@@ -190,8 +177,7 @@ fun SimpSearchScreen(
                         Text(
                             text = "Browse all",
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.padding(top = 8.dp)
                         )
                     }
@@ -208,7 +194,7 @@ fun SimpSearchScreen(
                                         modifier = Modifier
                                             .weight(1f)
                                             .height(76.dp)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(RoundedCornerShape(16.dp))
                                             .background(Brush.linearGradient(cat1.gradientColors))
                                             .clickable {
                                                 onQueryChange(cat1.title)
@@ -220,7 +206,6 @@ fun SimpSearchScreen(
                                         Text(
                                             text = cat1.title,
                                             style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
                                             color = Color.White
                                         )
                                     }
@@ -231,7 +216,7 @@ fun SimpSearchScreen(
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .height(76.dp)
-                                                .clip(RoundedCornerShape(8.dp))
+                                                .clip(RoundedCornerShape(16.dp))
                                                 .background(Brush.linearGradient(cat2.gradientColors))
                                                 .clickable {
                                                     onQueryChange(cat2.title)
@@ -243,7 +228,6 @@ fun SimpSearchScreen(
                                             Text(
                                                 text = cat2.title,
                                                 style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold,
                                                 color = Color.White
                                             )
                                         }
@@ -267,7 +251,6 @@ fun SimpSearchScreen(
                             Text(
                                 text = "Artists",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Spacer(modifier = Modifier.height(10.dp))
@@ -288,7 +271,6 @@ fun SimpSearchScreen(
                             Text(
                                 text = "Albums",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Spacer(modifier = Modifier.height(10.dp))
@@ -309,7 +291,6 @@ fun SimpSearchScreen(
                             Text(
                                 text = "Playlists",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Spacer(modifier = Modifier.height(10.dp))
@@ -330,7 +311,6 @@ fun SimpSearchScreen(
                             Text(
                                 text = "Songs",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Spacer(modifier = Modifier.height(10.dp))

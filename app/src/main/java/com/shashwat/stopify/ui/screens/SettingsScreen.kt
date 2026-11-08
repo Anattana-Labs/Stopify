@@ -3,6 +3,8 @@ package com.shashwat.stopify.ui.screens
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -30,18 +32,24 @@ import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyUserProfile
 import com.shashwat.stopify.data.SpotifyWebClient
 import com.shashwat.stopify.ui.theme.AppThemeMode
+import com.shashwat.stopify.ui.theme.PaneShape
+import com.shashwat.stopify.ui.theme.PrismTokens
+import com.shashwat.stopify.ui.theme.pane
+import com.shashwat.stopify.ui.theme.glassFill
+import com.shashwat.stopify.ui.theme.glassEdge
+import com.shashwat.stopify.ui.components.Eyebrow
+import com.shashwat.stopify.ui.components.Hairline
+import com.shashwat.stopify.ui.components.PrismOutlinedButton
+import com.shashwat.stopify.ui.components.PrismSwitch
+import com.shashwat.stopify.ui.components.PrismTonalButton
+import com.shashwat.stopify.ui.components.Segmented
+import com.shashwat.stopify.ui.components.SubPageHeader
 import com.shashwat.stopify.ui.theme.ThemeColorMode
 import kotlinx.coroutines.launch
 
 @Composable
 private fun SettingsSectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.secondary,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(start = 8.dp, top = 28.dp, bottom = 8.dp)
-    )
+    Eyebrow(title, Modifier.padding(start = 12.dp, top = PrismTokens.Space.section, bottom = 10.dp))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,27 +108,7 @@ fun SimpSettingsScreen(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Settings",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                )
-            )
+            SubPageHeader(title = "Settings", onBack = onBack)
         }
     ) { innerPadding ->
         Column(
@@ -133,17 +121,12 @@ fun SimpSettingsScreen(
         ) {
             // ── 1. ACCOUNT ──────────────────────────────────────────
             SettingsSectionHeader("Account")
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().pane(PaneShape).padding(vertical = 4.dp)) {
                 ListItem(
                     headlineContent = {
                         Text(
                             text = userProfile?.displayName ?: "Spotify User",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -189,19 +172,22 @@ fun SimpSettingsScreen(
                     },
                     trailingContent = {
                         if (!userProfile?.product.isNullOrBlank()) {
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(userProfile!!.product) }
+                            Text(
+                                text = userProfile!!.product,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(glassFill(1.6f))
+                                    .border(1.dp, glassEdge(), CircleShape)
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
 
                 Row(
                     modifier = Modifier
@@ -209,7 +195,7 @@ fun SimpSettingsScreen(
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FilledTonalButton(
+                    PrismTonalButton(
                         onClick = onOpenCookieManager,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -223,15 +209,13 @@ fun SimpSettingsScreen(
                     }
 
                     if (userProfile != null || !client.customAccessToken.isNullOrEmpty()) {
-                        OutlinedButton(
+                        PrismOutlinedButton(
                             onClick = {
                                 prefs.edit().remove("spotify_cookies").remove("spotify_access_token").apply()
                                 client.updateCookies("")
                                 tokenDisplay = null
                             },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
+                            contentColor = MaterialTheme.colorScheme.error
                         ) {
                             Text("Log out")
                         }
@@ -241,17 +225,12 @@ fun SimpSettingsScreen(
 
             // ── 2. SESSION & TOKEN ──────────────────────────────────
             SettingsSectionHeader("Session & Token")
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().pane(PaneShape).padding(vertical = 4.dp)) {
                 ListItem(
                     headlineContent = {
                         Text(
                             text = "Bearer Access Token",
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
                         )
                     },
                     supportingContent = {
@@ -276,7 +255,6 @@ fun SimpSettingsScreen(
                             Text(
                                 text = if (!tokenDisplay.isNullOrEmpty()) "ACTIVE" else "IDLE",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
                                 color = if (!tokenDisplay.isNullOrEmpty()) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
@@ -294,10 +272,7 @@ fun SimpSettingsScreen(
                     )
                 }
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
 
                 Row(
                     modifier = Modifier
@@ -305,7 +280,7 @@ fun SimpSettingsScreen(
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FilledTonalButton(
+                    PrismTonalButton(
                         onClick = {
                             isRefreshingToken = true
                             tokenStatusMsg = "Refreshing in background..."
@@ -331,7 +306,7 @@ fun SimpSettingsScreen(
                         Text(if (isRefreshingToken) "Refreshing…" else "Refresh Token")
                     }
 
-                    OutlinedButton(
+                    PrismOutlinedButton(
                         onClick = onOpenCookieManager,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -342,17 +317,12 @@ fun SimpSettingsScreen(
 
             // ── 3. PLAYBACK & AUDIO ─────────────────────────────────
             SettingsSectionHeader("Playback & Audio")
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().pane(PaneShape).padding(vertical = 4.dp)) {
                 ListItem(
                     headlineContent = {
                         Text(
                             text = "Normalize Volume",
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
                         )
                     },
                     supportingContent = {
@@ -370,7 +340,7 @@ fun SimpSettingsScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        PrismSwitch(
                             checked = normalizeVolume,
                             onCheckedChange = {
                                 normalizeVolume = it
@@ -381,17 +351,13 @@ fun SimpSettingsScreen(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
 
                 ListItem(
                     headlineContent = {
                         Text(
                             text = "Gapless Playback",
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
                         )
                     },
                     supportingContent = {
@@ -409,7 +375,7 @@ fun SimpSettingsScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        PrismSwitch(
                             checked = gaplessPlayback,
                             onCheckedChange = {
                                 gaplessPlayback = it
@@ -420,17 +386,13 @@ fun SimpSettingsScreen(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
 
                 ListItem(
                     headlineContent = {
                         Text(
                             text = "Canvas",
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
                         )
                     },
                     supportingContent = {
@@ -448,7 +410,7 @@ fun SimpSettingsScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        PrismSwitch(
                             checked = canvasToggleLocal,
                             onCheckedChange = {
                                 canvasToggleLocal = it
@@ -463,15 +425,10 @@ fun SimpSettingsScreen(
 
             // ── 4. APPEARANCE & DISPLAY ─────────────────────────────
             SettingsSectionHeader("Appearance & Display")
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().pane(PaneShape).padding(vertical = 4.dp)) {
                 Text(
                     text = "Display Mode",
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
                 )
 
@@ -480,71 +437,46 @@ fun SimpSettingsScreen(
                     "Dark" to ThemeColorMode.DARK,
                     "Light" to ThemeColorMode.LIGHT
                 )
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    colorModes.forEachIndexed { index, (label, mode) ->
-                        SegmentedButton(
-                            selected = currentColorMode == mode,
-                            onClick = { onColorModeChange(mode) },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = colorModes.size)
-                        ) {
-                            Text(label)
-                        }
-                    }
-                }
+                Segmented(
+                    options = colorModes.map { it.second },
+                    selected = currentColorMode,
+                    label = { m -> colorModes.first { it.second == m }.first },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    onSelect = onColorModeChange
+                )
 
                 Spacer(Modifier.height(8.dp))
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
 
                 Text(
                     text = "Color Palette",
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
                 )
 
                 val themeModes = listOf(
-                    "Dynamic" to AppThemeMode.DYNAMIC,
-                    "Slate" to AppThemeMode.MONOCHROME,
+                    "Prism" to AppThemeMode.DYNAMIC,
+                    "White light" to AppThemeMode.MONOCHROME,
                     "AMOLED" to AppThemeMode.AMOLED
                 )
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    themeModes.forEachIndexed { index, (label, mode) ->
-                        SegmentedButton(
-                            selected = currentThemeMode == mode,
-                            onClick = { onThemeChange(mode) },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = themeModes.size)
-                        ) {
-                            Text(label)
-                        }
-                    }
-                }
+                Segmented(
+                    options = themeModes.map { it.second },
+                    selected = currentThemeMode,
+                    label = { m -> themeModes.first { it.second == m }.first },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    onSelect = onThemeChange
+                )
                 Spacer(Modifier.height(16.dp))
             }
 
             // ── 5. HISTORY & SYNC ───────────────────────────────────
             SettingsSectionHeader("History & Sync")
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().pane(PaneShape).padding(vertical = 4.dp)) {
                 ListItem(
                     headlineContent = {
                         Text(
                             text = "Sync Played Tracks",
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
                         )
                     },
                     supportingContent = {
@@ -562,7 +494,7 @@ fun SimpSettingsScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        PrismSwitch(
                             checked = syncSpotifyHistory,
                             onCheckedChange = {
                                 syncSpotifyHistory = it
@@ -573,17 +505,13 @@ fun SimpSettingsScreen(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
 
                 ListItem(
                     headlineContent = {
                         Text(
                             text = "Spotify Account Recents",
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
                         )
                     },
                     supportingContent = {
@@ -646,7 +574,6 @@ fun SimpSettingsScreen(
                                         Text(
                                             text = track.name,
                                             style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -692,11 +619,7 @@ fun SimpSettingsScreen(
 
             // ── 6. ABOUT & ENGINE ───────────────────────────────────
             SettingsSectionHeader("About & Engine")
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().pane(PaneShape).padding(vertical = 4.dp)) {
                 ListItem(
                     headlineContent = { Text("App Version", style = MaterialTheme.typography.bodyMedium) },
                     trailingContent = {
@@ -709,10 +632,7 @@ fun SimpSettingsScreen(
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
                 ListItem(
                     headlineContent = { Text("DRM Engine", style = MaterialTheme.typography.bodyMedium) },
                     trailingContent = {
@@ -725,10 +645,7 @@ fun SimpSettingsScreen(
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
                 ListItem(
                     headlineContent = { Text("Audio Engine", style = MaterialTheme.typography.bodyMedium) },
                     trailingContent = {
@@ -741,10 +658,7 @@ fun SimpSettingsScreen(
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
                 ListItem(
                     headlineContent = { Text("Connect Engine", style = MaterialTheme.typography.bodyMedium) },
                     trailingContent = {

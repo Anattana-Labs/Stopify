@@ -43,16 +43,15 @@ fun SimpSquareCard(
     }
     Column(
         modifier = modifier
-            .width(148.dp)
+            .width(152.dp)
             .clip(CardShape)
             .clickable { onClick() }
     ) {
         Box(
             modifier = Modifier
-                .size(148.dp)
+                .size(152.dp)
                 .clip(CardShape)
                 .background(scheme.surfaceContainerHigh)
-                .border(1.dp, scheme.outlineVariant, CardShape)
         ) {
             if (!item.coverUrl.isNullOrEmpty()) {
                 AsyncImage(
@@ -70,11 +69,10 @@ fun SimpSquareCard(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             text = item.name,
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
             color = scheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -109,7 +107,6 @@ fun SimpArtistCircleCard(
                 .size(96.dp)
                 .clip(CircleShape)
                 .background(scheme.surfaceContainerHigh)
-                .border(1.dp, scheme.outlineVariant, CircleShape)
         ) {
             if (!item.coverUrl.isNullOrEmpty()) {
                 AsyncImage(
@@ -127,11 +124,10 @@ fun SimpArtistCircleCard(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             text = item.name,
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
             color = scheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -24,6 +24,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.Role
+import com.shashwat.stopify.ui.components.RoundAction
+import com.shashwat.stopify.ui.components.ScreenHeader
+import com.shashwat.stopify.ui.components.SectionHeader
+import com.shashwat.stopify.ui.components.SpectrumLine
+import com.shashwat.stopify.ui.theme.PaneShape
+import com.shashwat.stopify.ui.theme.PrismTokens
+import com.shashwat.stopify.ui.theme.glassEdge
+import com.shashwat.stopify.ui.theme.ink3
+import com.shashwat.stopify.ui.theme.pane
 import com.shashwat.stopify.data.SpotifyHomeData
 import com.shashwat.stopify.data.SpotifyItemType
 import com.shashwat.stopify.data.SpotifyMediaItem
@@ -66,46 +77,25 @@ fun SimpHomeScreen(
         modifier = modifier
             .fillMaxSize()
             .background(scheme.background),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 180.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp)
+        contentPadding = PaddingValues(start = PrismTokens.Space.gutter, end = PrismTokens.Space.gutter, bottom = 200.dp),
+        verticalArrangement = Arrangement.spacedBy(PrismTokens.Space.section)
     ) {
-        // Masthead
+        // Masthead: Prism's page title, light and large, with round glass actions
         item(key = "masthead") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(top = 20.dp),
-                verticalAlignment = Alignment.Top
+            ScreenHeader(
+                title = if (firstName.isNotEmpty()) firstName else "Your music",
+                subtitle = greeting,
+                start = 0.dp,
+                end = 0.dp
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = greeting,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = if (firstName.isNotEmpty()) firstName else "Your music",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = scheme.onBackground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                IconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        Icons.Rounded.Refresh,
-                        contentDescription = "Refresh",
-                        tint = scheme.onSurfaceVariant
-                    )
-                }
+                RoundAction(Icons.Rounded.Refresh, "Refresh", onClick = onRefresh)
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .size(44.dp)
+                        .clip(CircleShape)
                         .background(scheme.primaryContainer)
-                        .clickable(onClickLabel = "Open settings") { onOpenSettings() },
+                        .border(1.dp, glassEdge(), CircleShape)
+                        .clickable(role = Role.Button, onClickLabel = "Open settings") { onOpenSettings() },
                     contentAlignment = Alignment.Center
                 ) {
                     if (!userProfile?.avatarUrl.isNullOrEmpty()) {
@@ -119,7 +109,6 @@ fun SimpHomeScreen(
                         Text(
                             text = (userProfile?.displayName?.firstOrNull() ?: 'S').uppercase(),
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
                             color = scheme.onPrimaryContainer
                         )
                     }
@@ -138,23 +127,8 @@ fun SimpHomeScreen(
         if (recentlyPlayed.size > 1) {
             item(key = "ledger") {
                 Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Recently played",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = scheme.onBackground,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = "${recentlyPlayed.size} songs",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
+                    SectionHeader(title = "Recently played", strapline = "${recentlyPlayed.size} songs")
+                    Spacer(Modifier.height(4.dp))
                     recentlyPlayed.drop(1).take(5).forEachIndexed { i, t ->
                         LedgerRow(index = i + 1, track = t, onClick = { onPlayTrack(t) })
                     }
@@ -168,19 +142,8 @@ fun SimpHomeScreen(
                 val isArtistShelf = section.items.isNotEmpty() &&
                         section.items.all { it.type == SpotifyItemType.ARTIST || it.uri.contains(":artist:") }
                 Column {
-                    Text(
-                        text = section.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = scheme.onBackground
-                    )
-                    if (!section.subtitle.isNullOrBlank()) {
-                        Text(
-                            text = section.subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
+                    SectionHeader(title = section.title, strapline = section.subtitle?.takeIf { it.isNotBlank() })
+                    Spacer(Modifier.height(8.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         items(section.items) { item ->
                             if (isArtistShelf || item.type == SpotifyItemType.ARTIST) {
@@ -208,8 +171,8 @@ fun SimpHomeScreen(
                         items(4) {
                             Box(
                                 Modifier
-                                    .size(148.dp)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .size(152.dp)
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(scheme.surfaceContainer)
                             )
                         }
@@ -226,26 +189,23 @@ private fun ResumeSlab(track: SpotifyTrack, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(scheme.surfaceContainer)
-            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(20.dp))
+            .pane(PaneShape)
             .clickable(onClickLabel = "Play ${track.name}") { onClick() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Cover(url = track.coverUrl, size = 84.dp, radius = 12.dp)
+        Cover(url = track.coverUrl, size = 84.dp, radius = 14.dp)
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Pick up where you left off",
                 style = MaterialTheme.typography.labelMedium,
-                color = scheme.secondary
+                color = scheme.onSurfaceVariant
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = track.name,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
                 color = scheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -257,16 +217,18 @@ private fun ResumeSlab(track: SpotifyTrack, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            Spacer(Modifier.height(8.dp))
+            SpectrumLine(fraction = 1f, modifier = Modifier.width(36.dp), height = 2.dp)
         }
         Spacer(Modifier.width(10.dp))
         Box(
             modifier = Modifier
                 .size(52.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(scheme.primary),
+                .clip(CircleShape)
+                .background(scheme.onSurface),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = scheme.onPrimary, modifier = Modifier.size(30.dp))
+            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = scheme.surface, modifier = Modifier.size(30.dp))
         }
     }
 }
@@ -278,24 +240,23 @@ private fun LedgerRow(index: Int, track: SpotifyTrack, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 60.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClickLabel = "Play ${track.name}") { onClick() }
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = index.toString(),
-            style = MaterialTheme.typography.titleSmall,
-            color = scheme.onSurfaceVariant,
+            style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+            color = scheme.ink3,
             modifier = Modifier.width(28.dp)
         )
-        Cover(url = track.coverUrl, size = 46.dp, radius = 8.dp)
+        Cover(url = track.coverUrl, size = 48.dp, radius = 10.dp)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = track.name,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium,
                 color = scheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

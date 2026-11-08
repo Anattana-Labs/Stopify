@@ -28,6 +28,7 @@ import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.platform.LocalContext
 import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import com.shashwat.stopify.ui.components.RoundAction
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -113,21 +114,11 @@ fun SimpAlbumScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                RoundAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
                 Box(
                     modifier = Modifier
                         .size(240.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(22.dp))
                         .align(Alignment.CenterHorizontally)
                         .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                 )
@@ -167,17 +158,7 @@ fun SimpAlbumScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
+                        RoundAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(
@@ -187,7 +168,7 @@ fun SimpAlbumScreen(
                                 Icon(
                                     imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                     contentDescription = "Favorite",
-                                    tint = if (isLiked) dynamicTint else Color.White,
+                                    tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -208,8 +189,8 @@ fun SimpAlbumScreen(
                             modifier = Modifier
                                 .padding(vertical = 12.dp)
                                 .size(240.dp)
-                                .shadow(24.dp, RoundedCornerShape(16.dp), spotColor = dynamicTint.copy(alpha = 0.45f))
-                                .clip(RoundedCornerShape(16.dp))
+                                .shadow(24.dp, RoundedCornerShape(22.dp), spotColor = dynamicTint.copy(alpha = 0.45f))
+                                .clip(RoundedCornerShape(22.dp))
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                         ) {
                             if (!album.coverUrl.isNullOrEmpty()) {
@@ -227,8 +208,7 @@ fun SimpAlbumScreen(
                         // Album Title
                         Text(
                             text = album.name,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
@@ -242,7 +222,7 @@ fun SimpAlbumScreen(
                             text = album.artist,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
-                            color = dynamicTint,
+                            color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.clickable {
                                 onViewArtist("spotify:artist:${album.artist}", album.artist)
@@ -292,7 +272,7 @@ fun SimpAlbumScreen(
                                     .height(48.dp)
                                     .widthIn(min = 125.dp)
                                     .clip(CircleShape)
-                                    .background(dynamicTint)
+                                    .background(MaterialTheme.colorScheme.onSurface)
                                     .clickable {
                                         album.tracks.firstOrNull()?.let { onPlayTrack(it) }
                                     }
@@ -303,15 +283,14 @@ fun SimpAlbumScreen(
                                     Icon(
                                         imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                         contentDescription = null,
-                                        tint = Color.Black,
+                                        tint = MaterialTheme.colorScheme.surface,
                                         modifier = Modifier.size(24.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = if (isThisPlaying) "Pause" else "Play",
-                                        color = Color.Black,
+                                        color = MaterialTheme.colorScheme.surface,
                                         style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }

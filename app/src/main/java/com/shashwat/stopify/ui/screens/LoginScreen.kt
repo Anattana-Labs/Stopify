@@ -19,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.shashwat.stopify.ui.components.PrismButton
+import com.shashwat.stopify.ui.components.PrismOutlinedButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,7 +74,7 @@ fun LoginScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = Color(0xFF121212)
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
@@ -94,7 +96,7 @@ fun LoginScreen(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF242424))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
@@ -111,7 +113,7 @@ fun LoginScreen(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xFF242424))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                         .padding(3.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -126,7 +128,6 @@ fun LoginScreen(
                         Text(
                             text = "Web",
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
                             color = if (selectedTab == 0) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.75f)
                         )
                     }
@@ -142,7 +143,6 @@ fun LoginScreen(
                         Text(
                             text = "cookies.txt",
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
                             color = if (selectedTab == 1) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.75f)
                         )
                     }
@@ -155,7 +155,7 @@ fun LoginScreen(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF242424))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
@@ -174,7 +174,7 @@ fun LoginScreen(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF242424))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.DeleteOutline,
@@ -239,13 +239,8 @@ fun LoginScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Button(
+                            PrismButton(
                                 onClick = { filePickerLauncher.launch("text/*") },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF282828),
-                                    contentColor = Color.White
-                                ),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Icon(Icons.Rounded.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -253,7 +248,7 @@ fun LoginScreen(
                                 Text("Pick File", style = MaterialTheme.typography.labelMedium)
                             }
 
-                            Button(
+                            PrismButton(
                                 onClick = {
                                     val clip = clipboardManager.getText()?.text
                                     if (!clip.isNullOrEmpty()) {
@@ -262,11 +257,6 @@ fun LoginScreen(
                                         isSuccess = true
                                     }
                                 },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF282828),
-                                    contentColor = Color.White
-                                ),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Icon(Icons.Rounded.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -287,7 +277,7 @@ fun LoginScreen(
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (hasSpDc) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0xFF242424)
+                                color = if (hasSpDc) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -310,7 +300,7 @@ fun LoginScreen(
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (hasBearer) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0xFF242424)
+                                color = if (hasBearer) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -348,9 +338,9 @@ fun LoginScreen(
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = Color(0xFF333333),
-                                focusedContainerColor = Color(0xFF1A1A1A),
-                                unfocusedContainerColor = Color(0xFF1A1A1A),
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White
                             ),
@@ -367,7 +357,7 @@ fun LoginScreen(
 
             // ── FOOTER ──────────────────────────────────────────
             Surface(
-                color = Color(0xFF1A1A1A),
+                color = MaterialTheme.colorScheme.surfaceContainer,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -379,7 +369,7 @@ fun LoginScreen(
                         Text(
                             text = statusMessage,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isSuccess) MaterialTheme.colorScheme.primary else Color(0xFFFF5252),
+                            color = if (isSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
@@ -398,18 +388,17 @@ fun LoginScreen(
                                     modifier = Modifier
                                         .size(8.dp)
                                         .clip(CircleShape)
-                                        .background(if (hasSessionInWeb) MaterialTheme.colorScheme.primary else Color(0xFFE8622C))
+                                        .background(if (hasSessionInWeb) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary)
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = if (hasSessionInWeb) "Session Active" else "Log in to Spotify",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
                                     color = Color.White
                                 )
                             }
 
-                            Button(
+                            PrismButton(
                                 onClick = {
                                     val cm = CookieManager.getInstance()
                                     val c1 = cm.getCookie("https://open.spotify.com") ?: ""
@@ -429,11 +418,6 @@ fun LoginScreen(
                                         isSuccess = false
                                     }
                                 },
-                                shape = RoundedCornerShape(24.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
                             ) {
                                 Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
@@ -445,7 +429,7 @@ fun LoginScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            OutlinedButton(
+                            PrismOutlinedButton(
                                 onClick = {
                                     val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
                                     prefs.edit().remove("spotify_cookies").remove("spotify_access_token").apply()
@@ -455,14 +439,12 @@ fun LoginScreen(
                                     statusMessage = "Credentials reset to defaults."
                                     isSuccess = true
                                 },
-                                shape = RoundedCornerShape(24.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF5252)),
                                 modifier = Modifier.weight(0.4f)
                             ) {
                                 Text("Reset", style = MaterialTheme.typography.labelMedium)
                             }
 
-                            Button(
+                            PrismButton(
                                 onClick = {
                                     if (cookieInputText.isNotBlank()) {
                                         val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
@@ -508,11 +490,6 @@ fun LoginScreen(
                                         isSuccess = false
                                     }
                                 },
-                                shape = RoundedCornerShape(24.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                ),
                                 modifier = Modifier.weight(0.6f)
                             ) {
                                 Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))

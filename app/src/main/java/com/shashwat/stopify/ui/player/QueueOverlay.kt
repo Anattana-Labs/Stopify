@@ -84,7 +84,6 @@ fun QueueOverlayContent(
                     Text(
                         text = "Play Queue",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
@@ -99,7 +98,6 @@ fun QueueOverlayContent(
                         Text(
                             text = "Clear",
                             color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Bold
                         )
                     }
                 } else {
@@ -118,7 +116,6 @@ fun QueueOverlayContent(
                     Text(
                         text = "NOW PLAYING",
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
                         letterSpacing = 1.2.sp,
                         modifier = Modifier.padding(bottom = 6.dp)
@@ -166,7 +163,6 @@ fun QueueOverlayContent(
                                 Text(
                                     text = currentTrack.name,
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -193,7 +189,6 @@ fun QueueOverlayContent(
                     Text(
                         text = "NEXT IN QUEUE",
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         letterSpacing = 1.2.sp,
                         modifier = Modifier.padding(bottom = 6.dp)
@@ -221,7 +216,6 @@ fun QueueOverlayContent(
                                 Text(
                                     text = "Queue is empty",
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
@@ -260,7 +254,6 @@ fun QueueOverlayContent(
                                     Text(
                                         text = "${index + 1}",
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.width(22.dp)
                                     )
@@ -295,7 +288,6 @@ fun QueueOverlayContent(
                                         Text(
                                             text = itemTrack.name,
                                             style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurface,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis

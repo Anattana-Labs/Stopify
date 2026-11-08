@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.shashwat.stopify.ui.theme.spectrumRing
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.StopifyDownloadManager
 
@@ -45,7 +46,7 @@ fun SimpTrackItem(
 
     val backgroundColor by animateColorAsState(
         targetValue = if (isCurrentTrack) {
-            MaterialTheme.colorScheme.surfaceContainerHigh
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
         } else {
             Color.Transparent
         },
@@ -55,7 +56,7 @@ fun SimpTrackItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(backgroundColor)
             .clickable { onClick() }
             .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -67,7 +68,7 @@ fun SimpTrackItem(
                 modifier = Modifier.size(24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                M3EqualizerAnimation(color = MaterialTheme.colorScheme.primary)
+                M3EqualizerAnimation(color = MaterialTheme.colorScheme.onSurface)
             }
             Spacer(modifier = Modifier.width(8.dp))
         } else if (index != null) {
@@ -78,7 +79,7 @@ fun SimpTrackItem(
                 Text(
                     text = index.toString(),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                    color = if (isCurrentTrack) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = if (isCurrentTrack) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -91,6 +92,7 @@ fun SimpTrackItem(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(10.dp))
+                    .then(if (isCurrentTrack) Modifier.spectrumRing(RoundedCornerShape(10.dp), 1.5.dp) else Modifier)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center
             ) {
@@ -117,11 +119,8 @@ fun SimpTrackItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = track.name,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 15.sp,
-                    fontWeight = if (isCurrentTrack) FontWeight.Bold else FontWeight.Medium
-                ),
-                color = if (isCurrentTrack) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -146,7 +145,7 @@ fun SimpTrackItem(
                 }
                 Text(
                     text = track.artist,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

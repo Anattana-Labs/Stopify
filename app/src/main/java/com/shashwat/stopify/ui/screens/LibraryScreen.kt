@@ -15,6 +15,15 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.shashwat.stopify.ui.components.PrismChip
+import com.shashwat.stopify.ui.components.RoundAction
+import com.shashwat.stopify.ui.components.ScreenHeader
+import com.shashwat.stopify.ui.theme.PaneShape
+import com.shashwat.stopify.ui.theme.PrismTokens
+import com.shashwat.stopify.ui.theme.glassEdge
+import com.shashwat.stopify.ui.theme.glassFill
+import com.shashwat.stopify.ui.theme.pane
+import com.shashwat.stopify.ui.theme.spectrumBrush
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -36,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shashwat.stopify.ui.components.PrismButton
 import coil.compose.AsyncImage
 import com.shashwat.stopify.data.SpotifyPlaylistSummary
 import com.shashwat.stopify.data.SpotifyTrack
@@ -199,65 +209,34 @@ fun SimpLibraryScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 180.dp),
+            contentPadding = PaddingValues(start = PrismTokens.Space.gutter, end = PrismTokens.Space.gutter, top = 0.dp, bottom = 200.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ── TOP HEADER BAR (Spotui style) ────────────────────────
+            // ── TOP HEADER: Prism's light page title with round glass actions ──
             item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 8.dp)
-                ) {
-                    Text(
-                        text = "Library",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // Search icon
-                    Icon(
-                        imageVector = Icons.Rounded.Search,
-                        contentDescription = "Search library",
-                        tint = if (isSearchExpanded) accentGreen else MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier
-                            .padding(end = 14.dp)
-                            .size(22.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) {
-                                isSearchExpanded = !isSearchExpanded
-                                if (!isSearchExpanded) searchQuery = ""
-                            },
-                    )
-                    // Grid / list toggle
-                    Icon(
-                        imageVector = if (viewMode == LibraryViewMode.LIST) Icons.Rounded.GridView else Icons.Rounded.FormatListBulleted,
-                        contentDescription = if (viewMode == LibraryViewMode.LIST) "Show as grid" else "Show as list",
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier
-                            .padding(end = 14.dp)
-                            .size(20.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                viewMode = if (viewMode == LibraryViewMode.LIST) LibraryViewMode.GRID else LibraryViewMode.LIST
-                            }
-                    )
-                    // Account avatar
+                ScreenHeader(title = "Library", start = 0.dp, end = 0.dp) {
+                    RoundAction(
+                        Icons.Rounded.Search,
+                        if (isSearchExpanded) "Close library search" else "Search library"
+                    ) {
+                        isSearchExpanded = !isSearchExpanded
+                        if (!isSearchExpanded) searchQuery = ""
+                    }
+                    RoundAction(
+                        if (viewMode == LibraryViewMode.LIST) Icons.Rounded.GridView else Icons.Rounded.FormatListBulleted,
+                        if (viewMode == LibraryViewMode.LIST) "Show as grid" else "Show as list"
+                    ) {
+                        viewMode = if (viewMode == LibraryViewMode.LIST) LibraryViewMode.GRID else LibraryViewMode.LIST
+                    }
                     Box(
                         modifier = Modifier
                             .size(44.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .border(1.dp, glassEdge(), CircleShape)
                             .clickable(onClickLabel = "Open settings") { onOpenSettings() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -269,7 +248,7 @@ fun SimpLibraryScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
-                            Icon(Icons.Rounded.Person, contentDescription = "Account", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Person, contentDescription = "Account", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
                         }
                     }
                 }
@@ -285,10 +264,12 @@ fun SimpLibraryScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 0.dp, horizontal = 0.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                            .padding(horizontal = 12.dp)
+                            .heightIn(min = 48.dp)
+                            .clip(CircleShape)
+                            .background(glassFill(1.3f))
+                            .border(1.dp, glassEdge(), CircleShape)
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.CenterStart
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -297,8 +278,8 @@ fun SimpLibraryScreen(
                             Icon(
                                 imageVector = Icons.Rounded.Search,
                                 contentDescription = null,
-                                tint = accentGreen,
-                                modifier = Modifier.size(18.dp)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Box(modifier = Modifier.weight(1f)) {
@@ -315,8 +296,8 @@ fun SimpLibraryScreen(
                                     singleLine = true,
                                     textStyle = TextStyle(
                                         color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Medium
+                                        fontSize = 16.sp,
+                                        fontFamily = com.shashwat.stopify.ui.theme.PrismFont
                                     ),
                                     cursorBrush = SolidColor(accentGreen),
                                     modifier = Modifier.fillMaxWidth()
@@ -345,44 +326,18 @@ fun SimpLibraryScreen(
                 ) {
                     items(LibraryFilter.values()) { filter ->
                         val isSelected = selectedFilter == filter
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) accentGreen else MaterialTheme.colorScheme.surfaceContainerHigh,
-                            border = if (isSelected) null else androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            ),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable {
-                                    selectedFilter = if (isSelected && filter != LibraryFilter.ALL) {
-                                        LibraryFilter.ALL
-                                    } else {
-                                        filter
-                                    }
-                                }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-                            ) {
-                                Text(
-                                    text = filter.label,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                )
-                                if (isSelected && filter != LibraryFilter.ALL) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Rounded.Close,
-                                        contentDescription = "Clear filter",
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
+                        PrismChip(
+                            selected = isSelected,
+                            label = filter.label,
+                            icon = if (isSelected && filter != LibraryFilter.ALL) Icons.Rounded.Close else null,
+                            onClick = {
+                                selectedFilter = if (isSelected && filter != LibraryFilter.ALL) {
+                                    LibraryFilter.ALL
+                                } else {
+                                    filter
                                 }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -399,7 +354,7 @@ fun SimpLibraryScreen(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .clickable { showSortMenu = true }
                                 .padding(vertical = 4.dp, horizontal = 4.dp)
                         ) {
@@ -445,13 +400,10 @@ fun SimpLibraryScreen(
             // ── PINNED LIKED SONGS (Shown when ALL or LIKED) ──────────
             if ((selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.LIKED) && searchQuery.isBlank()) {
                 item {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .shadow(6.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.2f))
+                            .pane(PaneShape)
                             .clickable { onPlayCollection("spotify:user:library:tracks", "Liked Songs") }
                     ) {
                         Row(
@@ -460,20 +412,12 @@ fun SimpLibraryScreen(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Purple Gradient Square Heart
+                            // Liked songs: Prism's split-light tile
                             Box(
                                 modifier = Modifier
                                     .size(62.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(
-                                                Color(0xFF450AF5),
-                                                Color(0xFF8E8EE5),
-                                                accentGreen
-                                            )
-                                        )
-                                    ),
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(spectrumBrush(0f, 220f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -490,7 +434,6 @@ fun SimpLibraryScreen(
                                 Text(
                                     text = "Liked Songs",
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -515,15 +458,15 @@ fun SimpLibraryScreen(
                             // Quick Play button
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(44.dp)
                                     .clip(CircleShape)
-                                    .background(accentGreen),
+                                    .background(MaterialTheme.colorScheme.onSurface),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.PlayArrow,
                                     contentDescription = "Play Liked Songs",
-                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    tint = MaterialTheme.colorScheme.surface,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -561,7 +504,6 @@ fun SimpLibraryScreen(
                                 Text(
                                     text = "Downloaded",
                                     style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
                             }
@@ -704,7 +646,7 @@ fun SimpLibraryScreen(
                         Box(
                             modifier = Modifier
                                 .size(56.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                             contentAlignment = Alignment.Center
                         ) {
@@ -731,7 +673,6 @@ fun SimpLibraryScreen(
                             Text(
                                 text = pl.name,
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -752,7 +693,7 @@ fun SimpLibraryScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .clickable {
                                 onPlayCollection("spotify:playlist:${pl.id}", pl.name)
                                 selectedOptionPlaylist = null
@@ -779,7 +720,7 @@ fun SimpLibraryScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .clickable {
                                 playlistToDelete = pl
                                 selectedOptionPlaylist = null
@@ -815,7 +756,6 @@ fun SimpLibraryScreen(
                 title = {
                     Text(
                         text = "Delete Playlist?",
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 },
@@ -838,7 +778,6 @@ fun SimpLibraryScreen(
                     ) {
                         Text(
                             text = "Delete",
-                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.error
                         )
                     }
@@ -881,7 +820,7 @@ fun PlaylistListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -890,8 +829,8 @@ fun PlaylistListItem(
         Box(
             modifier = Modifier
                 .size(62.dp)
-                .shadow(4.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.2f))
-                .clip(RoundedCornerShape(8.dp))
+                .shadow(4.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.2f))
+                .clip(RoundedCornerShape(14.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {
@@ -925,7 +864,6 @@ fun PlaylistListItem(
             Text(
                 text = playlist.name,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -977,7 +915,7 @@ fun PlaylistGridCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {
@@ -1028,7 +966,6 @@ fun PlaylistGridCard(
         Text(
             text = playlist.name,
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -1072,7 +1009,7 @@ fun ArtistListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onClick() }
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1109,7 +1046,6 @@ fun ArtistListItem(
             Text(
                 text = artist.name,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1167,7 +1103,6 @@ fun EmptyLibraryState(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
 
@@ -1182,17 +1117,11 @@ fun EmptyLibraryState(
 
             if (!actionLabel.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(
+                PrismButton(
                     onClick = onAction,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    shape = RoundedCornerShape(20.dp)
                 ) {
                     Text(
                         text = actionLabel,
-                        fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.labelLarge
                     )
                 }

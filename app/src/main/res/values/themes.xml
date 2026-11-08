@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Stopify" parent="android:Theme.Material.Light.NoActionBar" />
-
+    <!-- Prism's ground (hsl 255 14% 5.5%) shows until Compose draws, so a dark launch never flashes white. -->
+    <style name="Theme.Stopify" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/prism_ground</item>
+        <item name="android:colorBackground">@color/prism_ground</item>
+    </style>
 </resources>

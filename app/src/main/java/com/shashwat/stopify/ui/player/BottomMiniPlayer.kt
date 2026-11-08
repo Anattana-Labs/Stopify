@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Favorite
@@ -24,7 +25,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import com.shashwat.stopify.ui.theme.MiniPlayerShape
+import com.shashwat.stopify.ui.theme.SmallArtShape
+import com.shashwat.stopify.ui.theme.PrismTokens
+import com.shashwat.stopify.ui.theme.LocalIsDark
+import com.shashwat.stopify.ui.theme.spectrumBrush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -65,24 +69,13 @@ fun SimpBottomMiniPlayer(
     val offsetX = remember { Animatable(0f) }
     val scheme = MaterialTheme.colorScheme
 
-    // Tint the strip with the track's own color, kept dark/quiet so text contrast holds.
-    val tint by animateColorAsState(
-        targetValue = if (backgroundColor != null) lerp(scheme.surfaceContainerHigh, backgroundColor, 0.22f)
-        else scheme.surfaceContainerHigh,
-        animationSpec = tween(400),
-        label = "mini_tint"
-    )
-
     val duration = playbackState.durationMs.takeIf { it > 0 } ?: track.durationMs
     val progress = if (duration > 0) (playbackState.currentPositionMs.toFloat() / duration).coerceIn(0f, 1f) else 0f
 
+    // No surface of its own: the dock's glass is behind it, so player and tabs read as one object.
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(12.dp, MiniPlayerShape)
-            .clip(MiniPlayerShape)
-            .background(tint)
-            .border(1.dp, scheme.outlineVariant, MiniPlayerShape)
             .pointerInput(Unit) {
                 detectVerticalDragGestures { change, dy ->
                     if (dy < -12f) { change.consume(); onExpand() }
@@ -92,14 +85,14 @@ fun SimpBottomMiniPlayer(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .clickable { onExpand() }
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
@@ -121,8 +114,8 @@ fun SimpBottomMiniPlayer(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(44.dp)
+                        .clip(SmallArtShape)
                         .background(scheme.surfaceContainerHighest),
                     contentAlignment = Alignment.Center
                 ) {
@@ -142,7 +135,6 @@ fun SimpBottomMiniPlayer(
                     Text(
                         text = track.name,
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
                         color = scheme.onSurface,
                         maxLines = 1,
                         modifier = Modifier.basicMarquee()
@@ -166,12 +158,12 @@ fun SimpBottomMiniPlayer(
                 )
             }
 
-            // Play / pause: square-ish coral key, the one accent on the strip
+            // Play / pause: a solid pill in the text colour, the one bright mark on the strip
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(scheme.primary)
+                    .clip(CircleShape)
+                    .background(scheme.onSurface)
                     .clickable(onClickLabel = if (playbackState.isPlaying) "Pause" else "Play") { onTogglePlayPause() }
                     .semantics { contentDescription = if (playbackState.isPlaying) "Pause" else "Play" },
                 contentAlignment = Alignment.Center
@@ -180,13 +172,13 @@ fun SimpBottomMiniPlayer(
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,
-                        color = scheme.onPrimary
+                        color = scheme.surface
                     )
                 } else {
                     Icon(
                         imageVector = if (playbackState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = null,
-                        tint = scheme.onPrimary,
+                        tint = scheme.surface,
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -201,20 +193,23 @@ fun SimpBottomMiniPlayer(
                 )
             }
         }
-        // Progress hairline along the bottom edge of the card
+        // Progress in split light, inset along the bottom of the card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(3.dp)
-                .background(scheme.onSurface.copy(alpha = 0.08f))
+                .padding(horizontal = 18.dp)
+                .padding(bottom = 6.dp)
+                .height(2.5.dp)
+                .clip(CircleShape)
+                .background(scheme.onSurface.copy(alpha = 0.12f))
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(progress)
                     .fillMaxHeight()
-                    .background(scheme.primary)
+                    .clip(CircleShape)
+                    .background(spectrumBrush(0f, 900f))
             )
         }
-
     }
 }
