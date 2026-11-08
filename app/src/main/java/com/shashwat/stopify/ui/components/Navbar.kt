@@ -1,6 +1,7 @@
 package com.shashwat.stopify.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -57,9 +58,8 @@ class NoRippleInteractionSource : MutableInteractionSource {
 }
 
 /**
- * Prism's floating bar: one lifted piece of glass 12 dp above the bottom edge. The mini player is joined to its top
- * (same surface, a hairline between), the tabs sit below. The current tab is lifted on the glass and carries a short
- * line of split light under its label.
+ * Two separate floating objects: the mini player (its own rounded card) and, beneath it, a compact navigation pill
+ * that only is as wide as its three tabs. The current tab expands to icon + label; the others stay icon-only.
  */
 @Composable
 fun SimpDock(
@@ -70,42 +70,40 @@ fun SimpDock(
     player: @Composable () -> Unit = {}
 ) {
     val scheme = MaterialTheme.colorScheme
-    val shape = if (hasPlayer) RoundedCornerShape(28.dp) else NavPillShape
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 12.dp)
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
-                .clip(shape)
+        if (hasPlayer) {
+            val cardShape = RoundedCornerShape(22.dp)
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .shadow(12.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
+                    .clip(cardShape)
+                    .background(scheme.surfaceContainerHigh)
+                    .background(glassFill(0.8f))
+                    .border(0.8.dp, glassEdge(), cardShape)
+            ) { player() }
+        }
+        Row(
+            modifier = Modifier
+                .shadow(10.dp, NavPillShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
+                .clip(NavPillShape)
                 .background(scheme.surfaceContainerHigh)
                 .background(glassFill(0.8f))
-                .border(0.8.dp, glassEdge(), shape)
+                .border(0.8.dp, glassEdge(), NavPillShape)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (hasPlayer) {
-                player()
-                Box(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(0.75.dp)
-                        .background(scheme.hairline)
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                NavigationTab.values().forEach { item ->
-                    DockTab(
-                        item = item,
-                        selected = currentTab == item,
-                        onClick = { onTabSelect(item) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+            NavigationTab.values().forEach { item ->
+                DockTab(item = item, selected = currentTab == item, onClick = { onTabSelect(item) })
             }
         }
     }
@@ -119,40 +117,36 @@ private fun DockTab(
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
-    val dark = LocalIsDark.current
     val fg by animateColorAsState(
         if (selected) scheme.onSurface else scheme.ink3, tween(PrismTokens.Motion.STANDARD), label = "tab_fg"
     )
-    val lifted = glassFill(2.6f)
-    val bg by animateColorAsState(if (selected) lifted else Color.Transparent, tween(PrismTokens.Motion.STANDARD), label = "tab_bg")
-    val mark by animateFloatAsState(if (selected) 1f else 0f, tween(PrismTokens.Motion.STANDARD), label = "tab_line")
-    Column(
+    val bg by animateColorAsState(
+        if (selected) glassFill(2.6f) else Color.Transparent, tween(PrismTokens.Motion.STANDARD), label = "tab_bg"
+    )
+    Row(
         modifier = modifier
-            .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .height(44.dp)
+            .clip(NavPillShape)
             .background(bg)
-            .drawWithContent {
-                drawContent()
-                if (mark > 0f) {
-                    val w = 16.dp.toPx() * mark
-                    val x = (size.width - w) / 2
-                    drawRoundRect(
-                        PrismTokens.spectrum(dark, x, x + w),
-                        Offset(x, size.height - 6.dp.toPx()), Size(w, 2.dp.toPx()), CornerRadius(1.dp.toPx())
-                    )
-                }
-            }
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = if (selected) 16.dp else 14.dp)
+            .animateContentSize(tween(PrismTokens.Motion.STANDARD)),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(item.icon, contentDescription = null, tint = fg, modifier = Modifier.size(24.dp))
-        Text(
-            text = item.title,
-            style = MaterialTheme.typography.labelSmall,
-            color = fg,
-            maxLines = 1,
-            modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
+        Icon(
+            item.icon,
+            contentDescription = if (selected) null else item.title,
+            tint = fg,
+            modifier = Modifier.size(22.dp)
         )
+        if (selected) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.labelLarge,
+                color = fg,
+                maxLines = 1
+            )
+        }
     }
 }

@@ -17,8 +17,9 @@ Source of truth: `Yigder/Prism` (`ui/theme/Theme.kt`, `Tokens.kt`, `Spectrum.kt`
 `PrismButton` (solid ink pill), `PrismOutlinedButton` / `PrismTonalButton` (glass pills), `PrismSwitch`, `PrismChip`, `Segmented`, `RoundAction` (44 dp glass disc), `ScreenHeader`, `SubPageHeader`, `Eyebrow`, `SectionHeader`, `SettingsGroup`, `PrismScrubber`, `SpectrumLine`, `Hairline`; modifiers `pane`, `spectrumRing`, `glassDisc`.
 
 ## Structure
-- Dock (`Navbar.kt`): one floating glass object 12 dp above the bottom edge. The mini player is joined on top (same surface, hairline between), tabs below. Current tab is lifted on the glass with a short split-light line under its label.
-- Mini player (`BottomMiniPlayer.kt`): no surface of its own, 44 dp cover (10 dp), title and artist, favourite, solid ink play pill, next; split-light progress inset along the bottom. Tap or swipe up opens, swipe sideways skips.
+- Dock (`Navbar.kt`): two separate floating objects. The mini player is its own rounded card (cover, title, play pill, next, split-light progress); beneath it a compact navigation pill only as wide as its three tabs. The current tab shows icon + label, the others icon only.
+- Mini player (`BottomMiniPlayer.kt`): no favourite button (it lives in the full player). When another Connect device is playing, the artist line becomes "speaker icon + device name" in the accent colour. Tap or swipe up opens, swipe sideways skips.
+- Connect (`ConnectDevicesSheet.kt`, `data/SpotifyConnect*.kt`): the device menu is a bottom sheet from the full player's tool capsule. Playback on other devices is mirrored live in both players and controlled remotely.
 - Home: large light title with the greeting beneath, round glass actions, a "resume" pane, a recents ledger, shelves with a quiet strapline over a light title. Cards have no borders.
 - Library / Search: page header, glass search pill, chips (picked chip carries the split-light ring), Liked tile in split light.
 - Settings: sub-page header with glass back button, small-caps group labels over lifted panes, hairline row dividers, split-light switches, segmented glass capsule for display mode.
