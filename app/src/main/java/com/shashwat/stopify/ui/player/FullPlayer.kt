@@ -202,7 +202,7 @@ fun SimpFullPlayer(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                PlayerIconButton(Icons.Rounded.MoreVert, "Track options", fg, { showOptions = true }, size = 44.dp, glass = true)
+                PlayerIconButton(Icons.Rounded.MoreVert, "Track options", fg, onClick = { showOptions = true }, size = 44.dp, glass = true)
             }
 
             Spacer(Modifier.height(20.dp))
@@ -269,8 +269,9 @@ fun SimpFullPlayer(
                 PlayerIconButton(
                     if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     if (isFav) "Remove from favourites" else "Add to favourites",
-                    if (isFav) scheme.primary else fg
-                ) { onToggleFavorite(track) }
+                    if (isFav) scheme.primary else fg,
+                    onClick = { onToggleFavorite(track) }
+                )
             }
 
             // Status line: error with retry, or the current lyric line
