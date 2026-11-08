@@ -1,6 +1,5 @@
 package com.shashwat.stopify.ui.player
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.basicMarquee
@@ -32,6 +31,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+
 import com.shashwat.stopify.data.SpotifyColorLyrics
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
@@ -47,7 +60,11 @@ fun argbToColor(argb: Int): Color {
     return Color(red = r, green = g, blue = b, alpha = 1f)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Full-screen player. One column, top to bottom: header, artwork, title row, scrubber, transport, tool row.
+ * Gestures: swipe down anywhere on the header or artwork to close, swipe the artwork sideways for
+ * previous / next. Back also closes it (handled by the caller).
+ */
 @Composable
 fun SimpFullPlayer(
     track: SpotifyTrack,
@@ -71,469 +88,335 @@ fun SimpFullPlayer(
     onToggleFavorite: (SpotifyTrack) -> Unit = {},
     isFavoriteTrack: Boolean = false,
     isFavorite: ((SpotifyTrack) -> Boolean)? = null,
+    isShuffle: Boolean = false,
+    isRepeat: Boolean = false,
+    onToggleShuffle: () -> Unit = {},
+    onToggleRepeat: () -> Unit = {},
     canvasUrl: String? = null,
     canvasEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val scheme = MaterialTheme.colorScheme
     var isScrubbing by remember { mutableStateOf(false) }
     var scrubProgress by remember { mutableFloatStateOf(0f) }
-    var showQueueOverlay by remember { mutableStateOf(false) }
-    var showTrackOptionsMenu by remember { mutableStateOf(false) }
-    var showFullScreenLyrics by remember { mutableStateOf(false) }
-    var isShuffle by remember { mutableStateOf(false) }
-    var isRepeat by remember { mutableStateOf(false) }
+    var showQueue by remember { mutableStateOf(false) }
+    var showOptions by remember { mutableStateOf(false) }
+    var showLyrics by remember { mutableStateOf(false) }
 
-    var colorLyrics by remember { mutableStateOf<SpotifyColorLyrics?>(null) }
-    var isLyricsLoading by remember { mutableStateOf(false) }
-    var activeCanvasUrl by remember(canvasUrl, canvasEnabled) {
-        mutableStateOf(if (canvasEnabled) canvasUrl else null)
-    }
+    var colorLyrics by remember(track.id) { mutableStateOf<SpotifyColorLyrics?>(null) }
+    var isLyricsLoading by remember(track.id) { mutableStateOf(false) }
+    var fetchedCanvas by remember(track.id) { mutableStateOf<String?>(null) }
+    val activeCanvasUrl = if (canvasEnabled) (canvasUrl ?: fetchedCanvas) else null
 
-    LaunchedEffect(canvasUrl, canvasEnabled) {
-        activeCanvasUrl = if (canvasEnabled) canvasUrl else null
-    }
-
-    val coroutineScope = rememberCoroutineScope()
-    val scrollState = rememberScrollState()
-
-    // Fetch Spotify Canvas if enabled and not preloaded
-    LaunchedEffect(track.id, client, canvasEnabled) {
+    LaunchedEffect(track.id, client, canvasEnabled, canvasUrl) {
         if (canvasEnabled && canvasUrl == null && client != null) {
-            activeCanvasUrl = client.fetchCanvasUrl(track.id)
-        } else if (!canvasEnabled) {
-            activeCanvasUrl = null
+            fetchedCanvas = try { client.fetchCanvasUrl(track.id) } catch (e: Exception) { null }
         }
     }
-
-    // Fetch Spotify Color Lyrics
     LaunchedEffect(track.id, client) {
         if (client != null) {
             isLyricsLoading = true
-            colorLyrics = null
-            val res = client.fetchColorLyrics(track.id, track.coverUrl)
-            colorLyrics = res.getOrNull()
+            colorLyrics = try { client.fetchColorLyrics(track.id, track.coverUrl).getOrNull() } catch (e: Exception) { null }
             isLyricsLoading = false
         }
     }
 
-    val durationMs = playbackState.durationMs
-    val currentPositionMs = if (isScrubbing) {
-        (scrubProgress * durationMs).toLong()
-    } else {
-        playbackState.currentPositionMs
+    val durationMs = playbackState.durationMs.takeIf { it > 0 } ?: track.durationMs
+    val positionMs = if (isScrubbing) (scrubProgress * durationMs).toLong() else playbackState.currentPositionMs
+    val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+
+    // The room takes a quiet tint from the track; text stays on the theme's own foreground for contrast.
+    val tintBase = remember(colorLyrics) { colorLyrics?.let { argbToColor(it.backgroundColor) } } ?: scheme.primary
+    val ground by animateColorAsState(lerp(scheme.surface, tintBase, 0.22f), tween(500), label = "player_ground")
+    val onVideo = activeCanvasUrl != null
+    val fg = if (onVideo) Color.White else scheme.onSurface
+    val fgMuted = if (onVideo) Color.White.copy(alpha = 0.78f) else scheme.onSurfaceVariant
+    val isFav = isFavorite?.invoke(track) ?: isFavoriteTrack
+    val activeLine = remember(colorLyrics, positionMs / 500) {
+        colorLyrics?.lines?.lastOrNull { it.startTimeMs <= positionMs }?.words?.takeIf { it.isNotBlank() }
     }
 
-    val progressFraction = if (durationMs > 0) {
-        (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-    } else 0f
-
-    val lyricsBgColor = remember(colorLyrics) {
-        colorLyrics?.let { argbToColor(it.backgroundColor) }
+    // Swipe down closes the player
+    val closeDrag = Modifier.pointerInput(Unit) {
+        var total = 0f
+        detectVerticalDragGestures(
+            onDragStart = { total = 0f },
+            onDragEnd = { if (total > 140f) onCollapse() },
+            onVerticalDrag = { _, dy -> total += dy }
+        )
     }
-
-    val lyricsHighlightColor = remember(colorLyrics) {
-        colorLyrics?.let { argbToColor(it.highlightTextColor) } ?: Color.White
-    }
-
-    val themePrimary = MaterialTheme.colorScheme.primary
-    val themeSurface = MaterialTheme.colorScheme.surface
-    val isLightMode = (themeSurface.red * 0.299f + themeSurface.green * 0.587f + themeSurface.blue * 0.114f) > 0.52f
-
-    val playerBackdropColor = if (isLightMode && activeCanvasUrl == null) {
-        MaterialTheme.colorScheme.surface
-    } else {
-        Color(0xFF121212)
-    }
-
-    val defaultGradientTop = if (isLightMode && activeCanvasUrl == null) MaterialTheme.colorScheme.surfaceContainerHigh else Color(0xFF282828)
-    val gradientTopColor = remember(lyricsBgColor, themePrimary, themeSurface, isLightMode, defaultGradientTop) {
-        lyricsBgColor?.let { blendThemeTint(it, themePrimary, themeSurface, !isLightMode) }
-            ?: defaultGradientTop
-    }
-
-    val playerContentColor = if (isLightMode && activeCanvasUrl == null) MaterialTheme.colorScheme.onSurface else Color.White
-    val playerContentSubColor = if (isLightMode && activeCanvasUrl == null) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.7f)
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(playerBackdropColor)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        gradientTopColor,
-                        playerBackdropColor
-                    ),
-                    startY = 0f,
-                    endY = 1600f
-                )
-            )
+            .background(ground)
+            // Swallow taps so nothing underneath can be pressed through the player
+            .pointerInput(Unit) { detectTapGestures { } }
     ) {
-        if (activeCanvasUrl != null) {
-            // Spotify Canvas: looping video fills the full screen behind controls
-            CanvasVideo(
-                url = activeCanvasUrl!!,
-                modifier = Modifier.fillMaxSize()
-            )
+        if (onVideo) {
+            CanvasVideo(url = activeCanvasUrl!!, modifier = Modifier.fillMaxSize())
             Box(
-                modifier = Modifier
+                Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.50f),
-                                Color.Black.copy(alpha = 0.10f),
-                                Color.Black.copy(alpha = 0.35f),
-                                Color.Black.copy(alpha = 0.80f),
-                            )
+                            listOf(Color.Black.copy(0.55f), Color.Black.copy(0.15f), Color.Black.copy(0.45f), Color.Black.copy(0.85f))
                         )
                     )
             )
         }
 
-        val screenHeight = maxHeight
+        val artSize = minOf(maxWidth - 48.dp, maxHeight * 0.42f).coerceAtLeast(160.dp)
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .verticalScroll(scrollState)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Main Player (Screen 1 - SimpMusic classic Spotify player)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = screenHeight),
-                verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.CenterHorizontally
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth().then(closeDrag).padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. Top App Bar (SimpMusic Spotify layout)
-                CenterAlignedTopAppBar(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = Color.Transparent
-                    ),
-                    title = {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                        ) {
-                            Text(
-                                text = "PLAYING FROM " + if (track.album.isNotBlank()) "ALBUM" else "PLAYLIST",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = playerContentSubColor,
-                                letterSpacing = 1.2.sp
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = track.album.ifEmpty { "Stopify" },
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = playerContentColor,
-                                maxLines = 1,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.basicMarquee()
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(
-                            onClick = onCollapse,
-                            modifier = Modifier.padding(start = 12.dp).size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.KeyboardArrowDown,
-                                contentDescription = "Collapse",
-                                tint = playerContentColor,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = { showTrackOptionsMenu = true },
-                            modifier = Modifier.padding(end = 12.dp).size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.MoreVert,
-                                contentDescription = "Options",
-                                tint = playerContentColor,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                )
-
-                // 2. Large Cover Artwork (Hidden when Canvas is active to show looping video)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(28.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
-                        .background(if (activeCanvasUrl != null) Color.Transparent else Color.DarkGray.copy(alpha = 0.3f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (!track.coverUrl.isNullOrEmpty()) {
-                        AsyncImage(
-                            model = track.coverUrl,
-                            contentDescription = track.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .alpha(if (activeCanvasUrl != null) 0f else 1f)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.Album,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = if (activeCanvasUrl != null) 0f else 0.3f),
-                            modifier = Modifier.size(96.dp)
-                        )
-                    }
-                }
-
-                // Inline Lyric Line (Between artwork and metadata - SimpMusic style)
-                val activeLine = remember(colorLyrics, currentPositionMs) {
-                    colorLyrics?.lines?.lastOrNull { it.startTimeMs <= currentPositionMs }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(28.dp)
-                        .padding(horizontal = 24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (colorLyrics != null && activeLine != null && activeLine.words.isNotBlank()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clickable {
-                                    showFullScreenLyrics = true
-                                }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Lyrics,
-                                contentDescription = null,
-                                tint = lyricsHighlightColor.copy(alpha = 0.85f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = activeLine.words,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = lyricsHighlightColor,
-                                maxLines = 1,
-                                modifier = Modifier.basicMarquee()
-                            )
-                        }
-                    }
-                }
-
-                // 3. Track Info + Heart (NowPlayingTrackInfoRow)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = track.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = playerContentColor,
-                            maxLines = 1,
-                            modifier = Modifier.basicMarquee()
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = track.artist,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = playerContentSubColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    val currentIsFav = isFavorite?.invoke(track) ?: isFavoriteTrack
-                    IconButton(
-                        onClick = { onToggleFavorite(track) },
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        val accentColor = MaterialTheme.colorScheme.primary
-                        Icon(
-                            imageVector = if (currentIsFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                            contentDescription = "Save",
-                            tint = if (currentIsFav) accentColor else playerContentColor,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-
-                // 4. Scrubber Slider & Timestamps (SpotifyPlaybackControls)
+                PlayerIconButton(Icons.Rounded.KeyboardArrowDown, "Close player", fg, onCollapse)
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Slider(
-                        value = if (isScrubbing) scrubProgress else progressFraction,
-                        onValueChange = {
-                            isScrubbing = true
-                            scrubProgress = it
-                        },
-                        onValueChangeFinished = {
-                            isScrubbing = false
-                            onSeekTo((scrubProgress * durationMs).toLong())
-                        },
-                        colors = SliderDefaults.colors(
-                            thumbColor = playerContentColor,
-                            activeTrackColor = playerContentColor,
-                            inactiveTrackColor = playerContentColor.copy(alpha = 0.25f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                    Text("Now playing", style = MaterialTheme.typography.labelMedium, color = fgMuted)
+                    Text(
+                        track.album.ifBlank { "Stopify" },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = fg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = formatTimeMs(currentPositionMs),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = playerContentSubColor
-                        )
-                        Text(
-                            text = formatTimeMs(durationMs),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = playerContentSubColor
-                        )
-                    }
                 }
-
-                // 5. Classic Player Transport Row (SimpPlayerControlLayout)
-                SimpPlayerControlLayout(
-                    isPlaying = playbackState.isPlaying,
-                    isShuffle = isShuffle,
-                    isRepeat = isRepeat,
-                    onTogglePlayPause = onTogglePlayPause,
-                    onNext = onNext,
-                    onPrevious = onPrevious,
-                    onToggleShuffle = { isShuffle = !isShuffle },
-                    onToggleRepeat = { isRepeat = !isRepeat },
-                    isLoading = playbackState.isBuffering,
-                    activeColor = MaterialTheme.colorScheme.primary,
-                    contentColor = playerContentColor,
-                    horizontalPadding = 20.dp
-                )
-
-                // 6. Bottom Buttons (Info, Output, Add to playlist, Queue)
-                Row(
-                    modifier = Modifier
-                        .height(36.dp)
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            modifier = Modifier.size(26.dp),
-                            onClick = {
-                                val albUri = track.albumUri ?: if (track.album.isNotBlank()) "spotify:album:${track.id}" else null
-                                if (albUri != null) onViewAlbum(albUri)
-                            }
-                        ) {
-                            Icon(imageVector = Icons.Rounded.Info, tint = playerContentColor, contentDescription = "Info")
-                        }
-                        IconButton(
-                            modifier = Modifier.size(26.dp),
-                            onClick = {}
-                        ) {
-                            Icon(imageVector = Icons.Rounded.Headphones, tint = playerContentColor, contentDescription = "Output")
-                        }
-                    }
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            modifier = Modifier.size(26.dp),
-                            onClick = { onAddToPlaylist(track) }
-                        ) {
-                            Icon(imageVector = Icons.Rounded.PlaylistAdd, tint = playerContentColor, contentDescription = "Add to playlist")
-                        }
-                        IconButton(
-                            modifier = Modifier.size(26.dp),
-                            onClick = { showQueueOverlay = true }
-                        ) {
-                            Icon(imageVector = Icons.Rounded.QueueMusic, tint = playerContentColor, contentDescription = "Queue")
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
+                PlayerIconButton(Icons.Rounded.MoreVert, "Track options", fg) { showOptions = true }
             }
 
-            // Screen 2: Lyrics Section (Scroll down to view full lyrics - SimpMusic style)
-            Column(
+            Spacer(Modifier.height(20.dp))
+
+            // Artwork: edge, no shadow. Sideways swipe skips.
+            var dragX by remember { mutableFloatStateOf(0f) }
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 16.dp, bottom = 48.dp)
+                    .size(artSize)
+                    .clip(RoundedCornerShape(20.dp))
+                    .border(1.dp, fg.copy(alpha = 0.14f), RoundedCornerShape(20.dp))
+                    .background(scheme.surfaceContainerHighest)
+                    .pointerInput(track.id) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { dragX = 0f },
+                            onDragEnd = {
+                                if (dragX < -120f) onNext() else if (dragX > 120f) onPrevious()
+                            },
+                            onHorizontalDrag = { _, dx -> dragX += dx }
+                        )
+                    }
+                    .then(closeDrag),
+                contentAlignment = Alignment.Center
             ) {
-                if (colorLyrics != null && colorLyrics!!.lines.isNotEmpty()) {
-                    SpotifyColorLyricsCard(
-                        lyrics = colorLyrics!!,
-                        currentPositionMs = currentPositionMs,
-                        onLineClick = { onSeekTo(it) },
-                        onExpand = { showFullScreenLyrics = true }
+                if (!track.coverUrl.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = track.coverUrl,
+                        contentDescription = "Cover of ${track.album.ifBlank { track.name }}",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
-                } else if (isLyricsLoading) {
-                    Box(
+                } else {
+                    Icon(Icons.Rounded.Album, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(72.dp))
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Title row
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        track.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = fg,
+                        maxLines = 1,
+                        modifier = Modifier.basicMarquee()
+                    )
+                    Text(
+                        track.artist,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = fgMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable(onClickLabel = "Open artist") {
+                                val uri = track.artistUri ?: if (track.artist.isNotBlank()) "spotify:artist:${track.artist}" else null
+                                if (uri != null) onViewArtist(uri, track.artist)
+                            }
+                            .padding(vertical = 4.dp)
+                    )
+                }
+                PlayerIconButton(
+                    if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                    if (isFav) "Remove from favourites" else "Add to favourites",
+                    if (isFav) scheme.primary else fg
+                ) { onToggleFavorite(track) }
+            }
+
+            // Status line: error with retry, or the current lyric line
+            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp), contentAlignment = Alignment.CenterStart) {
+                when {
+                    playbackState.error != null -> Row(
+                        modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color.White.copy(alpha = 0.08f)),
-                        contentAlignment = Alignment.Center
+                            .clickable(onClickLabel = "Retry") { onTogglePlayPause() }
+                            .heightIn(min = 40.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Rounded.ErrorOutline, null, tint = scheme.error, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Couldn't play this track. Tap to retry.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (onVideo) Color.White else scheme.error
+                        )
+                    }
+                    activeLine != null -> Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClickLabel = "Open lyrics") { showLyrics = true }
+                            .heightIn(min = 40.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Lyrics, null, tint = fgMuted, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(activeLine, style = MaterialTheme.typography.bodyMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
+            }
+
+            // Scrubber
+            Slider(
+                value = if (isScrubbing) scrubProgress else fraction,
+                onValueChange = { isScrubbing = true; scrubProgress = it },
+                onValueChangeFinished = {
+                    onSeekTo((scrubProgress * durationMs).toLong())
+                    isScrubbing = false
+                },
+                enabled = durationMs > 0,
+                colors = SliderDefaults.colors(
+                    thumbColor = scheme.primary,
+                    activeTrackColor = scheme.primary,
+                    inactiveTrackColor = fg.copy(alpha = 0.22f),
+                    disabledThumbColor = fg.copy(alpha = 0.3f),
+                    disabledActiveTrackColor = fg.copy(alpha = 0.3f),
+                    disabledInactiveTrackColor = fg.copy(alpha = 0.15f)
+                ),
+                modifier = Modifier.fillMaxWidth().semantics {
+                    contentDescription = "Seek, ${formatTimeMs(positionMs)} of ${formatTimeMs(durationMs)}"
+                }
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(formatTimeMs(positionMs), style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = fgMuted)
+                Text(
+                    if (playbackState.isBuffering) "Loading…" else "-" + formatTimeMs((durationMs - positionMs).coerceAtLeast(0L)),
+                    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                    color = fgMuted
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Transport
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PlayerIconButton(
+                    Icons.Rounded.Shuffle, if (isShuffle) "Shuffle on" else "Shuffle off",
+                    if (isShuffle) scheme.primary else fgMuted, onToggleShuffle
+                )
+                PlayerIconButton(Icons.Rounded.SkipPrevious, "Previous", fg, onPrevious, size = 56.dp, iconSize = 34.dp)
+                val label = when {
+                    playbackState.error != null -> "Retry"
+                    playbackState.isPlaying -> "Pause"
+                    else -> "Play"
+                }
+                Box(
+                    modifier = Modifier
+                        .size(76.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(scheme.primary)
+                        .clickable(onClickLabel = label, role = Role.Button, onClick = onTogglePlayPause)
+                        .semantics { contentDescription = label },
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        playbackState.isBuffering -> CircularProgressIndicator(
+                            modifier = Modifier.size(30.dp), strokeWidth = 3.dp, color = scheme.onPrimary
+                        )
+                        else -> Icon(
+                            when {
+                                playbackState.error != null -> Icons.Rounded.Refresh
+                                playbackState.isPlaying -> Icons.Rounded.Pause
+                                else -> Icons.Rounded.PlayArrow
+                            },
+                            null, tint = scheme.onPrimary, modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
+                PlayerIconButton(Icons.Rounded.SkipNext, "Next", fg, onNext, size = 56.dp, iconSize = 34.dp)
+                PlayerIconButton(
+                    Icons.Rounded.Repeat, if (isRepeat) "Repeat on" else "Repeat off",
+                    if (isRepeat) scheme.primary else fgMuted, onToggleRepeat
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            // Tools: every one of these does something
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(fg.copy(alpha = if (onVideo) 0.14f else 0.07f)),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                PlayerTool(Icons.Rounded.Lyrics, "Lyrics", fg, Modifier.weight(1f)) { showLyrics = true }
+                PlayerTool(Icons.Rounded.PlaylistAdd, "Save", fg, Modifier.weight(1f)) { onAddToPlaylist(track) }
+                PlayerTool(
+                    Icons.Rounded.QueueMusic,
+                    if (playbackQueue.isEmpty()) "Queue" else "Queue · ${playbackQueue.size}",
+                    fg, Modifier.weight(1f)
+                ) { showQueue = true }
             }
         }
 
-        // Full Screen Lyrics Viewer (Spotui style)
-        if (showFullScreenLyrics) {
+        if (showLyrics) {
+            BackHandler { showLyrics = false }
             FullScreenLyricsViewer(
                 track = track,
                 lyrics = colorLyrics,
                 isLoading = isLyricsLoading,
-                currentPositionMs = currentPositionMs,
+                currentPositionMs = positionMs,
                 onSeekTo = onSeekTo,
-                onClose = { showFullScreenLyrics = false }
+                onClose = { showLyrics = false }
             )
         }
 
-        // Full-screen Queue Overlay Modal Sheet
-        if (showQueueOverlay) {
+        if (showQueue) {
+            BackHandler { showQueue = false }
             QueueOverlayContent(
                 currentTrack = track,
                 playbackQueue = playbackQueue,
-                onClose = { showQueueOverlay = false },
+                onClose = { showQueue = false },
                 onClearQueue = onClearQueue,
                 onPlayTrackFromQueue = onPlayTrackFromQueue,
                 onMoveQueueItem = onMoveQueueItem,
@@ -546,28 +429,63 @@ fun SimpFullPlayer(
             )
         }
 
-        // Track Options Bottom Sheet
-        val currentIsFav = isFavorite?.invoke(track) ?: isFavoriteTrack
         TrackOptionsMenu(
-            expanded = showTrackOptionsMenu,
-            onDismissRequest = { showTrackOptionsMenu = false },
+            expanded = showOptions,
+            onDismissRequest = { showOptions = false },
             track = track,
             onPlayNext = { onPlayNext(track) },
             onAddToQueue = { onAddToQueue(track) },
             onAddToPlaylist = { onAddToPlaylist(track) },
             onToggleFavorite = { onToggleFavorite(track) },
-            isFavorite = currentIsFav,
+            isFavorite = isFav,
             onViewAlbum = {
-                showTrackOptionsMenu = false
+                showOptions = false
                 val albUri = track.albumUri ?: if (track.album.isNotBlank()) "spotify:album:${track.id}" else null
                 if (albUri != null) onViewAlbum(albUri)
             },
             onViewArtist = {
-                showTrackOptionsMenu = false
+                showOptions = false
                 val artUri = track.artistUri ?: if (track.artist.isNotBlank()) "spotify:artist:${track.artist}" else null
                 if (artUri != null) onViewArtist(artUri, track.artist)
             }
         )
+    }
+}
+
+@Composable
+private fun PlayerIconButton(
+    icon: ImageVector,
+    description: String,
+    tint: Color,
+    onClick: () -> Unit,
+    size: Dp = 48.dp,
+    iconSize: Dp = 26.dp
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(iconSize))
+    }
+}
+
+@Composable
+private fun PlayerTool(icon: ImageVector, label: String, tint: Color, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier = modifier
+            .heightIn(min = 56.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.height(2.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = tint, maxLines = 1)
     }
 }
 

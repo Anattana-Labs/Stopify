@@ -26,7 +26,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.shashwat.stopify.ui.theme.DockShape
+import androidx.compose.ui.draw.shadow
+import com.shashwat.stopify.ui.theme.NavPillShape
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -55,12 +56,14 @@ fun SimpDock(
     player: @Composable () -> Unit = {}
 ) {
     val scheme = MaterialTheme.colorScheme
+    // Two separate floating objects: the mini player card above, the navigation pill below.
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(DockShape)
-            .background(scheme.surfaceContainerLow)
-            .border(1.dp, scheme.outlineVariant, DockShape)
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (hasPlayer) {
             player()
@@ -68,8 +71,11 @@ fun SimpDock(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .shadow(12.dp, NavPillShape)
+                .clip(NavPillShape)
+                .background(scheme.surfaceContainerHigh)
+                .border(1.dp, scheme.outlineVariant, NavPillShape)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             NavigationTab.values().forEach { item ->
@@ -98,8 +104,8 @@ private fun DockTab(
     val barWidth by animateDpAsState(if (selected) 24.dp else 0.dp, tween(200), label = "tab_bar")
     Column(
         modifier = modifier
-            .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .heightIn(min = 52.dp)
+            .clip(RoundedCornerShape(24.dp))
             .selectable(selected = selected, role = Role.Tab, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center

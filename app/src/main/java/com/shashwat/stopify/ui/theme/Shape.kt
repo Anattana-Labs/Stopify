@@ -24,3 +24,7 @@ val CardShape = RoundedCornerShape(12.dp)
 
 /** Dock: rounded top edge only, it is fused to the screen bottom. */
 val DockShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
+/** Floating mini player card and floating navigation pill. */
+val MiniPlayerShape = RoundedCornerShape(22.dp)
+val NavPillShape = RoundedCornerShape(32.dp)

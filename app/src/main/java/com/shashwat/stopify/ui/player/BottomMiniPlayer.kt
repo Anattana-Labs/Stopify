@@ -23,6 +23,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import com.shashwat.stopify.ui.theme.MiniPlayerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -77,28 +79,16 @@ fun SimpBottomMiniPlayer(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(12.dp, MiniPlayerShape)
+            .clip(MiniPlayerShape)
             .background(tint)
+            .border(1.dp, scheme.outlineVariant, MiniPlayerShape)
             .pointerInput(Unit) {
                 detectVerticalDragGestures { change, dy ->
                     if (dy < -12f) { change.consume(); onExpand() }
                 }
             }
     ) {
-        // Progress hairline: flush with the top edge of the dock
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp)
-                .background(scheme.onSurface.copy(alpha = 0.08f))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress)
-                    .fillMaxHeight()
-                    .background(scheme.primary)
-            )
-        }
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -211,5 +201,20 @@ fun SimpBottomMiniPlayer(
                 )
             }
         }
+        // Progress hairline along the bottom edge of the card
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(scheme.onSurface.copy(alpha = 0.08f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress)
+                    .fillMaxHeight()
+                    .background(scheme.primary)
+            )
+        }
+
     }
 }
