@@ -1,5 +1,7 @@
 package com.shashwat.stopify.ui.components
 
+import androidx.compose.foundation.border
+import com.shashwat.stopify.ui.theme.CardShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -34,15 +36,14 @@ fun SimpSquareCard(
     Column(
         modifier = modifier
             .width(168.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(CardShape)
             .clickable { onClick() }
             .padding(2.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(164.dp)
-                .shadow(4.dp, RoundedCornerShape(6.dp), spotColor = Color.Black.copy(alpha = 0.35f))
-                .clip(RoundedCornerShape(6.dp))
+                .clip(CardShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             if (!item.coverUrl.isNullOrEmpty()) {
@@ -71,15 +72,15 @@ fun SimpSquareCard(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp)
-                    .size(36.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.65f)),
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = "Play",
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -89,11 +90,12 @@ fun SimpSquareCard(
 
         Text(
             text = item.name,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp)
         )
 
         Spacer(modifier = Modifier.height(2.dp))
@@ -104,7 +106,7 @@ fun SimpSquareCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            fontSize = 12.sp
+            fontSize = 13.sp
         )
     }
 }
@@ -126,7 +128,8 @@ fun SimpArtistCircleCard(
         Box(
             modifier = Modifier
                 .size(105.dp)
-                .shadow(8.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.35f))
+                .border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                .padding(3.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {

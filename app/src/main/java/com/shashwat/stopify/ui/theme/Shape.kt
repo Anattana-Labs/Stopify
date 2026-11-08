@@ -5,20 +5,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
-/**
- * Material Design 3 Expressive Corner Radius Scale
- */
+/** Radius scale: 6 chips/thumbs, 14 tiles, 22 sheets. Cards use a "notched" corner (see CardShape). */
 val M3Shapes = Shapes(
-    extraSmall = RoundedCornerShape(4.dp),
-    small = RoundedCornerShape(4.dp),
-    medium = RoundedCornerShape(8.dp),
-    large = RoundedCornerShape(8.dp),
-    extraLarge = RoundedCornerShape(12.dp)
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(22.dp),
+    extraLarge = RoundedCornerShape(28.dp)
 )
 
-// Minimal Spotify-styled Shapes
-val ShapeLargeIncreased = RoundedCornerShape(8.dp)
-val ShapeExtraLargeIncreased = RoundedCornerShape(8.dp)
-val ShapeExtraExtraLarge = RoundedCornerShape(12.dp)
+val ShapeLargeIncreased = RoundedCornerShape(14.dp)
+val ShapeExtraLargeIncreased = RoundedCornerShape(22.dp)
+val ShapeExtraExtraLarge = RoundedCornerShape(28.dp)
 val ShapeFull = CircleShape
 
+/** Signature artwork shape: soft corners with one tight corner, like a sleeve edge. */
+val CardShape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomEnd = 22.dp, bottomStart = 4.dp)

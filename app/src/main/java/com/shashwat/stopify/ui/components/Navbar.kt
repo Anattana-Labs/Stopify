@@ -1,5 +1,11 @@
 package com.shashwat.stopify.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.Interaction
@@ -26,7 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 enum class NavigationTab(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Rounded.Home),
     SEARCH("Search", Icons.Rounded.Search),
-    LIBRARY("Your Library", Icons.Rounded.LibraryMusic)
+    LIBRARY("Library", Icons.Rounded.LibraryMusic)
 }
 
 class NoRippleInteractionSource : MutableInteractionSource {
@@ -42,72 +48,64 @@ fun SimpBottomNavigationBar(
     modifier: Modifier = Modifier,
     backdrop: Any? = null
 ) {
-    val navItems = listOf(
-        NavigationTab.HOME,
-        NavigationTab.SEARCH,
-        NavigationTab.LIBRARY
-    )
-
-    val navSurface = MaterialTheme.colorScheme.surface
-    val navOnSurface = MaterialTheme.colorScheme.onSurface
-    val navUnselected = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
-
+    val scheme = MaterialTheme.colorScheme
+    // Floating dock: the active tab expands into an accent pill with its label.
     Box(
-        contentAlignment = Alignment.BottomCenter,
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        navSurface.copy(alpha = 0.85f),
-                        navSurface.copy(alpha = 0.98f),
-                        navSurface
-                    ),
-                    startY = 0f
-                )
-            )
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(52.dp)
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(scheme.surfaceContainerHigh)
+                .border(1.dp, scheme.outlineVariant, androidx.compose.foundation.shape.CircleShape)
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            navItems.forEach { item ->
-                val isSelected = currentTab == item
-                val contentColor = if (isSelected) navOnSurface else navUnselected
-                Column(
+            NavigationTab.values().forEach { item ->
+                val selected = currentTab == item
+                val bg by animateColorAsState(
+                    if (selected) scheme.primary else Color.Transparent, label = "nav_bg"
+                )
+                val fg by animateColorAsState(
+                    if (selected) scheme.onPrimary else scheme.onSurfaceVariant, label = "nav_fg"
+                )
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable(
-                            interactionSource = remember { NoRippleInteractionSource() },
-                            indication = null,
+                        .heightIn(min = 48.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(bg)
+                        .selectable(
+                            selected = selected,
+                            role = Role.Tab,
                             onClick = { onTabSelect(item) }
-                        ),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                        )
+                        .padding(horizontal = if (selected) 18.dp else 16.dp)
+                        .animateContentSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
                         imageVector = item.icon,
-                        contentDescription = item.title,
-                        tint = contentColor,
+                        contentDescription = if (selected) null else item.title,
+                        tint = fg,
                         modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = item.title,
-                        fontSize = 10.5.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = contentColor
-                    )
+                    if (selected) {
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = fg,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
     }
 }
-

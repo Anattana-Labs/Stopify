@@ -182,7 +182,7 @@ fun TrackOptionsMenu(
             TrackOptionRow(
                 title = if (effectivelyDownloaded) "Remove Download" else "Download",
                 icon = if (effectivelyDownloaded) Icons.Rounded.FileDownloadDone else Icons.Rounded.Download,
-                iconTint = if (effectivelyDownloaded) Color(0xFF1DB954) else MaterialTheme.colorScheme.onSurfaceVariant,
+                iconTint = if (effectivelyDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 onClick = {
                     onDismissRequest()
                     if (onToggleDownload != null) {

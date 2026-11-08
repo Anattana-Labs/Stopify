@@ -134,7 +134,7 @@ fun SimpHomeScreen(
                                         else MaterialTheme.colorScheme.surfaceVariant
                                     )
                                     .clickable { selectedFilterIndex = idx }
-                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
                             ) {
                                 Text(
                                     text = tab,
