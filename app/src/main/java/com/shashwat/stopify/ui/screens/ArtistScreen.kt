@@ -29,6 +29,7 @@ import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.platform.LocalContext
 import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import com.shashwat.stopify.ui.components.RoundAction
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -152,17 +153,7 @@ fun SimpArtistScreen(
         ) {
             // Top App Bar
             item {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
+                    RoundAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
             }
 
             // Hero Circular Avatar & Info Header
@@ -208,14 +199,14 @@ fun SimpArtistScreen(
                         Icon(
                             imageVector = Icons.Rounded.CheckCircle,
                             contentDescription = "Verified",
-                            tint = dynamicTint,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Verified Artist",
                             style = MaterialTheme.typography.labelMedium,
-                            color = dynamicTint
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
 
@@ -224,7 +215,6 @@ fun SimpArtistScreen(
                     Text(
                         text = artistName,
                         style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
@@ -264,7 +254,7 @@ fun SimpArtistScreen(
                                  .height(48.dp)
                                  .widthIn(min = 130.dp)
                                  .clip(CircleShape)
-                                 .background(dynamicTint)
+                                 .background(MaterialTheme.colorScheme.onSurface)
                                  .clickable {
                                      topTracks.firstOrNull()?.let { onPlayTrack(it) }
                                  }
@@ -275,15 +265,14 @@ fun SimpArtistScreen(
                                 Icon(
                                     imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                     contentDescription = null,
-                                    tint = Color.Black,
+                                    tint = MaterialTheme.colorScheme.surface,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (isThisPlaying) "Pause" else "Play",
-                                    color = Color.Black,
+                                    color = MaterialTheme.colorScheme.surface,
                                     style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
@@ -298,7 +287,6 @@ fun SimpArtistScreen(
                 Text(
                     text = "Popular Tracks",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 )
@@ -330,7 +318,6 @@ fun SimpArtistScreen(
                         Text(
                             text = "Albums & Singles",
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                         )

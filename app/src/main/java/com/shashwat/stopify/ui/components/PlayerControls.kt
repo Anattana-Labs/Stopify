@@ -89,15 +89,15 @@ fun SimpPlayerControlLayout(
             Box(
                 modifier = Modifier
                     .size(bigIcon.second)
-                    .clip(RoundedCornerShape(if (isSmallSize) 14.dp else 30.dp))
-                    .background(MaterialTheme.colorScheme.primary)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface)
                     .clickable { onTogglePlayPause() },
                 contentAlignment = Alignment.Center
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(if (isSmallSize) 22.dp else 34.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
+                        color = MaterialTheme.colorScheme.surface,
                         strokeWidth = 3.dp
                     )
                 } else {
@@ -105,7 +105,7 @@ fun SimpPlayerControlLayout(
                         Icon(
                             imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = if (playing) "Pause" else "Play",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = MaterialTheme.colorScheme.surface,
                             modifier = Modifier.size(if (playing) 38.dp else 42.dp)
                         )
                     }

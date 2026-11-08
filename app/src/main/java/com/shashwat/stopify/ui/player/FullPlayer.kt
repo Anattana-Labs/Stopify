@@ -50,6 +50,11 @@ import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
 import com.shashwat.stopify.player.PlaybackState
 import com.shashwat.stopify.ui.components.SimpPlayerControlLayout
+import com.shashwat.stopify.ui.components.PrismScrubber
+import com.shashwat.stopify.ui.components.Eyebrow
+import com.shashwat.stopify.ui.theme.spectrumRing
+import com.shashwat.stopify.ui.theme.glassFill
+import com.shashwat.stopify.ui.theme.glassEdge
 import com.shashwat.stopify.ui.components.TrackOptionsMenu
 import kotlinx.coroutines.launch
 
@@ -183,12 +188,12 @@ fun SimpFullPlayer(
                 modifier = Modifier.fillMaxWidth().then(closeDrag).padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                PlayerIconButton(Icons.Rounded.KeyboardArrowDown, "Close player", fg, onCollapse)
+                PlayerIconButton(Icons.Rounded.KeyboardArrowDown, "Close player", fg, onCollapse, size = 44.dp, glass = true)
                 Column(
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Now playing", style = MaterialTheme.typography.labelMedium, color = fgMuted)
+                    Eyebrow("Now playing", color = fgMuted)
                     Text(
                         track.album.ifBlank { "Stopify" },
                         style = MaterialTheme.typography.titleSmall,
@@ -197,18 +202,18 @@ fun SimpFullPlayer(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                PlayerIconButton(Icons.Rounded.MoreVert, "Track options", fg) { showOptions = true }
+                PlayerIconButton(Icons.Rounded.MoreVert, "Track options", fg, { showOptions = true }, size = 44.dp, glass = true)
             }
 
             Spacer(Modifier.height(20.dp))
 
-            // Artwork: edge, no shadow. Sideways swipe skips.
+            // Artwork: soft 22 dp corners lifted off the ground. Sideways swipe skips.
             var dragX by remember { mutableFloatStateOf(0f) }
             Box(
                 modifier = Modifier
                     .size(artSize)
-                    .clip(RoundedCornerShape(20.dp))
-                    .border(1.dp, fg.copy(alpha = 0.14f), RoundedCornerShape(20.dp))
+                    .shadow(28.dp, RoundedCornerShape(22.dp), ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f))
+                    .clip(RoundedCornerShape(22.dp))
                     .background(scheme.surfaceContainerHighest)
                     .pointerInput(track.id) {
                         detectHorizontalDragGestures(
@@ -242,7 +247,6 @@ fun SimpFullPlayer(
                     Text(
                         track.name,
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
                         color = fg,
                         maxLines = 1,
                         modifier = Modifier.basicMarquee()
@@ -302,7 +306,7 @@ fun SimpFullPlayer(
             }
 
             // Scrubber
-            Slider(
+            PrismScrubber(
                 value = if (isScrubbing) scrubProgress else fraction,
                 onValueChange = { isScrubbing = true; scrubProgress = it },
                 onValueChangeFinished = {
@@ -310,17 +314,8 @@ fun SimpFullPlayer(
                     isScrubbing = false
                 },
                 enabled = durationMs > 0,
-                colors = SliderDefaults.colors(
-                    thumbColor = scheme.primary,
-                    activeTrackColor = scheme.primary,
-                    inactiveTrackColor = fg.copy(alpha = 0.22f),
-                    disabledThumbColor = fg.copy(alpha = 0.3f),
-                    disabledActiveTrackColor = fg.copy(alpha = 0.3f),
-                    disabledInactiveTrackColor = fg.copy(alpha = 0.15f)
-                ),
-                modifier = Modifier.fillMaxWidth().semantics {
-                    contentDescription = "Seek, ${formatTimeMs(positionMs)} of ${formatTimeMs(durationMs)}"
-                }
+                trackColor = fg.copy(alpha = 0.20f),
+                description = "Seek, ${formatTimeMs(positionMs)} of ${formatTimeMs(durationMs)}"
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(formatTimeMs(positionMs), style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = fgMuted)
@@ -352,15 +347,16 @@ fun SimpFullPlayer(
                 Box(
                     modifier = Modifier
                         .size(76.dp)
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(scheme.primary)
+                        .clip(CircleShape)
+                        .background(if (onVideo) Color.White else scheme.onSurface)
+                        .then(if (playbackState.isPlaying) Modifier.spectrumRing(CircleShape, 2.dp) else Modifier)
                         .clickable(onClickLabel = label, role = Role.Button, onClick = onTogglePlayPause)
                         .semantics { contentDescription = label },
                     contentAlignment = Alignment.Center
                 ) {
                     when {
                         playbackState.isBuffering -> CircularProgressIndicator(
-                            modifier = Modifier.size(30.dp), strokeWidth = 3.dp, color = scheme.onPrimary
+                            modifier = Modifier.size(30.dp), strokeWidth = 3.dp, color = scheme.surface
                         )
                         else -> Icon(
                             when {
@@ -368,7 +364,7 @@ fun SimpFullPlayer(
                                 playbackState.isPlaying -> Icons.Rounded.Pause
                                 else -> Icons.Rounded.PlayArrow
                             },
-                            null, tint = scheme.onPrimary, modifier = Modifier.size(40.dp)
+                            null, tint = if (onVideo) Color.Black else scheme.surface, modifier = Modifier.size(40.dp)
                         )
                     }
                 }
@@ -385,8 +381,9 @@ fun SimpFullPlayer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(fg.copy(alpha = if (onVideo) 0.14f else 0.07f)),
+                    .clip(CircleShape)
+                    .background(if (onVideo) Color.White.copy(alpha = 0.14f) else glassFill(1.3f))
+                    .border(1.dp, glassEdge(), CircleShape),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 PlayerTool(Icons.Rounded.Lyrics, "Lyrics", fg, Modifier.weight(1f)) { showLyrics = true }
@@ -459,12 +456,14 @@ private fun PlayerIconButton(
     tint: Color,
     onClick: () -> Unit,
     size: Dp = 48.dp,
-    iconSize: Dp = 26.dp
+    iconSize: Dp = 26.dp,
+    glass: Boolean = false
 ) {
     Box(
         modifier = Modifier
             .size(size)
             .clip(CircleShape)
+            .then(if (glass) Modifier.background(glassFill(1.4f)).border(1.dp, glassEdge(), CircleShape) else Modifier)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center
@@ -549,7 +548,6 @@ fun SpotifyColorLyricsCard(
                     Text(
                         text = "Lyrics",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
                         color = highlightColor
                     )
                     if (lyrics.syncType == "LINE_SYNCED") {
@@ -560,7 +558,6 @@ fun SpotifyColorLyricsCard(
                             Text(
                                 text = "SYNCED",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
                                 color = highlightColor,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
@@ -581,7 +578,6 @@ fun SpotifyColorLyricsCard(
                         Text(
                             text = "MORE",
                             style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp
                             ),
                             color = highlightColor
@@ -629,7 +625,6 @@ fun SpotifyColorLyricsCard(
                         Text(
                             text = line.words.ifEmpty { "♪" },
                             style = if (isCurrent) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
                             color = if (isCurrent) highlightColor else if (isPast) highlightColor.copy(alpha = 0.65f) else normalTextColor,
                             modifier = Modifier.weight(1f)
                         )

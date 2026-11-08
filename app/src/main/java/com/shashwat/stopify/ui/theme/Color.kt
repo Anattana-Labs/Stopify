@@ -1,63 +1,74 @@
 package com.shashwat.stopify.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.ColorUtils
 
-// M3 Expressive Music Tonal Palette - Dark Scheme (Luxury Acoustic Orange)
-val DarkPrimary = Color(0xFFFF6422) // Luxury Premium Acoustic Orange
-val DarkOnPrimary = Color(0xFF000000)
-val DarkPrimaryContainer = Color(0xFF5A1E00)
-val DarkOnPrimaryContainer = Color(0xFFFFDBCF)
+/*
+ * Prism palette (Aura × Spectrum). One violet seed, near-neutral surfaces tinted slightly toward it, and the
+ * "split light": red to violet, used only for progress, the current tab, rings and the playing mark.
+ */
 
-val DarkSecondary = Color(0xFFFF8B53)
-val DarkOnSecondary = Color(0xFF381000)
-val DarkSecondaryContainer = Color(0xFF3D1B0D)
-val DarkOnSecondaryContainer = Color(0xFFFFD6C2)
+/** Prism's own accent. Every scheme is grown from it unless the artwork supplies another seed. */
+val PrismViolet = Color(0xFF7C5CFF)
 
-val DarkTertiary = Color(0xFFFFA066)
-val DarkOnTertiary = Color(0xFF381000)
-val DarkTertiaryContainer = Color(0xFF4A2010)
-val DarkOnTertiaryContainer = Color(0xFFFFDBCF)
+/** The split light on dark pages (bright) and light pages (deeper, so yellow still reads on white). */
+val SpectrumDark = listOf(
+    0.00f to Color(0xFFFF4D5E), 0.20f to Color(0xFFFF9F43), 0.38f to Color(0xFFFFD84D),
+    0.56f to Color(0xFF3DDC97), 0.76f to Color(0xFF36B8FF), 1.00f to Color(0xFF7C5CFF),
+)
+val SpectrumLight = listOf(
+    0.00f to Color(0xFFE23347), 0.20f to Color(0xFFE57A12), 0.38f to Color(0xFFC79A00),
+    0.56f to Color(0xFF15A86C), 0.76f to Color(0xFF1789D6), 1.00f to Color(0xFF6A44F0),
+)
+/** The same colours as a closed loop, for rings. */
+val SpectrumRing = listOf(
+    Color(0xFFFF4D5E), Color(0xFFFF9F43), Color(0xFFFFD84D), Color(0xFF3DDC97),
+    Color(0xFF36B8FF), Color(0xFF7C5CFF), Color(0xFFFF4D5E),
+)
 
-val DarkSurface = Color(0xFF131110)
-val DarkOnSurface = Color(0xFFF3EEEE)
-val DarkSurfaceVariant = Color(0xFF221C1A)
-val DarkOnSurfaceVariant = Color(0xFFC7BDB8)
+internal fun hsl(h: Float, s: Float, l: Float): Color =
+    Color(ColorUtils.HSLToColor(floatArrayOf(((h % 360f) + 360f) % 360f, s.coerceIn(0f, 1f), l.coerceIn(0f, 1f))))
 
-val DarkSurfaceContainerLowest = Color(0xFF0C0A09)
-val DarkSurfaceContainerLow = Color(0xFF161311)
-val DarkSurfaceContainer = Color(0xFF1D1917)
-val DarkSurfaceContainerHigh = Color(0xFF272220)
-val DarkSurfaceContainerHighest = Color(0xFF342E2B)
+internal fun hueOf(c: Color): Float {
+    val out = FloatArray(3)
+    ColorUtils.colorToHSL(c.toArgbCompat(), out)
+    return out[0]
+}
 
-val DarkOutline = Color(0xFF554A45)
-val DarkOutlineVariant = Color(0xFF302926)
+internal fun satOf(c: Color): Float {
+    val out = FloatArray(3)
+    ColorUtils.colorToHSL(c.toArgbCompat(), out)
+    return out[1]
+}
 
-// M3 Expressive Music Tonal Palette - Light Scheme (Luxury Acoustic Orange)
-val LightPrimary = Color(0xFFE54E0B)
-val LightOnPrimary = Color(0xFFFFFFFF)
-val LightPrimaryContainer = Color(0xFFFFDBCF)
-val LightOnPrimaryContainer = Color(0xFF380C00)
+internal fun Color.toArgbCompat(): Int = this.toArgb()
 
-val LightSecondary = Color(0xFF7B5240)
-val LightOnSecondary = Color(0xFFFFFFFF)
-val LightSecondaryContainer = Color(0xFFFFDBCF)
-val LightOnSecondaryContainer = Color(0xFF2E1508)
+/** Greys have no hue to grow a scheme from. */
+internal fun isNeutralSeed(c: Color): Boolean {
+    val out = FloatArray(3)
+    ColorUtils.colorToHSL(c.toArgbCompat(), out)
+    return out[1] < 0.08f || out[2] > 0.97f || out[2] < 0.03f
+}
 
-val LightTertiary = Color(0xFF8B4D20)
-val LightOnTertiary = Color(0xFFFFFFFF)
-val LightTertiaryContainer = Color(0xFFFFD6C2)
-val LightOnTertiaryContainer = Color(0xFF301505)
+internal fun contrastOf(fg: Color, bg: Color): Float =
+    ColorUtils.calculateContrast(fg.copy(alpha = 1f).toArgbCompat(), bg.copy(alpha = 1f).toArgbCompat()).toFloat()
 
-val LightSurface = Color(0xFFFFFFFF)
-val LightOnSurface = Color(0xFF1F1A18)
-val LightSurfaceVariant = Color(0xFFF5EBE6)
-val LightOnSurfaceVariant = Color(0xFF51443E)
+/** [c] moved toward white or black, as far as it must, until it reads on [bg] at [min]:1. */
+internal fun readableOn(c: Color, bg: Color, min: Float = 4.5f): Color {
+    if (contrastOf(c, bg) >= min) return c
+    val out = FloatArray(3)
+    ColorUtils.colorToHSL(c.toArgbCompat(), out)
+    val lighten = ColorUtils.calculateLuminance(bg.toArgbCompat()) < 0.5
+    var l = out[2]
+    repeat(40) {
+        l = (l + if (lighten) 0.02f else -0.02f).coerceIn(0f, 1f)
+        val next = hsl(out[0], out[1], l)
+        if (contrastOf(next, bg) >= min) return next
+    }
+    return if (lighten) Color.White else Color(0xFF111114)
+}
 
-val LightSurfaceContainerLowest = Color(0xFFFFFFFF)
-val LightSurfaceContainerLow = Color(0xFFFAF2ED)
-val LightSurfaceContainer = Color(0xFFF4ECE6)
-val LightSurfaceContainerHigh = Color(0xFFEEE6E0)
-val LightSurfaceContainerHighest = Color(0xFFE8E0DA)
-
-val LightOutline = Color(0xFF84746D)
-val LightOutlineVariant = Color(0xFFD7C2B9)
+/** White or near-black ink, whichever reads better on [c]. */
+internal fun inkOn(c: Color): Color =
+    if (contrastOf(Color.White, c) >= contrastOf(Color(0xFF111114), c)) Color.White else Color(0xFF111114)

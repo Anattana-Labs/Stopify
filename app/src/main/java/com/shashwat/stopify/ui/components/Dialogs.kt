@@ -114,7 +114,6 @@ fun TrackOptionsMenu(
                     Text(
                         text = track.name,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -296,7 +295,6 @@ fun AddToPlaylistDialog(
                     Text(
                         text = "Add to Playlist",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
@@ -349,7 +347,6 @@ fun AddToPlaylistDialog(
                             Text(
                                 text = track.name,
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -383,7 +380,7 @@ fun AddToPlaylistDialog(
                             Text("Cancel")
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Button(
+                        PrismButton(
                             onClick = {
                                 if (newPlaylistName.isNotBlank() && !isSaving) {
                                     isSaving = true
@@ -404,10 +401,9 @@ fun AddToPlaylistDialog(
                         }
                     }
                 } else {
-                    OutlinedButton(
+                    PrismOutlinedButton(
                         onClick = { isCreatingNew = true },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
@@ -480,7 +476,6 @@ fun AddToPlaylistDialog(
                                             Text(
                                                 text = pl.name,
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
@@ -535,7 +530,6 @@ fun CreatePlaylistDialog(
                     Text(
                         text = "Create Playlist",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
@@ -600,7 +594,7 @@ fun CreatePlaylistDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Switch(
+                    PrismSwitch(
                         checked = isPublic,
                         onCheckedChange = { isPublic = it }
                     )
@@ -616,7 +610,7 @@ fun CreatePlaylistDialog(
                         Text("Cancel")
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Button(
+                    PrismButton(
                         onClick = {
                             if (name.isNotBlank() && !isCreating) {
                                 isCreating = true
@@ -631,14 +625,9 @@ fun CreatePlaylistDialog(
                             }
                         },
                         enabled = name.isNotBlank() && !isCreating,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
                             text = if (isCreating) "Creating..." else "Create Playlist",
-                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -704,7 +693,6 @@ fun SearchAndAddTracksDialog(
                         Text(
                             text = "Add Songs",
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = "To $playlistName",
@@ -818,7 +806,6 @@ fun SearchAndAddTracksDialog(
                                         Text(
                                             text = track.name,
                                             style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )

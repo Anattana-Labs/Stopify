@@ -26,7 +26,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shashwat.stopify.ui.components.PrismButton
 import coil.compose.AsyncImage
+import com.shashwat.stopify.ui.components.RoundAction
 import android.graphics.drawable.BitmapDrawable
 import androidx.palette.graphics.Palette
 import coil.imageLoader
@@ -132,21 +134,11 @@ fun SimpPlaylistScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                RoundAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
                 Box(
                     modifier = Modifier
                         .size(240.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(22.dp))
                         .align(Alignment.CenterHorizontally)
                         .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                 )
@@ -186,17 +178,7 @@ fun SimpPlaylistScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
+                        RoundAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (isCustomPlaylist) {
@@ -205,12 +187,12 @@ fun SimpPlaylistScreen(
                                     modifier = Modifier
                                         .size(40.dp)
                                         .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.1f))
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.DeleteOutline,
                                         contentDescription = "Delete Playlist",
-                                        tint = Color(0xFFFF5252),
+                                        tint = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -232,9 +214,9 @@ fun SimpPlaylistScreen(
                             modifier = Modifier
                                 .padding(vertical = 12.dp)
                                 .size(230.dp)
-                                .shadow(24.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.6f))
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF242424))
+                                .shadow(24.dp, RoundedCornerShape(22.dp), spotColor = Color.Black.copy(alpha = 0.6f))
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                         ) {
                             if (!playlist.coverUrl.isNullOrEmpty()) {
                                 AsyncImage(
@@ -251,7 +233,7 @@ fun SimpPlaylistScreen(
                                     Icon(
                                         imageVector = Icons.Rounded.MusicNote,
                                         contentDescription = null,
-                                        tint = dynamicTint,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(64.dp)
                                     )
                                 }
@@ -263,8 +245,7 @@ fun SimpPlaylistScreen(
                         // Playlist Title
                         Text(
                             text = playlist.name,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
@@ -291,8 +272,7 @@ fun SimpPlaylistScreen(
                         Text(
                             text = "${playlist.tracks.size} songs",
                             style = MaterialTheme.typography.labelMedium,
-                            color = dynamicTint,
-                            fontWeight = FontWeight.SemiBold
+                            color = MaterialTheme.colorScheme.primary,
                         )
 
                         Spacer(modifier = Modifier.height(20.dp))
@@ -328,7 +308,7 @@ fun SimpPlaylistScreen(
                                     .height(48.dp)
                                     .widthIn(min = 130.dp)
                                     .clip(CircleShape)
-                                    .background(dynamicTint)
+                                    .background(MaterialTheme.colorScheme.onSurface)
                                     .clickable {
                                         playlist.tracks.firstOrNull()?.let { onPlayTrack(it) }
                                     }
@@ -339,15 +319,14 @@ fun SimpPlaylistScreen(
                                     Icon(
                                         imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                         contentDescription = null,
-                                        tint = Color.Black,
+                                        tint = MaterialTheme.colorScheme.surface,
                                         modifier = Modifier.size(24.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = if (isThisPlaying) "Pause" else "Play",
-                                        color = Color.Black,
+                                        color = MaterialTheme.colorScheme.surface,
                                         style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
@@ -357,14 +336,14 @@ fun SimpPlaylistScreen(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.1f))
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                     .clickable { showAddSongsDialog = true },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Add,
                                     contentDescription = "Add Songs",
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -385,17 +364,15 @@ fun SimpPlaylistScreen(
                             Text(
                                 text = "This playlist is empty",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = Color.White.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Button(
+                            PrismButton(
                                 onClick = { showAddSongsDialog = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = dynamicTint),
-                                shape = RoundedCornerShape(20.dp)
                             ) {
-                                Icon(Icons.Rounded.Add, contentDescription = null, tint = Color.Black)
+                                Icon(Icons.Rounded.Add, contentDescription = null, tint = MaterialTheme.colorScheme.surface)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Add Songs", color = Color.Black, fontWeight = FontWeight.Bold)
+                                Text("Add Songs", color = MaterialTheme.colorScheme.surface, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -468,7 +445,7 @@ fun SimpPlaylistScreen(
                             }
                         }
                     ) {
-                        Text("Delete", color = Color(0xFFFF5252))
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
                     }
                 },
                 dismissButton = {

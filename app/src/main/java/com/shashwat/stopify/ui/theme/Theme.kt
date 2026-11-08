@@ -2,15 +2,21 @@ package com.shashwat.stopify.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 enum class AppThemeMode {
+    /** Prism's violet, or the playing cover's colour when there is one. */
     DYNAMIC,
+    /** "White light": greys and ink only. */
     MONOCHROME,
+    /** Pure black ground. */
     AMOLED
 }
 
@@ -20,266 +26,114 @@ enum class ThemeColorMode(val label: String) {
     LIGHT("Light Mode")
 }
 
-// ── "OXIDE" PALETTE: deep teal-black ground, coral signal, sand secondary ──
-val PremiumOrange = Color(0xFFFF6F61) // primary signal coral
+/** Whether the app is drawing its dark scheme (not necessarily the phone's). */
+val LocalIsDark = staticCompositionLocalOf { true }
 
-val PremiumOrangeDarkScheme = darkColorScheme(
-    primary = Color(0xFFFF6F61), onPrimary = Color(0xFF3A0A05),
-    primaryContainer = Color(0xFF5C1F17), onPrimaryContainer = Color(0xFFFFDAD4),
-    secondary = Color(0xFFE9C46A), onSecondary = Color(0xFF2E2300),
-    secondaryContainer = Color(0xFF45380F), onSecondaryContainer = Color(0xFFFFEDB8),
-    tertiary = Color(0xFF7FD6C2), onTertiary = Color(0xFF00382F),
-    surface = Color(0xFF0F1718), onSurface = Color(0xFFE8EEEC),
-    surfaceVariant = Color(0xFF1A2829), onSurfaceVariant = Color(0xFF9FB0AE),
-    surfaceContainerLowest = Color(0xFF070D0E), surfaceContainerLow = Color(0xFF0D1516),
-    surfaceContainer = Color(0xFF142021), surfaceContainerHigh = Color(0xFF1B2A2C),
-    surfaceContainerHighest = Color(0xFF263638),
-    background = Color(0xFF0A1112), onBackground = Color(0xFFE8EEEC),
-    outline = Color(0xFF5E7476), outlineVariant = Color(0xFF223335)
-)
+/** Kept for older call sites: the accent a screen may use as "the brand". */
+val PremiumOrange = PrismViolet
 
-val PremiumOrangeLightScheme = lightColorScheme(
-    primary = Color(0xFFB8321F), onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFFFDAD4), onPrimaryContainer = Color(0xFF3A0A05),
-    secondary = Color(0xFF7A5C00), onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFFFEDB8), onSecondaryContainer = Color(0xFF261A00),
-    tertiary = Color(0xFF00695A), onTertiary = Color(0xFFFFFFFF),
-    surface = Color(0xFFF2F4F1), onSurface = Color(0xFF101616),
-    surfaceVariant = Color(0xFFE1E7E4), onSurfaceVariant = Color(0xFF3F4D4C),
-    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFEBEFEC),
-    surfaceContainer = Color(0xFFE4E9E6), surfaceContainerHigh = Color(0xFFDCE2DF),
-    surfaceContainerHighest = Color(0xFFD2D9D6),
-    background = Color(0xFFF2F4F1), onBackground = Color(0xFF101616),
-    outline = Color(0xFF627270), outlineVariant = Color(0xFFC3CCC9)
-)
-
-// ── MONOCHROME SCHEMES ────────────────────────────────────────────────
-private val MonochromeColorScheme = darkColorScheme(
-    primary = Color(0xFFE2E2E2),
-    onPrimary = Color(0xFF141414),
-    primaryContainer = Color(0xFF383838),
-    onPrimaryContainer = Color(0xFFF2F2F2),
-    secondary = Color(0xFFC4C4C4),
-    onSecondary = Color(0xFF1E1E1E),
-    secondaryContainer = Color(0xFF3E3E3E),
-    onSecondaryContainer = Color(0xFFE5E5E5),
-    tertiary = Color(0xFFAAAAAA),
-    onTertiary = Color(0xFF1A1A1A),
-    surface = Color(0xFF121212),
-    onSurface = Color(0xFFEAEAEA),
-    surfaceVariant = Color(0xFF1E1E1E),
-    onSurfaceVariant = Color(0xFFA8A8A8),
-    surfaceContainerLowest = Color(0xFF0B0B0B),
-    surfaceContainerLow = Color(0xFF161616),
-    surfaceContainer = Color(0xFF1C1C1C),
-    surfaceContainerHigh = Color(0xFF262626),
-    surfaceContainerHighest = Color(0xFF303030),
-    background = Color(0xFF0F0F10),
-    onBackground = Color(0xFFEAEAEA),
-    outline = Color(0xFF4C4C4C),
-    outlineVariant = Color(0xFF2E2E2E)
-)
-
-private val MonochromeLightScheme = lightColorScheme(
-    primary = Color(0xFF202020),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE0E0E0),
-    onPrimaryContainer = Color(0xFF101010),
-    secondary = Color(0xFF505050),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFEEEEEE),
-    onSecondaryContainer = Color(0xFF222222),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF141414),
-    surfaceVariant = Color(0xFFF0F0F0),
-    onSurfaceVariant = Color(0xFF555555),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF6F6F6),
-    surfaceContainer = Color(0xFFEFEFEF),
-    surfaceContainerHigh = Color(0xFFE8E8E8),
-    surfaceContainerHighest = Color(0xFFE0E0E0),
-    background = Color(0xFFF8F8F8),
-    onBackground = Color(0xFF141414),
-    outline = Color(0xFF888888),
-    outlineVariant = Color(0xFFCCCCCC)
-)
-
-// ── AMOLED PURE BLACK ─────────────────────────────────────────────────
-private val AmoledColorScheme = darkColorScheme(
-    primary = PremiumOrange,
-    onPrimary = Color(0xFF1A2000),
-    primaryContainer = Color(0xFF3A4500),
-    onPrimaryContainer = Color(0xFFF1FF9E),
-    secondary = Color(0xFF8FD3E8),
-    onSecondary = Color(0xFF000000),
-    secondaryContainer = Color(0xFF381506),
-    onSecondaryContainer = Color(0xFFFFD6C2),
-    tertiary = Color(0xFFFFA066),
-    onTertiary = Color(0xFF000000),
-    surface = Color(0xFF000000), // Pure AMOLED Black
-    onSurface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFF121212),
-    onSurfaceVariant = Color(0xFFB3B3B3),
-    surfaceContainerLowest = Color(0xFF000000),
-    surfaceContainerLow = Color(0xFF080808),
-    surfaceContainer = Color(0xFF101010),
-    surfaceContainerHigh = Color(0xFF181818),
-    surfaceContainerHighest = Color(0xFF222222),
-    background = Color(0xFF000000),
-    onBackground = Color(0xFFFFFFFF),
-    outline = Color(0xFF3A3A3A),
-    outlineVariant = Color(0xFF202020)
-)
-
-// ── DYNAMIC ARTWORK PALETTE EXTRACTION ────────────────────────────────
-fun generateArtworkColorScheme(seedColor: Color, darkTheme: Boolean = true): ColorScheme {
-    val r = seedColor.red
-    val g = seedColor.green
-    val b = seedColor.blue
-    val max = maxOf(r, g, b)
-    val min = minOf(r, g, b)
-    val d = max - min
-    val h = when {
-        d == 0f -> 0f
-        max == r -> {
-            val segment = (g - b) / d
-            if (segment < 0f) (segment + 6f) * 60f else segment * 60f
-        }
-        max == g -> (((b - r) / d) + 2f) * 60f
-        else -> (((r - g) / d) + 4f) * 60f
-    }
-    val l = (max + min) / 2f
-    val s = if (d == 0f) 0f else d / (1f - kotlin.math.abs(2f * l - 1f))
-
-    fun fromHsl(hue: Float, sat: Float, lum: Float): Color {
-        val c = (1f - kotlin.math.abs(2f * lum - 1f)) * sat
-        val x = c * (1f - kotlin.math.abs((hue / 60f) % 2f - 1f))
-        val m = lum - c / 2f
-        val (rp, gp, bp) = when (((hue / 60f).toInt() % 6 + 6) % 6) {
-            0 -> Triple(c, x, 0f)
-            1 -> Triple(x, c, 0f)
-            2 -> Triple(0f, c, x)
-            3 -> Triple(0f, x, c)
-            4 -> Triple(x, 0f, c)
-            else -> Triple(c, 0f, x)
-        }
-        return Color(
-            (rp + m).coerceIn(0f, 1f),
-            (gp + m).coerceIn(0f, 1f),
-            (bp + m).coerceIn(0f, 1f),
-            1f
+/** Near-neutral greys for "White light": no tint anywhere. */
+private fun neutralScheme(dark: Boolean): ColorScheme {
+    fun g(l: Float) = hsl(0f, 0f, l)
+    return if (dark) {
+        val bg = g(0.055f)
+        darkColorScheme(
+            primary = Color.White, onPrimary = g(0.08f),
+            primaryContainer = g(0.26f), onPrimaryContainer = Color.White, inversePrimary = g(0.20f),
+            secondary = g(0.82f), onSecondary = g(0.10f),
+            secondaryContainer = g(0.22f), onSecondaryContainer = g(0.95f),
+            tertiary = g(0.70f), onTertiary = g(0.10f),
+            tertiaryContainer = g(0.24f), onTertiaryContainer = g(0.95f),
+            background = bg, onBackground = g(0.95f), surface = bg, onSurface = g(0.95f),
+            surfaceVariant = g(0.20f), onSurfaceVariant = g(0.74f), surfaceTint = Color.White,
+            inverseSurface = g(0.93f), inverseOnSurface = g(0.12f),
+            outline = g(0.45f), outlineVariant = g(0.26f),
+            surfaceBright = g(0.20f), surfaceDim = bg,
+            surfaceContainerLowest = g(0.04f), surfaceContainerLow = g(0.085f),
+            surfaceContainer = g(0.105f), surfaceContainerHigh = g(0.135f), surfaceContainerHighest = g(0.165f),
+        )
+    } else {
+        val bg = g(0.985f)
+        lightColorScheme(
+            primary = g(0.12f), onPrimary = Color.White,
+            primaryContainer = g(0.88f), onPrimaryContainer = g(0.08f), inversePrimary = Color.White,
+            secondary = g(0.34f), onSecondary = Color.White,
+            secondaryContainer = g(0.90f), onSecondaryContainer = g(0.10f),
+            tertiary = g(0.45f), onTertiary = Color.White,
+            tertiaryContainer = g(0.90f), onTertiaryContainer = g(0.10f),
+            background = bg, onBackground = g(0.08f), surface = bg, onSurface = g(0.08f),
+            surfaceVariant = g(0.91f), onSurfaceVariant = g(0.34f), surfaceTint = g(0.12f),
+            inverseSurface = g(0.16f), inverseOnSurface = g(0.95f),
+            outline = g(0.52f), outlineVariant = g(0.82f),
+            surfaceBright = bg, surfaceDim = g(0.88f),
+            surfaceContainerLowest = Color.White, surfaceContainerLow = g(0.965f),
+            surfaceContainer = g(0.95f), surfaceContainerHigh = g(0.93f), surfaceContainerHighest = g(0.905f),
         )
     }
+}
 
-    if (!darkTheme) {
-        val primary = fromHsl(h, 0.90f.coerceAtMost(s.coerceAtLeast(0.6f)), 0.38f)
-        val onPrimary = Color.White
-        val primaryContainer = fromHsl(h, 0.75f, 0.90f)
-        val onPrimaryContainer = fromHsl(h, 0.90f, 0.12f)
-        val secondary = fromHsl((h + 30f) % 360f, 0.50f, 0.42f)
-        val onSecondary = Color.White
-        val secondaryContainer = fromHsl((h + 30f) % 360f, 0.60f, 0.88f)
-        val onSecondaryContainer = fromHsl((h + 30f) % 360f, 0.80f, 0.12f)
-        val tertiary = fromHsl((h + 60f) % 360f, 0.50f, 0.40f)
-        val onTertiary = Color.White
-        val tertiaryContainer = fromHsl((h + 60f) % 360f, 0.60f, 0.88f)
-        val onTertiaryContainer = fromHsl((h + 60f) % 360f, 0.80f, 0.12f)
-        val surface = fromHsl(h, 0.10f, 0.99f)
-        val onSurface = fromHsl(h, 0.20f, 0.10f)
-        val surfaceVariant = fromHsl(h, 0.15f, 0.92f)
-        val onSurfaceVariant = fromHsl(h, 0.15f, 0.35f)
-        val surfaceContainerLowest = Color.White
-        val surfaceContainerLow = fromHsl(h, 0.10f, 0.96f)
-        val surfaceContainer = fromHsl(h, 0.12f, 0.93f)
-        val surfaceContainerHigh = fromHsl(h, 0.14f, 0.89f)
-        val surfaceContainerHighest = fromHsl(h, 0.16f, 0.85f)
-        val background = fromHsl(h, 0.10f, 0.98f)
-        val onBackground = fromHsl(h, 0.20f, 0.10f)
-        val outline = fromHsl(h, 0.15f, 0.55f)
-        val outlineVariant = fromHsl(h, 0.15f, 0.80f)
-
-        return lightColorScheme(
-            primary = primary,
-            onPrimary = onPrimary,
-            primaryContainer = primaryContainer,
-            onPrimaryContainer = onPrimaryContainer,
-            secondary = secondary,
-            onSecondary = onSecondary,
-            secondaryContainer = secondaryContainer,
-            onSecondaryContainer = onSecondaryContainer,
-            tertiary = tertiary,
-            onTertiary = onTertiary,
-            tertiaryContainer = tertiaryContainer,
-            onTertiaryContainer = onTertiaryContainer,
-            surface = surface,
-            onSurface = onSurface,
-            surfaceVariant = surfaceVariant,
-            onSurfaceVariant = onSurfaceVariant,
-            surfaceContainerLowest = surfaceContainerLowest,
-            surfaceContainerLow = surfaceContainerLow,
-            surfaceContainer = surfaceContainer,
-            surfaceContainerHigh = surfaceContainerHigh,
-            surfaceContainerHighest = surfaceContainerHighest,
-            background = background,
-            onBackground = onBackground,
-            outline = outline,
-            outlineVariant = outlineVariant
+/**
+ * A full Material 3 scheme grown from one [seed] hue, as Prism does it: a ground at 5.5 % lightness (dark) or 98.5 %
+ * (light) with a hint of the seed's hue, containers stepping up by small amounts, and an accent that is checked
+ * against the ground ([readableOn]) so a pale yellow or neon cover can never give an accent you cannot read.
+ */
+fun schemeFromSeed(seed: Color, dark: Boolean, pureBlack: Boolean = false): ColorScheme {
+    if (isNeutralSeed(seed)) return neutralScheme(dark)
+    val h = hueOf(seed)
+    val s = satOf(seed).coerceIn(0.30f, 0.92f)
+    val n = 0.10f
+    val c = if (dark) {
+        val bg = if (pureBlack) Color.Black else hsl(h, n * 1.4f, 0.055f)
+        darkColorScheme(
+            primary = hsl(h, s, 0.76f), onPrimary = hsl(h, s, 0.14f),
+            primaryContainer = hsl(h, s * 0.75f, 0.30f), onPrimaryContainer = hsl(h, s, 0.92f),
+            inversePrimary = hsl(h, s, 0.42f),
+            secondary = hsl(h, s * 0.35f, 0.76f), onSecondary = hsl(h, s * 0.35f, 0.16f),
+            secondaryContainer = hsl(h, s * 0.30f, 0.26f), onSecondaryContainer = hsl(h, s * 0.35f, 0.92f),
+            tertiary = hsl(h + 45f, s * 0.6f, 0.78f), onTertiary = hsl(h + 45f, s * 0.6f, 0.16f),
+            tertiaryContainer = hsl(h + 45f, s * 0.5f, 0.28f), onTertiaryContainer = hsl(h + 45f, s * 0.6f, 0.92f),
+            background = bg, onBackground = hsl(h, n, 0.93f), surface = bg, onSurface = hsl(h, n, 0.93f),
+            surfaceVariant = hsl(h, n * 1.5f, 0.20f), onSurfaceVariant = hsl(h, n * 1.2f, 0.74f),
+            surfaceTint = hsl(h, s, 0.76f),
+            inverseSurface = hsl(h, n, 0.92f), inverseOnSurface = hsl(h, n, 0.12f),
+            outline = hsl(h, n, 0.45f), outlineVariant = hsl(h, n, 0.26f),
+            surfaceBright = hsl(h, n * 1.4f, if (pureBlack) 0.16f else 0.20f), surfaceDim = bg,
+            surfaceContainerLowest = if (pureBlack) Color.Black else hsl(h, n * 1.4f, 0.04f),
+            surfaceContainerLow = hsl(h, n * 1.4f, if (pureBlack) 0.05f else 0.085f),
+            surfaceContainer = hsl(h, n * 1.4f, if (pureBlack) 0.07f else 0.105f),
+            surfaceContainerHigh = hsl(h, n * 1.4f, if (pureBlack) 0.10f else 0.135f),
+            surfaceContainerHighest = hsl(h, n * 1.4f, if (pureBlack) 0.13f else 0.165f),
+        )
+    } else {
+        val bg = hsl(h, 0.30f, 0.985f)
+        lightColorScheme(
+            primary = hsl(h, s, 0.42f), onPrimary = Color.White,
+            primaryContainer = hsl(h, s, 0.90f), onPrimaryContainer = hsl(h, s, 0.14f),
+            inversePrimary = hsl(h, s, 0.78f),
+            secondary = hsl(h, s * 0.30f, 0.40f), onSecondary = Color.White,
+            secondaryContainer = hsl(h, s * 0.40f, 0.90f), onSecondaryContainer = hsl(h, s * 0.35f, 0.14f),
+            tertiary = hsl(h + 45f, s * 0.6f, 0.40f), onTertiary = Color.White,
+            tertiaryContainer = hsl(h + 45f, s * 0.6f, 0.90f), onTertiaryContainer = hsl(h + 45f, s * 0.6f, 0.14f),
+            background = bg, onBackground = hsl(h, n, 0.10f), surface = bg, onSurface = hsl(h, n, 0.10f),
+            surfaceVariant = hsl(h, 0.18f, 0.91f), onSurfaceVariant = hsl(h, n, 0.34f),
+            surfaceTint = hsl(h, s, 0.42f),
+            inverseSurface = hsl(h, n, 0.18f), inverseOnSurface = hsl(h, n, 0.95f),
+            outline = hsl(h, n, 0.52f), outlineVariant = hsl(h, n, 0.82f),
+            surfaceBright = bg, surfaceDim = hsl(h, 0.15f, 0.88f),
+            surfaceContainerLowest = Color.White, surfaceContainerLow = hsl(h, 0.30f, 0.965f),
+            surfaceContainer = hsl(h, 0.28f, 0.95f), surfaceContainerHigh = hsl(h, 0.25f, 0.93f),
+            surfaceContainerHighest = hsl(h, 0.22f, 0.905f),
         )
     }
-
-    val primary = fromHsl(h, 0.85f.coerceAtMost(s.coerceAtLeast(0.6f)), 0.65f)
-    val onPrimary = fromHsl(h, 0.9f, 0.10f)
-    val primaryContainer = fromHsl(h, 0.7f, 0.22f)
-    val onPrimaryContainer = fromHsl(h, 0.8f, 0.92f)
-
-    val secondary = fromHsl((h + 30f) % 360f, 0.6f, 0.70f)
-    val onSecondary = fromHsl((h + 30f) % 360f, 0.8f, 0.12f)
-    val secondaryContainer = fromHsl((h + 30f) % 360f, 0.5f, 0.20f)
-    val onSecondaryContainer = fromHsl((h + 30f) % 360f, 0.7f, 0.90f)
-
-    val tertiary = fromHsl((h + 60f) % 360f, 0.65f, 0.75f)
-    val onTertiary = fromHsl((h + 60f) % 360f, 0.8f, 0.12f)
-
-    val surface = fromHsl(h, 0.22f, 0.06f)
-    val onSurface = fromHsl(h, 0.10f, 0.94f)
-    val surfaceVariant = fromHsl(h, 0.18f, 0.14f)
-    val onSurfaceVariant = fromHsl(h, 0.12f, 0.80f)
-
-    val surfaceContainerLowest = fromHsl(h, 0.25f, 0.03f)
-    val surfaceContainerLow = fromHsl(h, 0.22f, 0.08f)
-    val surfaceContainer = fromHsl(h, 0.20f, 0.11f)
-    val surfaceContainerHigh = fromHsl(h, 0.18f, 0.15f)
-    val surfaceContainerHighest = fromHsl(h, 0.16f, 0.20f)
-    val background = fromHsl(h, 0.22f, 0.05f)
-    val onBackground = fromHsl(h, 0.10f, 0.94f)
-
-    val outline = fromHsl(h, 0.15f, 0.50f)
-    val outlineVariant = fromHsl(h, 0.18f, 0.28f)
-
-    return darkColorScheme(
-        primary = primary,
-        onPrimary = onPrimary,
-        primaryContainer = primaryContainer,
-        onPrimaryContainer = onPrimaryContainer,
-        secondary = secondary,
-        onSecondary = onSecondary,
-        secondaryContainer = secondaryContainer,
-        onSecondaryContainer = onSecondaryContainer,
-        tertiary = tertiary,
-        onTertiary = onTertiary,
-        surface = surface,
-        onSurface = onSurface,
-        surfaceVariant = surfaceVariant,
-        onSurfaceVariant = onSurfaceVariant,
-        surfaceContainerLowest = surfaceContainerLowest,
-        surfaceContainerLow = surfaceContainerLow,
-        surfaceContainer = surfaceContainer,
-        surfaceContainerHigh = surfaceContainerHigh,
-        surfaceContainerHighest = surfaceContainerHighest,
-        background = background,
-        onBackground = onBackground,
-        outline = outline,
-        outlineVariant = outlineVariant
+    val primary = readableOn(c.primary, c.background)
+    return c.copy(
+        primary = primary, surfaceTint = primary, onPrimary = readableOn(c.onPrimary, primary),
+        onPrimaryContainer = readableOn(c.onPrimaryContainer, c.primaryContainer),
+        secondary = readableOn(c.secondary, c.background),
+        onSecondaryContainer = readableOn(c.onSecondaryContainer, c.secondaryContainer),
+        tertiary = readableOn(c.tertiary, c.background),
+        onSurfaceVariant = readableOn(c.onSurfaceVariant, c.background),
+        outline = readableOn(c.outline, c.background, 3f),
     )
 }
 
@@ -298,21 +152,18 @@ fun StopifyTheme(
     }
 
     val colorScheme = when (themeMode) {
-        AppThemeMode.AMOLED -> AmoledColorScheme
-        AppThemeMode.MONOCHROME -> if (isDark) MonochromeColorScheme else MonochromeLightScheme
-        AppThemeMode.DYNAMIC -> {
-            if (seedColor != null) {
-                generateArtworkColorScheme(seedColor, isDark)
-            } else {
-                if (isDark) PremiumOrangeDarkScheme else PremiumOrangeLightScheme
-            }
-        }
+        AppThemeMode.AMOLED -> schemeFromSeed(seedColor ?: PrismViolet, dark = true, pureBlack = true)
+        AppThemeMode.MONOCHROME -> neutralScheme(isDark)
+        AppThemeMode.DYNAMIC -> schemeFromSeed(seedColor ?: PrismViolet, isDark)
     }
+    val dark = isDark || themeMode == AppThemeMode.AMOLED
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = M3Shapes,
-        content = content
-    )
+    CompositionLocalProvider(LocalIsDark provides dark, LocalContentColor provides colorScheme.onBackground) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            shapes = M3Shapes,
+            content = content
+        )
+    }
 }
