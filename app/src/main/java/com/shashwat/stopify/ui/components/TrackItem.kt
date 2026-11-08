@@ -45,7 +45,7 @@ fun SimpTrackItem(
 
     val backgroundColor by animateColorAsState(
         targetValue = if (isCurrentTrack) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f)
+            MaterialTheme.colorScheme.surfaceContainerHigh
         } else {
             Color.Transparent
         },
@@ -55,10 +55,10 @@ fun SimpTrackItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(backgroundColor)
             .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Track index or Equalizer (when in album / numbered list)
@@ -89,8 +89,8 @@ fun SimpTrackItem(
         if (showCover) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(5.dp))
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center
             ) {
@@ -118,7 +118,7 @@ fun SimpTrackItem(
             Text(
                 text = track.name,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 14.sp,
+                    fontSize = 15.sp,
                     fontWeight = if (isCurrentTrack) FontWeight.Bold else FontWeight.Medium
                 ),
                 color = if (isCurrentTrack) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
@@ -132,13 +132,13 @@ fun SimpTrackItem(
                         modifier = Modifier
                             .size(13.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1DB954)),
+                            .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.ArrowDownward,
                             contentDescription = "Downloaded",
-                            tint = Color.Black,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(9.dp)
                         )
                     }
@@ -146,8 +146,8 @@ fun SimpTrackItem(
                 }
                 Text(
                     text = track.artist,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -160,8 +160,8 @@ fun SimpTrackItem(
             val seconds = (track.durationMs / 1000) % 60
             Text(
                 text = "%d:%02d".format(minutes, seconds),
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontFeatureSettings = "tnum"),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
         }
@@ -169,7 +169,7 @@ fun SimpTrackItem(
         // 3-dot Options Menu Button
         IconButton(
             onClick = onMoreClick,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(48.dp)
         ) {
             Icon(
                 imageVector = Icons.Rounded.MoreVert,

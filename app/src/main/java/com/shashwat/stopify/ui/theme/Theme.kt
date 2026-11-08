@@ -20,59 +20,37 @@ enum class ThemeColorMode(val label: String) {
     LIGHT("Light Mode")
 }
 
-// ── LUXURY PREMIUM ACOUSTIC ORANGE ────────────────────────────────────
-val PremiumOrange = Color(0xFFFF6422) // High-end Sunset Amber Orange
+// ── "OXIDE" PALETTE: deep teal-black ground, coral signal, sand secondary ──
+val PremiumOrange = Color(0xFFFF6F61) // primary signal coral
 
 val PremiumOrangeDarkScheme = darkColorScheme(
-    primary = PremiumOrange,
-    onPrimary = Color(0xFF000000),
-    primaryContainer = Color(0xFF5A1E00),
-    onPrimaryContainer = Color(0xFFFFDBCF),
-    secondary = Color(0xFFFF8B53),
-    onSecondary = Color(0xFF381000),
-    secondaryContainer = Color(0xFF3D1B0D),
-    onSecondaryContainer = Color(0xFFFFD6C2),
-    tertiary = Color(0xFFFFA066),
-    onTertiary = Color(0xFF381000),
-    surface = Color(0xFF131110),
-    onSurface = Color(0xFFF3EEEE),
-    surfaceVariant = Color(0xFF221C1A),
-    onSurfaceVariant = Color(0xFFC7BDB8),
-    surfaceContainerLowest = Color(0xFF0C0A09),
-    surfaceContainerLow = Color(0xFF161311),
-    surfaceContainer = Color(0xFF1D1917),
-    surfaceContainerHigh = Color(0xFF272220),
-    surfaceContainerHighest = Color(0xFF342E2B),
-    background = Color(0xFF0F0D0C),
-    onBackground = Color(0xFFF3EEEE),
-    outline = Color(0xFF554A45),
-    outlineVariant = Color(0xFF302926)
+    primary = Color(0xFFFF6F61), onPrimary = Color(0xFF3A0A05),
+    primaryContainer = Color(0xFF5C1F17), onPrimaryContainer = Color(0xFFFFDAD4),
+    secondary = Color(0xFFE9C46A), onSecondary = Color(0xFF2E2300),
+    secondaryContainer = Color(0xFF45380F), onSecondaryContainer = Color(0xFFFFEDB8),
+    tertiary = Color(0xFF7FD6C2), onTertiary = Color(0xFF00382F),
+    surface = Color(0xFF0F1718), onSurface = Color(0xFFE8EEEC),
+    surfaceVariant = Color(0xFF1A2829), onSurfaceVariant = Color(0xFF9FB0AE),
+    surfaceContainerLowest = Color(0xFF070D0E), surfaceContainerLow = Color(0xFF0D1516),
+    surfaceContainer = Color(0xFF142021), surfaceContainerHigh = Color(0xFF1B2A2C),
+    surfaceContainerHighest = Color(0xFF263638),
+    background = Color(0xFF0A1112), onBackground = Color(0xFFE8EEEC),
+    outline = Color(0xFF5E7476), outlineVariant = Color(0xFF223335)
 )
 
 val PremiumOrangeLightScheme = lightColorScheme(
-    primary = Color(0xFFE54E0B),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFFFDBCF),
-    onPrimaryContainer = Color(0xFF380C00),
-    secondary = Color(0xFF7B5240),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFFFDBCF),
-    onSecondaryContainer = Color(0xFF2E1508),
-    tertiary = Color(0xFF8B4D20),
-    onTertiary = Color(0xFFFFFFFF),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1F1A18),
-    surfaceVariant = Color(0xFFF5EBE6),
-    onSurfaceVariant = Color(0xFF51443E),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFAF2ED),
-    surfaceContainer = Color(0xFFF4ECE6),
-    surfaceContainerHigh = Color(0xFFEEE6E0),
-    surfaceContainerHighest = Color(0xFFE8E0DA),
-    background = Color(0xFFFDF8F5),
-    onBackground = Color(0xFF1F1A18),
-    outline = Color(0xFF84746D),
-    outlineVariant = Color(0xFFD7C2B9)
+    primary = Color(0xFFB8321F), onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFFFDAD4), onPrimaryContainer = Color(0xFF3A0A05),
+    secondary = Color(0xFF7A5C00), onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFFFEDB8), onSecondaryContainer = Color(0xFF261A00),
+    tertiary = Color(0xFF00695A), onTertiary = Color(0xFFFFFFFF),
+    surface = Color(0xFFF2F4F1), onSurface = Color(0xFF101616),
+    surfaceVariant = Color(0xFFE1E7E4), onSurfaceVariant = Color(0xFF3F4D4C),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFEBEFEC),
+    surfaceContainer = Color(0xFFE4E9E6), surfaceContainerHigh = Color(0xFFDCE2DF),
+    surfaceContainerHighest = Color(0xFFD2D9D6),
+    background = Color(0xFFF2F4F1), onBackground = Color(0xFF101616),
+    outline = Color(0xFF627270), outlineVariant = Color(0xFFC3CCC9)
 )
 
 // ── MONOCHROME SCHEMES ────────────────────────────────────────────────
@@ -129,10 +107,10 @@ private val MonochromeLightScheme = lightColorScheme(
 // ── AMOLED PURE BLACK ─────────────────────────────────────────────────
 private val AmoledColorScheme = darkColorScheme(
     primary = PremiumOrange,
-    onPrimary = Color(0xFF000000),
-    primaryContainer = Color(0xFF5A1E00),
-    onPrimaryContainer = Color(0xFFFFDBCF),
-    secondary = Color(0xFFFF8B53),
+    onPrimary = Color(0xFF1A2000),
+    primaryContainer = Color(0xFF3A4500),
+    onPrimaryContainer = Color(0xFFF1FF9E),
+    secondary = Color(0xFF8FD3E8),
     onSecondary = Color(0xFF000000),
     secondaryContainer = Color(0xFF381506),
     onSecondaryContainer = Color(0xFFFFD6C2),

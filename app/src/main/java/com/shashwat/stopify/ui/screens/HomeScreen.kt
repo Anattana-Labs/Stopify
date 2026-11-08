@@ -5,41 +5,39 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.shashwat.stopify.data.SpotifyHomeData
 import com.shashwat.stopify.data.SpotifyItemType
 import com.shashwat.stopify.data.SpotifyMediaItem
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyUserProfile
-import com.shashwat.stopify.ui.components.AmbientThemeGlow
 import com.shashwat.stopify.ui.components.SimpArtistCircleCard
 import com.shashwat.stopify.ui.components.SimpSquareCard
 import java.util.Calendar
 
+/**
+ * Home. Never shows a blocking loader and never clears what is on screen:
+ * shelves appear when they arrive, and a background refresh swaps data in place.
+ * Songs play on tap; albums and playlists open their own screen (decided by the caller).
+ */
 @Composable
 fun SimpHomeScreen(
     homeData: SpotifyHomeData?,
@@ -50,315 +48,170 @@ fun SimpHomeScreen(
     recentlyPlayed: List<SpotifyTrack> = emptyList(),
     onPlayTrack: (SpotifyTrack) -> Unit = {},
     userProfile: SpotifyUserProfile? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    listState: LazyListState = rememberLazyListState()
 ) {
-    var selectedFilterIndex by remember { mutableIntStateOf(0) }
-    val filterTabs = remember { listOf("All", "Music", "Podcasts") }
-
+    val scheme = MaterialTheme.colorScheme
     val greeting = remember {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        when (hour) {
+        when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
             in 4..11 -> "Good morning"
             in 12..17 -> "Good afternoon"
             else -> "Good evening"
         }
     }
+    val firstName = userProfile?.displayName?.trim()?.substringBefore(' ').orEmpty()
 
-    LaunchedEffect(homeData, isLoading) {
-        if (homeData == null && !isLoading) {
-            onRefresh()
-        }
-    }
-
-    Box(
+    LazyColumn(
+        state = listState,
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(scheme.background),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 180.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            // Spotify-style top row: profile avatar on left (opens Settings), then filter pills inline
-            item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+        // Masthead
+        item(key = "masthead") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 20.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = greeting,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (firstName.isNotEmpty()) firstName else "Your music",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        Icons.Rounded.Refresh,
+                        contentDescription = "Refresh",
+                        tint = scheme.onSurfaceVariant
+                    )
+                }
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(top = 16.dp, bottom = 4.dp)
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(scheme.primaryContainer)
+                        .clickable(onClickLabel = "Open settings") { onOpenSettings() },
+                    contentAlignment = Alignment.Center
                 ) {
-                    val primaryColor = MaterialTheme.colorScheme.primary
-                    // Profile Avatar
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(primaryColor)
-                            .clickable { onOpenSettings() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (!userProfile?.avatarUrl.isNullOrEmpty()) {
-                            AsyncImage(
-                                model = userProfile!!.avatarUrl,
-                                contentDescription = "Profile",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Text(
-                                text = (userProfile?.displayName?.firstOrNull() ?: 'S').uppercase(),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontSize = 16.sp
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        items(filterTabs.size) { idx ->
-                            val tab = filterTabs[idx]
-                            val isSelected = selectedFilterIndex == idx
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                    .clickable { selectedFilterIndex = idx }
-                                    .padding(horizontal = 14.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = tab,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-                    }
-
-                    IconButton(
-                        onClick = onRefresh,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = "Refresh",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
+                    if (!userProfile?.avatarUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = userProfile!!.avatarUrl,
+                            contentDescription = "Settings",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
                         )
-                    }
-                }
-            }
-
-            // Spotify Iconic 6-card "Jump back in" Quick Grid
-            if (recentlyPlayed.isNotEmpty()) {
-                item {
-                    val quickItems = recentlyPlayed.take(6)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (i in quickItems.indices step 2) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                val item1 = quickItems[i]
-                                QuickPlayCard(
-                                    track = item1,
-                                    onClick = { onPlayTrack(item1) },
-                                    modifier = Modifier.weight(1f)
-                                )
-
-                                if (i + 1 < quickItems.size) {
-                                    val item2 = quickItems[i + 1]
-                                    QuickPlayCard(
-                                        track = item2,
-                                        onClick = { onPlayTrack(item2) },
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                } else {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Recently Played horizontal shelf (when more than 2 tracks exist)
-            if (recentlyPlayed.size > 2) {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Recently played",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                            Text(
-                                text = "${recentlyPlayed.size} tracks",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(horizontal = 2.dp)
-                        ) {
-                            items(recentlyPlayed) { rTrack ->
-                                Column(
-                                    modifier = Modifier
-                                        .width(168.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .clickable { onPlayTrack(rTrack) }
-                                        .padding(2.dp)
-                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(164.dp)
-                                            .shadow(4.dp, RoundedCornerShape(6.dp), spotColor = Color.Black.copy(alpha = 0.25f))
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                                            .border(
-                                                0.75.dp,
-                                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                                RoundedCornerShape(6.dp)
-                                            )
-                                    ) {
-                                        if (!rTrack.coverUrl.isNullOrEmpty()) {
-                                            AsyncImage(
-                                                model = rTrack.coverUrl,
-                                                contentDescription = rTrack.name,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        } else {
-                                            Box(
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Album,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(36.dp)
-                                                )
-                                            }
-                                        }
-
-                                        // Dynamic Play Button
-                                        val cardPrimary = MaterialTheme.colorScheme.primary
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.BottomEnd)
-                                                .padding(6.dp)
-                                                .size(34.dp)
-                                                .shadow(6.dp, CircleShape, spotColor = cardPrimary.copy(alpha = 0.5f))
-                                                .clip(CircleShape)
-                                                .background(cardPrimary),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.PlayArrow,
-                                                contentDescription = "Play",
-                                                tint = MaterialTheme.colorScheme.onPrimary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    Text(
-                                        text = rTrack.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-
-                                    Text(
-                                        text = rTrack.artist,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Shelves from Spotify Home API
-            if (isLoading) {
-                items(3) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Surface(
-                            modifier = Modifier
-                                .width(160.dp)
-                                .height(22.dp),
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainer
-                        ) {}
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            items(4) {
-                                Surface(
-                                    modifier = Modifier.size(150.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                ) {}
-                            }
-                        }
-                    }
-                }
-            } else if (homeData != null && homeData.sections.isNotEmpty()) {
-                items(homeData.sections) { section ->
-                    val isArtistSection = section.title.contains("Artist", ignoreCase = true) ||
-                            (section.items.isNotEmpty() && section.items.all { it.type == SpotifyItemType.ARTIST || it.uri.contains("artist") })
-
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    } else {
                         Text(
-                            text = section.title,
-                            style = MaterialTheme.typography.titleLarge,
+                            text = (userProfile?.displayName?.firstOrNull() ?: 'S').uppercase(),
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = scheme.onPrimaryContainer
                         )
+                    }
+                }
+            }
+        }
 
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(horizontal = 2.dp)
-                        ) {
-                            items(section.items) { item ->
-                                if (isArtistSection || item.type == SpotifyItemType.ARTIST) {
-                                    SimpArtistCircleCard(
-                                        item = item,
-                                        onClick = { onMediaItemClick(item) }
-                                    )
-                                } else {
-                                    SimpSquareCard(
-                                        item = item,
-                                        onClick = { onMediaItemClick(item) }
-                                    )
-                                }
+        // Resume slab: the last thing you played
+        recentlyPlayed.firstOrNull()?.let { last ->
+            item(key = "resume") {
+                ResumeSlab(track = last, onClick = { onPlayTrack(last) })
+            }
+        }
+
+        // Recents ledger
+        if (recentlyPlayed.size > 1) {
+            item(key = "ledger") {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Recently played",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = scheme.onBackground,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "${recentlyPlayed.size} songs",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    recentlyPlayed.drop(1).take(5).forEachIndexed { i, t ->
+                        LedgerRow(index = i + 1, track = t, onClick = { onPlayTrack(t) })
+                    }
+                }
+            }
+        }
+
+        // Shelves
+        if (homeData != null && homeData.sections.isNotEmpty()) {
+            items(homeData.sections) { section ->
+                val isArtistShelf = section.items.isNotEmpty() &&
+                        section.items.all { it.type == SpotifyItemType.ARTIST || it.uri.contains(":artist:") }
+                Column {
+                    Text(
+                        text = section.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = scheme.onBackground
+                    )
+                    if (!section.subtitle.isNullOrBlank()) {
+                        Text(
+                            text = section.subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        items(section.items) { item ->
+                            if (isArtistShelf || item.type == SpotifyItemType.ARTIST) {
+                                SimpArtistCircleCard(item = item, onClick = { onMediaItemClick(item) })
+                            } else {
+                                SimpSquareCard(item = item, onClick = { onMediaItemClick(item) })
                             }
+                        }
+                    }
+                }
+            }
+        } else if (homeData == null) {
+            // First load only: quiet placeholders, no spinner and no text
+            items(2) {
+                Column {
+                    Box(
+                        Modifier
+                            .width(140.dp)
+                            .height(20.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(scheme.surfaceContainer)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        items(4) {
+                            Box(
+                                Modifier
+                                    .size(148.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(scheme.surfaceContainer)
+                            )
                         }
                     }
                 }
@@ -368,79 +221,115 @@ fun SimpHomeScreen(
 }
 
 @Composable
-private fun QuickPlayCard(
-    track: SpotifyTrack,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = RoundedCornerShape(4.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = modifier
-            .height(52.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .clickable { onClick() }
+private fun ResumeSlab(track: SpotifyTrack, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(scheme.surfaceContainer)
+            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(20.dp))
+            .clickable(onClickLabel = "Play ${track.name}") { onClick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(58.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                contentAlignment = Alignment.Center
-            ) {
-                if (!track.coverUrl.isNullOrEmpty()) {
-                    AsyncImage(
-                        model = track.coverUrl,
-                        contentDescription = track.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Rounded.Album,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
+        Cover(url = track.coverUrl, size = 84.dp, radius = 12.dp)
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Pick up where you left off",
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.secondary
+            )
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = track.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = scheme.onSurface,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 12.5.sp,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 4.dp)
+                overflow = TextOverflow.Ellipsis
             )
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(scheme.primary),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = scheme.onPrimary, modifier = Modifier.size(30.dp))
+        }
+    }
+}
 
-            // Dynamic play circle on right edge of quick play card
-            val qpPrimary = MaterialTheme.colorScheme.primary
-            Box(
-                modifier = Modifier
-                    .padding(end = 8.dp)
-                    .size(30.dp)
-                    .shadow(4.dp, CircleShape, spotColor = qpPrimary.copy(alpha = 0.5f))
-                .clip(CircleShape)
-                .background(qpPrimary),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = "Play",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+@Composable
+private fun LedgerRow(index: Int, track: SpotifyTrack, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 60.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClickLabel = "Play ${track.name}") { onClick() }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = index.toString(),
+            style = MaterialTheme.typography.titleSmall,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.width(28.dp)
+        )
+        Cover(url = track.coverUrl, size = 46.dp, radius = 8.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun Cover(url: String?, size: androidx.compose.ui.unit.Dp, radius: androidx.compose.ui.unit.Dp) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(radius))
+            .background(scheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!url.isNullOrEmpty()) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(Icons.Rounded.Album, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(size / 2))
         }
     }
 }

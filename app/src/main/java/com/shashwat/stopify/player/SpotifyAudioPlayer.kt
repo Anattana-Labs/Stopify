@@ -86,10 +86,22 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
         )
     }
 
+    fun notifyFailed(track: SpotifyTrack, message: String) {
+        _playbackState.value = _playbackState.value.copy(
+            currentTrack = track,
+            isPlaying = false,
+            isBuffering = false,
+            error = message
+        )
+    }
+
     fun getOrCreatePlayer(): ExoPlayer {
         exoPlayer?.let { return it }
 
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(15_000)
+            .setAllowCrossProtocolRedirects(true)
             .setUserAgent(SpotifyWebClient.USER_AGENT)
             .setDefaultRequestProperties(
                 mapOf(
@@ -104,8 +116,8 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
             .setBufferDurationsMs(
                 15_000,
                 50_000,
-                500,
-                1_000
+                1_000,
+                2_500
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -306,6 +318,7 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
 
     fun seekTo(positionMs: Long) {
         exoPlayer?.seekTo(positionMs)
+        updateProgress()
     }
 
     fun seekBy(deltaMs: Long) {

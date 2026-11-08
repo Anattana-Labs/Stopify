@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.palette.graphics.Palette
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.input.pointer.pointerInput
@@ -36,6 +37,7 @@ import com.shashwat.stopify.ui.screens.*
 import com.shashwat.stopify.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -82,7 +84,7 @@ class MainActivity : ComponentActivity() {
         SpotifyTokenManager.refreshAccessTokenInBackground(
             this,
             spotifyClient,
-            showLoadingModal = savedAccessToken.isNullOrEmpty()
+            showLoadingModal = false
         )
 
         // Set up the token refresh hook for automatic background generation when an API gives up (401)
@@ -157,8 +159,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val isSessionLoading by SpotifyTokenManager.isRefreshingState.collectAsState()
-
             StopifyTheme(
                 themeMode = currentThemeMode,
                 colorMode = currentColorMode,
@@ -185,67 +185,6 @@ class MainActivity : ComponentActivity() {
                         prefs = prefs
                     )
 
-                    // Full-screen non-dismissible loading overlay blocking all touch interactions
-                    AnimatedVisibility(
-                        visible = isSessionLoading,
-                        enter = fadeIn(),
-                        exit = fadeOut(),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.78f))
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = { /* Intercept all touches */ }
-                                )
-                                .pointerInput(Unit) {
-                                    // Consume all raw pointer input events to prevent underlying clicks
-                                    awaitPointerEventScope {
-                                        while (true) {
-                                            val event = awaitPointerEvent()
-                                            event.changes.forEach { it.consume() }
-                                        }
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                                tonalElevation = 8.dp,
-                                shadowElevation = 12.dp,
-                                modifier = Modifier.padding(32.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 28.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        strokeWidth = 3.5.dp,
-                                        modifier = Modifier.size(46.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(20.dp))
-                                    Text(
-                                        text = "Connecting Session...",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = "Refreshing Spotify session keys and authorization",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -278,6 +217,7 @@ fun SimpMusicApp(
     val appContext = context.applicationContext
     var currentTab by remember { mutableStateOf(NavigationTab.HOME) }
     var homeData by remember { mutableStateOf<SpotifyHomeData?>(null) }
+    val homeListState = rememberLazyListState()
     var isHomeLoading by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<SpotifyMediaItem>>(emptyList()) }
@@ -295,6 +235,8 @@ fun SimpMusicApp(
     val previousTracks = remember { mutableStateListOf<SpotifyTrack>() }
     val playbackHistory = remember { mutableStateListOf<SpotifyTrack>() }
     var isAutoQueueEnabled by remember { mutableStateOf(true) }
+    var isShuffle by remember { mutableStateOf(false) }
+    var isRepeat by remember { mutableStateOf(false) }
 
     // Navigation Subscreen overlays
     var viewingAlbumUri by remember { mutableStateOf<String?>(null) }
@@ -308,6 +250,24 @@ fun SimpMusicApp(
     var userProfile by remember { mutableStateOf<SpotifyUserProfile?>(null) }
     var canvasEnabled by remember { mutableStateOf(prefs?.getBoolean("pref_canvas_enabled", true) ?: true) }
 
+    // History: local plays are recorded instantly and persisted; Spotify's recents are merged underneath.
+    fun recordLocalPlay(track: SpotifyTrack) {
+        val merged = SpotifyHistoryManager.withPlay(playbackHistory.toList(), track)
+        playbackHistory.clear()
+        playbackHistory.addAll(merged)
+        prefs?.let { SpotifyHistoryManager.saveLocal(it, merged) }
+    }
+
+    suspend fun mergeRemoteHistory() {
+        val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
+        if (recentsRes.isSuccess) {
+            val merged = SpotifyHistoryManager.mergeWithRemote(playbackHistory.toList(), recentsRes.getOrThrow())
+            playbackHistory.clear()
+            playbackHistory.addAll(merged)
+            prefs?.let { SpotifyHistoryManager.saveLocal(it, merged) }
+        }
+    }
+
     // Initialize playback history and favorites purely from live Spotify data
     LaunchedEffect(Unit) {
         prefs?.let {
@@ -315,9 +275,12 @@ fun SimpMusicApp(
             favoriteTrackIds = it.getStringSet("favorite_tracks_set", emptySet())?.toSet() ?: emptySet()
             it.edit().remove("local_playback_history_v2").apply()
         }
-        playbackHistory.clear()
+        // Show the saved history immediately, then merge Spotify's recents in the background
+        prefs?.let {
+            playbackHistory.clear()
+            playbackHistory.addAll(SpotifyHistoryManager.loadLocal(it))
+        }
 
-        // Proactively fetch account profile and live remote recents directly from Spotify
         coroutineScope.launch {
             val uRes = client.fetchCurrentUserProfile(prefs)
             if (uRes.isSuccess) {
@@ -325,12 +288,7 @@ fun SimpMusicApp(
             }
         }
         coroutineScope.launch {
-            val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
-            if (recentsRes.isSuccess) {
-                val list = recentsRes.getOrThrow()
-                playbackHistory.clear()
-                playbackHistory.addAll(list.distinctBy { it.uri })
-            }
+            mergeRemoteHistory()
         }
     }
 
@@ -408,12 +366,7 @@ fun SimpMusicApp(
                     coroutineScope.launch {
                         client.reportPlaybackProgress(track, playbackState.currentPositionMs, prefs, "played_threshold_reached")
                         delay(2500)
-                        val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
-                        if (recentsRes.isSuccess) {
-                            val list = recentsRes.getOrThrow()
-                            playbackHistory.clear()
-                            playbackHistory.addAll(list.distinctBy { it.uri })
-                        }
+                        mergeRemoteHistory()
                     }
                 }
             }
@@ -421,7 +374,40 @@ fun SimpMusicApp(
         }
     }
 
+    // Only one load is ever in flight: a newer tap cancels the older resolve so stale results can't override it.
+    val playJobHolder = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+
+    /** Resolves (or finds offline) the audio and hands it to the player. Returns false if it could not start. */
+    suspend fun startStream(track: SpotifyTrack, forceFreshToken: Boolean): Boolean {
+        val downloadManager = com.shashwat.stopify.data.StopifyDownloadManager.getInstance(appContext)
+        val localAudio = downloadManager.getDownloadedAudioFile(track.id)
+        if (localAudio != null && localAudio.exists()) {
+            val token = client.getAccessToken().getOrElse { SpotifyWebClient.FALLBACK_BEARER_TOKEN }
+            statusLog = "Playing offline '${track.name}'"
+            player.playTrack(track, android.net.Uri.fromFile(localAudio).toString(), token, client.customClientToken)
+            return true
+        }
+        statusLog = "Resolving stream for '${track.name}'..."
+        if (forceFreshToken) SpotifyTokenManager.awaitTokenRefresh(appContext, client)
+        // First failure usually means an expired session token: renew it silently and retry once.
+        val streamRes = client.resolveTrackAudioStream(track.uri).let { first ->
+            if (first.isSuccess) first else {
+                SpotifyTokenManager.awaitTokenRefresh(appContext, client)
+                client.resolveTrackAudioStream(track.uri)
+            }
+        }
+        if (streamRes.isFailure) {
+            statusLog = "Stream error: ${streamRes.exceptionOrNull()?.message}"
+            return false
+        }
+        val token = client.getAccessToken().getOrElse { SpotifyWebClient.FALLBACK_BEARER_TOKEN }
+        statusLog = "Playing '${track.name}'"
+        player.playTrack(track, streamRes.getOrThrow(), token, client.customClientToken)
+        return true
+    }
+
     fun playTrackInternal(track: SpotifyTrack, addToHistory: Boolean = true, addToPrevious: Boolean = true) {
+        if (addToHistory) recordLocalPlay(track)
         // Instantly notify player of loading state so buffering spinners show immediately
         player.notifyLoading(track)
 
@@ -431,77 +417,56 @@ fun SimpMusicApp(
             if (previousTracks.size > 50) previousTracks.removeAt(0)
         }
 
-        coroutineScope.launch {
-            val downloadManager = com.shashwat.stopify.data.StopifyDownloadManager.getInstance(appContext)
-            val localAudio = downloadManager.getDownloadedAudioFile(track.id)
-            if (localAudio != null && localAudio.exists()) {
-                val token = client.getAccessToken().getOrElse { SpotifyWebClient.FALLBACK_BEARER_TOKEN }
-                statusLog = "Playing offline '${track.name}'"
-                player.playTrack(track, android.net.Uri.fromFile(localAudio).toString(), token, client.customClientToken)
-
-                if (addToHistory) {
-                    coroutineScope.launch {
-                        client.reportPlaybackToApi(track, 0L, prefs)
-                        client.connectService.updateConnectClusterState(
-                            track = track,
-                            isPlaying = true,
-                            positionMs = 0L,
-                            deviceId = SpotifyWebClient.getDeviceId(prefs)
-                        )
+        playJobHolder[0]?.cancel()
+        playJobHolder[0] = coroutineScope.launch {
+            var started = false
+            var attempt = 0
+            while (!started && attempt < 3) {
+                if (startStream(track, forceFreshToken = attempt > 0)) {
+                    // Watchdog: a track still buffering after 20s, or one that errors, is retried.
+                    val state = kotlinx.coroutines.withTimeoutOrNull(20_000L) {
+                        player.playbackState.first { it.currentTrack?.id == track.id && (!it.isBuffering || it.error != null) }
                     }
+                    if (state != null && state.error == null) started = true
+                } else {
+                    delay(600)
                 }
+                attempt++
+            }
+            if (!started) {
+                player.notifyFailed(track, "Couldn't load this track. Tap play to try again.")
                 return@launch
             }
 
-            statusLog = "Resolving stream for '${track.name}'..."
-            val streamRes = client.resolveTrackAudioStream(track.uri)
-            if (streamRes.isSuccess) {
-                val streamUrl = streamRes.getOrThrow()
-                val token = client.getAccessToken().getOrElse { SpotifyWebClient.FALLBACK_BEARER_TOKEN }
-                statusLog = "Playing '${track.name}'"
-                player.playTrack(track, streamUrl, token, client.customClientToken)
+            if (addToHistory) {
+                launch {
+                    client.reportPlaybackToApi(track, 0L, prefs)
+                    client.connectService.updateConnectClusterState(
+                        track = track,
+                        isPlaying = true,
+                        positionMs = 0L,
+                        deviceId = SpotifyWebClient.getDeviceId(prefs)
+                    )
+                }
+            }
+            playbackQueue.firstOrNull()?.let { nextQ -> launch { client.preResolveTrack(nextQ.uri) } }
 
-                if (addToHistory) {
-                    coroutineScope.launch {
-                        client.reportPlaybackToApi(track, 0L, prefs)
-                        client.connectService.updateConnectClusterState(
-                            track = track,
-                            isPlaying = true,
-                            positionMs = 0L,
-                            deviceId = SpotifyWebClient.getDeviceId(prefs)
-                        )
+            if (isAutoQueueEnabled && playbackQueue.size < 3) {
+                launch {
+                    val autoTracks = client.fetchAutoplayQueue(track)
+                    val filtered = autoTracks.filter { it.uri != track.uri && playbackQueue.none { q -> q.uri == it.uri } }
+                    if (filtered.isNotEmpty()) {
+                        playbackQueue.addAll(filtered)
+                        client.preResolveTrack(filtered.first().uri)
                     }
                 }
-
-                // Pre-resolve the very next track in queue in background so subsequent playback is instant
-                playbackQueue.firstOrNull()?.let { nextQ ->
-                    coroutineScope.launch {
-                        client.preResolveTrack(nextQ.uri)
-                    }
-                }
-
-                // If queue is running low, proactively fetch autoqueue suggestions in background
-                if (isAutoQueueEnabled && playbackQueue.size < 3) {
-                    coroutineScope.launch {
-                        val autoTracks = client.fetchAutoplayQueue(track)
-                        val filtered = autoTracks.filter { it.uri != track.uri && playbackQueue.none { q -> q.uri == it.uri } }
-                        if (filtered.isNotEmpty()) {
-                            playbackQueue.addAll(filtered)
-                            // Pre-resolve the first added track
-                            client.preResolveTrack(filtered.first().uri)
-                        }
-                    }
-                }
-            } else {
-                val err = streamRes.exceptionOrNull()?.message
-                statusLog = "Stream error: $err"
             }
         }
     }
 
     fun playNextTrack() {
         if (playbackQueue.isNotEmpty()) {
-            val next = playbackQueue.removeAt(0)
+            val next = playbackQueue.removeAt(if (isShuffle) playbackQueue.indices.random() else 0)
             playTrackInternal(next)
             // Pre-resolve subsequent track
             playbackQueue.firstOrNull()?.let { nextNext ->
@@ -542,6 +507,10 @@ fun SimpMusicApp(
     DisposableEffect(player) {
         player.onTrackCompleted = { completedTrack ->
             coroutineScope.launch {
+                if (isRepeat) {
+                    playTrackInternal(completedTrack, addToHistory = false, addToPrevious = false)
+                    return@launch
+                }
                 launch {
                     client.reportPlaybackToApi(completedTrack, completedTrack.durationMs, prefs, isFinished = true)
                 }
@@ -565,7 +534,7 @@ fun SimpMusicApp(
      * Resolves and plays or opens any media item.
      * Songs and albums clicked on Home play immediately!
      */
-    fun playMediaItem(item: SpotifyMediaItem) {
+    fun playMediaItem(item: SpotifyMediaItem, autoPlayAlbums: Boolean = false) {
         if (item.uri.contains(":track:") || item.type == SpotifyItemType.TRACK) {
             playTrackInternal(item.toTrack())
             return
@@ -581,6 +550,11 @@ fun SimpMusicApp(
             return
         }
         if (item.uri.contains(":album:") || item.type == SpotifyItemType.ALBUM) {
+            if (!autoPlayAlbums) {
+                // Tapping an album opens its screen (track list + Play all); it never starts playback by itself.
+                viewingAlbumUri = item.uri
+                return
+            }
             coroutineScope.launch {
                 statusLog = "Playing '${item.name}'..."
                 val albumRes = client.fetchAlbumDetails(item.uri)
@@ -629,7 +603,7 @@ fun SimpMusicApp(
                                 subtitle = "",
                                 coverUrl = null,
                                 type = if (target.contains(":album:")) SpotifyItemType.ALBUM else SpotifyItemType.PLAYLIST
-                            ))
+                            ), autoPlayAlbums = true)
                         }
                     } else {
                         player.play()
@@ -680,20 +654,25 @@ fun SimpMusicApp(
         }
     }
 
-    fun loadHome() {
+    // Home loads silently. Existing content is never cleared or replaced by a spinner;
+    // failures retry quietly in the background with backoff.
+    fun loadHome(force: Boolean = false) {
         if (isHomeLoading) return
+        if (homeData != null && !force) return
         isHomeLoading = true
         coroutineScope.launch {
-            val res = client.fetchHomeSections()
-            if (res.isSuccess) {
-                homeData = res.getOrThrow()
+            var attempt = 0
+            while (attempt < 4) {
+                val res = client.fetchHomeSections()
+                if (res.isSuccess) {
+                    val fresh = res.getOrThrow()
+                    if (fresh.sections.isNotEmpty() || homeData == null) homeData = fresh
+                    break
+                }
+                attempt++
+                delay(1500L * attempt)
             }
-            val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
-            if (recentsRes.isSuccess) {
-                val list = recentsRes.getOrThrow()
-                playbackHistory.clear()
-                playbackHistory.addAll(list.distinctBy { it.uri })
-            }
+            mergeRemoteHistory()
             isHomeLoading = false
         }
     }
@@ -702,10 +681,10 @@ fun SimpMusicApp(
         loadHome()
     }
 
-    // Automatically reload home and remote recents whenever Spotify token refreshes
+    // A fresh token only retries Home when it never loaded; it never reloads visible content.
     LaunchedEffect(Unit) {
         SpotifyTokenManager.tokenRefreshEvents.collect {
-            loadHome()
+            if (homeData == null) loadHome()
         }
     }
 
@@ -734,6 +713,9 @@ fun SimpMusicApp(
         }
     }
 
+    // Registered after the other handlers so back closes the full player first
+    BackHandler(enabled = showFullPlayer) { showFullPlayer = false }
+
     val backdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
 
     CompositionLocalProvider(LocalBackdrop provides backdrop) {
@@ -752,7 +734,8 @@ fun SimpMusicApp(
                 SimpHomeScreen(
                     homeData = homeData,
                     isLoading = isHomeLoading,
-                    onRefresh = { loadHome() },
+                    onRefresh = { loadHome(force = true) },
+                    listState = homeListState,
                     onOpenSettings = { viewingSettings = true },
                     onMediaItemClick = { playMediaItem(it) },
                     recentlyPlayed = playbackHistory,
@@ -976,31 +959,27 @@ fun SimpMusicApp(
             )
         }
 
-    // Bottom Controls Dock: MiniPlayer + SimpBottomNavigationBar (Spotui structure)
-    Column(
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .fillMaxWidth()
-            .background(
-                androidx.compose.ui.graphics.Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                        MaterialTheme.colorScheme.background.copy(alpha = 0.98f)
-                    )
-                )
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Mini Player
-        playbackState.currentTrack?.let { currentTrack ->
-            Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
+    // Bottom dock: player strip + navigation fused into one object
+    SimpDock(
+        modifier = Modifier.align(Alignment.BottomCenter),
+        currentTab = currentTab,
+        onTabSelect = { tab ->
+            viewingAlbumUri = null
+            viewingPlaylistUri = null
+            viewingArtistUri = null
+            viewingSettings = false
+            currentTab = tab
+        },
+        hasPlayer = playbackState.currentTrack != null,
+        player = {
+            playbackState.currentTrack?.let { currentTrack ->
                 SimpBottomMiniPlayer(
                     track = currentTrack,
                     playbackState = playbackState,
                     backdrop = backdrop,
                     onTogglePlayPause = {
-                        if (playbackState.isPlaying) player.pause() else player.resume()
+                        if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false)
+                        else if (playbackState.isPlaying) player.pause() else player.resume()
                     },
                     onNextTrack = { playNextTrack() },
                     onPreviousTrack = { playPreviousTrack() },
@@ -1012,20 +991,7 @@ fun SimpMusicApp(
                 )
             }
         }
-
-        // Floating Nav Bar Dock
-        SimpBottomNavigationBar(
-            currentTab = currentTab,
-            backdrop = backdrop,
-            onTabSelect = { tab ->
-                viewingAlbumUri = null
-                viewingPlaylistUri = null
-                viewingArtistUri = null
-                viewingSettings = false
-                currentTab = tab
-            }
-        )
-    }
+    )
 
     // Full Screen Player Dialog / Sheet
         AnimatedVisibility(
@@ -1044,8 +1010,13 @@ fun SimpMusicApp(
                     canvasUrl = if (canvasEnabled) currentCanvasUrl else null,
                     canvasEnabled = canvasEnabled,
                     onTogglePlayPause = {
-                        if (playbackState.isPlaying) player.pause() else player.resume()
+                        if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false)
+                        else if (playbackState.isPlaying) player.pause() else player.resume()
                     },
+                    isShuffle = isShuffle,
+                    isRepeat = isRepeat,
+                    onToggleShuffle = { isShuffle = !isShuffle },
+                    onToggleRepeat = { isRepeat = !isRepeat },
                     onNext = { playNextTrack() },
                     onPrevious = { playPreviousTrack() },
                     onSeekTo = { player.seekTo(it) },
