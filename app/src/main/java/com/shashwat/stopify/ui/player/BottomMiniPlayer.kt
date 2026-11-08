@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,7 +64,8 @@ fun SimpBottomMiniPlayer(
     onDismiss: (() -> Unit)? = null,
     isFavorite: Boolean = false,
     onToggleFavorite: () -> Unit = {},
-    backgroundColor: Color? = null
+    backgroundColor: Color? = null,
+    deviceName: String? = null
 ) {
     val scope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
@@ -85,7 +87,7 @@ fun SimpBottomMiniPlayer(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 6.dp),
+                .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
@@ -139,23 +141,27 @@ fun SimpBottomMiniPlayer(
                         maxLines = 1,
                         modifier = Modifier.basicMarquee()
                     )
-                    Text(
-                        text = track.artist,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 1,
-                        modifier = Modifier.basicMarquee()
-                    )
+                    if (deviceName != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Speaker, null, tint = scheme.primary, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = deviceName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.primary,
+                                maxLines = 1
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = track.artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1,
+                            modifier = Modifier.basicMarquee()
+                        )
+                    }
                 }
-            }
-
-            IconButton(onClick = onToggleFavorite, modifier = Modifier.size(44.dp)) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove from favourites" else "Add to favourites",
-                    tint = if (isFavorite) scheme.primary else scheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
-                )
             }
 
             // Play / pause: a solid pill in the text colour, the one bright mark on the strip
@@ -197,8 +203,8 @@ fun SimpBottomMiniPlayer(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 6.dp)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 8.dp)
                 .height(2.5.dp)
                 .clip(CircleShape)
                 .background(scheme.onSurface.copy(alpha = 0.12f))

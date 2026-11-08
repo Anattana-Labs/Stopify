@@ -2,6 +2,12 @@ package com.shashwat.stopify.data
 
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -160,6 +166,7 @@ class SpotifyWebClient {
     val authService = SpotifyAuthService(this)
     val lyricsService = SpotifyLyricsService(this)
     val connectService = SpotifyConnectService(this)
+    val connectControl = SpotifyConnectControl(this)
 
     @Volatile
     var onRemoteCommandListener: SpotifyRemoteCommandListener? = null
@@ -222,6 +229,58 @@ class SpotifyWebClient {
         .build()
 
     private var activeWebSocket: WebSocket? = null
+
+    // ── Spotify Connect: live cluster (devices + what the active device is playing) ──
+    private val connectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val _connectCluster = MutableStateFlow(ConnectClusterState())
+    /** Devices and remote playback state, kept in sync by the Dealer socket. */
+    val connectCluster: StateFlow<ConnectClusterState> = _connectCluster
+    private var dealerPingJob: Job? = null
+    private var dealerReconnectJob: Job? = null
+    @Volatile private var dealerWanted = false
+    @Volatile private var dealerRetry = 0
+
+    /** Drops the Dealer socket for good (logout). */
+    fun disconnectDealer() {
+        dealerWanted = false
+        dealerPingJob?.cancel()
+        dealerReconnectJob?.cancel()
+        activeWebSocket?.close(1000, "logout")
+        activeWebSocket = null
+        dealerConnectionId = null
+        isDeviceRegistered = false
+        _connectCluster.value = ConnectClusterState()
+    }
+
+    private fun startDealerPing(ws: WebSocket) {
+        dealerPingJob?.cancel()
+        dealerPingJob = connectScope.launch {
+            while (true) {
+                delay(30_000L)
+                if (activeWebSocket !== ws) break
+                ws.send("{\"type\":\"ping\"}")
+            }
+        }
+    }
+
+    private fun scheduleDealerReconnect() {
+        dealerPingJob?.cancel()
+        if (!dealerWanted) return
+        dealerReconnectJob?.cancel()
+        val wait = (1000L shl dealerRetry.coerceAtMost(5)).coerceAtMost(30_000L)
+        dealerRetry++
+        dealerReconnectJob = connectScope.launch {
+            delay(wait)
+            if (!dealerWanted || activeWebSocket != null) return@launch
+            val token = getAccessToken().getOrNull() ?: return@launch
+            if (ensureDeviceRegistered(token)) dealerRetry = 0
+        }
+    }
+
+    private fun handleClusterMessage(pObj: JSONObject) {
+        val cluster = pObj.optJSONObject("cluster") ?: return
+        _connectCluster.value = ConnectClusterState.parse(cluster, DEVICE_ID)
+    }
     internal var dealerConnectionId: String? = null
     private var isDeviceRegistered = false
     private var connectionIdDeferred = CompletableDeferred<String>()
@@ -2275,6 +2334,7 @@ class SpotifyWebClient {
 
     private fun connectDealer(token: String) {
         if (activeWebSocket != null) return
+        dealerWanted = true
 
         val wsUrl = "wss://dealer.spotify.com/?access_token=$token"
         val reqBuilder = Request.Builder()
@@ -2290,6 +2350,7 @@ class SpotifyWebClient {
         activeWebSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "Dealer WebSocket connected successfully")
+                startDealerPing(webSocket)
                 val connId = response.header("Spotify-Connection-Id")
                     ?: response.header("x-spotify-connection-id")
                 if (!connId.isNullOrEmpty() && dealerConnectionId == null) {
@@ -2316,6 +2377,9 @@ class SpotifyWebClient {
                     }
 
                     val payloads = extractPayloadObjects(json)
+                    if (json.optString("uri").startsWith("hm://connect-state/v1/cluster")) {
+                        for (pObj in payloads) handleClusterMessage(pObj)
+                    }
                     for (pObj in payloads) {
                         // 1. Process state_machine manifests / queue tracks
                         val sm = pObj.optJSONObject("state_machine")
@@ -2384,6 +2448,7 @@ class SpotifyWebClient {
                     connectionIdDeferred.complete("")
                 }
                 connectionIdDeferred = CompletableDeferred()
+                scheduleDealerReconnect()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -2395,6 +2460,7 @@ class SpotifyWebClient {
                     connectionIdDeferred.complete("")
                 }
                 connectionIdDeferred = CompletableDeferred()
+                scheduleDealerReconnect()
             }
         })
     }
@@ -2512,6 +2578,10 @@ class SpotifyWebClient {
                 }
             }
             Log.d(TAG, "Device registration HTTP status: $code, body: $respBody, success=$isDeviceRegistered")
+            if (isDeviceRegistered) {
+                // Subscribe to the Connect cluster so the device list and remote state start flowing in.
+                connectScope.launch { connectService.updateConnectClusterState(null, false, 0L) }
+            }
             isDeviceRegistered
         } catch (e: Exception) {
             Log.e(TAG, "Error registering device with track-playback", e)

@@ -53,6 +53,19 @@ fun LoginScreen(
     var isSuccess by remember { mutableStateOf(false) }
     var webViewReloadKey by remember { mutableIntStateOf(0) }
     var hasSessionInWeb by remember { mutableStateOf(SpotifyWebClient.hasValidSpDc(client.customCookies)) }
+    // Web login finishes by itself: once a fresh sp_dc cookie and a web-player token are captured, close the sheet.
+    val startedWithSession = remember { SpotifyWebClient.hasValidSpDc(client.customCookies) }
+    var webCookieCaptured by remember { mutableStateOf(false) }
+    var webTokenCaptured by remember { mutableStateOf(false) }
+    var autoClosed by remember { mutableStateOf(false) }
+    LaunchedEffect(webCookieCaptured, webTokenCaptured) {
+        if (startedWithSession || !webCookieCaptured || autoClosed) return@LaunchedEffect
+        if (!webTokenCaptured) kotlinx.coroutines.delay(3500) // token arrives right after the first open.spotify.com load
+        if (autoClosed) return@LaunchedEffect
+        autoClosed = true
+        statusMessage = "Signed in."
+        onDismiss()
+    }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -211,6 +224,7 @@ fun LoginScreen(
                                     hasSessionInWeb = true
                                     statusMessage = "Session detected! Cookies saved."
                                     isSuccess = true
+                                    webCookieCaptured = true
                                 }
                             },
                             onTokenFound = { token ->
@@ -218,6 +232,7 @@ fun LoginScreen(
                                 prefs.edit().putString("spotify_access_token", token).apply()
                                 client.setAccessToken(token)
                                 hasSessionInWeb = true
+                                webTokenCaptured = true
                                 statusMessage = "Live Bearer Token captured!"
                                 isSuccess = true
                             },
@@ -433,7 +448,7 @@ fun LoginScreen(
                                 onClick = {
                                     val prefs = context.getSharedPreferences("stopify_prefs", Context.MODE_PRIVATE)
                                     prefs.edit().remove("spotify_cookies").remove("spotify_access_token").apply()
-                                    client.updateCookies("")
+                                    client.updateCookies(""); client.disconnectDealer()
                                     cookieInputText = ""
                                     onLoginSuccess("")
                                     statusMessage = "Credentials reset to defaults."

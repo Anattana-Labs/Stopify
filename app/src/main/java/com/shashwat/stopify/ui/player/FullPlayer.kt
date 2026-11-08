@@ -99,6 +99,8 @@ fun SimpFullPlayer(
     onToggleRepeat: () -> Unit = {},
     canvasUrl: String? = null,
     canvasEnabled: Boolean = true,
+    deviceName: String? = null,
+    onOpenDevices: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -193,7 +195,7 @@ fun SimpFullPlayer(
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Eyebrow("Now playing", color = fgMuted)
+                    Eyebrow(if (deviceName != null) "Playing on $deviceName" else "Now playing", color = if (deviceName != null) scheme.primary else fgMuted)
                     Text(
                         track.album.ifBlank { "Stopify" },
                         style = MaterialTheme.typography.titleSmall,
@@ -388,6 +390,7 @@ fun SimpFullPlayer(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 PlayerTool(Icons.Rounded.Lyrics, "Lyrics", fg, Modifier.weight(1f)) { showLyrics = true }
+                PlayerTool(Icons.Rounded.Speaker, deviceName ?: "Devices", if (deviceName != null) scheme.primary else fg, Modifier.weight(1f)) { onOpenDevices() }
                 PlayerTool(Icons.Rounded.PlaylistAdd, "Save", fg, Modifier.weight(1f)) { onAddToPlaylist(track) }
                 PlayerTool(
                     Icons.Rounded.QueueMusic,
@@ -485,7 +488,7 @@ private fun PlayerTool(icon: ImageVector, label: String, tint: Color, modifier: 
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
         Spacer(Modifier.height(2.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = tint, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
     }
 }
 

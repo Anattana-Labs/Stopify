@@ -716,6 +716,93 @@ fun SimpMusicApp(
     // Registered after the other handlers so back closes the full player first
     BackHandler(enabled = showFullPlayer) { showFullPlayer = false }
 
+    // ── Spotify Connect sync ──────────────────────────────────────────────────
+    // Keep the Dealer socket up while signed in, mirror what other devices play, and let the user move playback.
+    val cluster by client.connectCluster.collectAsState()
+    var showDevices by remember { mutableStateOf(false) }
+    var localPlayStartedAt by remember { mutableLongStateOf(0L) }
+    var remoteTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val remoteNow = if (cluster.playingElsewhere) cluster.nowPlaying else null
+    val remoteDeviceName = if (cluster.playingElsewhere) cluster.activeDevice?.name else null
+
+    LaunchedEffect(client.customCookies) {
+        if (SpotifyWebClient.hasValidSpDc(client.customCookies)) {
+            val token = client.getAccessToken().getOrNull()
+            if (token != null) client.ensureDeviceRegistered(token)
+        }
+    }
+    LaunchedEffect(playbackState.isPlaying) {
+        if (playbackState.isPlaying) localPlayStartedAt = System.currentTimeMillis()
+    }
+    // Another device took over: stop here instead of playing two things at once.
+    LaunchedEffect(cluster.activeDeviceId) {
+        if (cluster.playingElsewhere && playbackState.isPlaying &&
+            System.currentTimeMillis() - localPlayStartedAt > 6000L
+        ) {
+            player.pause()
+            statusLog = "Playing on ${cluster.activeDevice?.name ?: "another device"}"
+        }
+    }
+    LaunchedEffect(remoteNow?.isPlaying, remoteNow?.trackUri) {
+        while (remoteNow?.isPlaying == true) {
+            remoteTick = System.currentTimeMillis()
+            delay(500)
+        }
+    }
+    val remoteTrack = remember(remoteNow?.trackUri, remoteNow?.title, remoteNow?.coverUrl) {
+        remoteNow?.let {
+            SpotifyTrack(
+                id = it.trackUri.substringAfterLast(":"),
+                uri = it.trackUri,
+                name = it.title.ifBlank { "Playing on another device" },
+                artist = it.artist,
+                album = "",
+                coverUrl = it.coverUrl,
+                durationMs = it.durationMs
+            )
+        }
+    }
+    val uiTrack: SpotifyTrack? = remoteTrack ?: playbackState.currentTrack
+    val uiPlayback: PlaybackState = if (remoteNow != null && remoteTrack != null) {
+        PlaybackState(
+            currentTrack = remoteTrack,
+            isPlaying = remoteNow.isPlaying,
+            currentPositionMs = remoteNow.livePositionMs(remoteTick),
+            durationMs = remoteNow.durationMs
+        )
+    } else playbackState
+    val remoteId = cluster.activeDeviceId
+
+    fun remote(block: suspend (String) -> Unit) {
+        val id = remoteId ?: return
+        coroutineScope.launch { block(id) }
+    }
+
+    fun selectDevice(d: ConnectDevice) {
+        showDevices = false
+        if (d.isActive) return
+        coroutineScope.launch {
+            if (d.isSelf) {
+                // Pull playback back to this phone from whichever device has it.
+                val rt = remoteTrack
+                val pos = remoteNow?.livePositionMs() ?: 0L
+                val wasPlaying = remoteNow?.isPlaying == true
+                remoteId?.let { client.connectControl.pause(it) }
+                if (rt != null) {
+                    playTrackInternal(rt, addToHistory = false, addToPrevious = false)
+                    if (pos > 0) player.seekTo(pos)
+                    if (!wasPlaying) player.pause()
+                }
+            } else {
+                val ok = client.connectControl.transfer(d.id, playbackState.isPlaying)
+                if (ok) {
+                    if (playbackState.isPlaying) player.pause()
+                    statusLog = "Playing on ${d.name}"
+                } else statusLog = "Could not reach ${d.name}"
+            }
+        }
+    }
+
     val backdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
 
     CompositionLocalProvider(LocalBackdrop provides backdrop) {
@@ -970,56 +1057,83 @@ fun SimpMusicApp(
             viewingSettings = false
             currentTab = tab
         },
-        hasPlayer = playbackState.currentTrack != null,
+        hasPlayer = uiTrack != null,
         player = {
-            playbackState.currentTrack?.let { currentTrack ->
+            uiTrack?.let { currentTrack ->
                 SimpBottomMiniPlayer(
                     track = currentTrack,
-                    playbackState = playbackState,
+                    playbackState = uiPlayback,
                     backdrop = backdrop,
                     onTogglePlayPause = {
-                        if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false)
+                        if (remoteNow != null) remote { if (remoteNow.isPlaying) client.connectControl.pause(it) else client.connectControl.resume(it) }
+                        else if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false)
                         else if (playbackState.isPlaying) player.pause() else player.resume()
                     },
-                    onNextTrack = { playNextTrack() },
-                    onPreviousTrack = { playPreviousTrack() },
-                    onSeekTo = { player.seekTo(it) },
+                    onNextTrack = { if (remoteNow != null) remote { client.connectControl.skipNext(it) } else playNextTrack() },
+                    onPreviousTrack = { if (remoteNow != null) remote { client.connectControl.skipPrev(it) } else playPreviousTrack() },
+                    onSeekTo = { if (remoteNow != null) remote { id -> client.connectControl.seekTo(id, it) } else player.seekTo(it) },
                     onExpand = { showFullPlayer = true },
                     isFavorite = favoriteTrackIds.contains(currentTrack.id),
                     onToggleFavorite = { onToggleFavoriteLambda(currentTrack) },
-                    backgroundColor = currentTrackLyricsColor
+                    backgroundColor = currentTrackLyricsColor,
+                    deviceName = remoteDeviceName
                 )
             }
         }
     )
 
+    if (showDevices) {
+        ConnectDevicesSheet(
+            cluster = cluster,
+            onDismiss = { showDevices = false },
+            onSelect = { selectDevice(it) },
+            onVolume = { d, v ->
+                if (d.isSelf) player.setVolume(v)
+                else coroutineScope.launch { client.connectControl.setVolume(d.id, v) }
+            }
+        )
+    }
+
     // Full Screen Player Dialog / Sheet
         AnimatedVisibility(
-            visible = showFullPlayer && playbackState.currentTrack != null,
+            visible = showFullPlayer && uiTrack != null,
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
         ) {
-            playbackState.currentTrack?.let { currentTrack ->
+            uiTrack?.let { currentTrack ->
                 SimpFullPlayer(
                     track = currentTrack,
-                    playbackState = playbackState,
+                    playbackState = uiPlayback,
                     client = client,
-                    canvasUrl = if (canvasEnabled) currentCanvasUrl else null,
+                    canvasUrl = if (canvasEnabled && remoteNow == null) currentCanvasUrl else null,
                     canvasEnabled = canvasEnabled,
+                    deviceName = remoteDeviceName,
+                    onOpenDevices = { showDevices = true },
                     onTogglePlayPause = {
-                        if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false)
+                        if (remoteNow != null) remote { if (remoteNow.isPlaying) client.connectControl.pause(it) else client.connectControl.resume(it) }
+                        else if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false)
                         else if (playbackState.isPlaying) player.pause() else player.resume()
                     },
-                    isShuffle = isShuffle,
-                    isRepeat = isRepeat,
-                    onToggleShuffle = { isShuffle = !isShuffle },
-                    onToggleRepeat = { isRepeat = !isRepeat },
-                    onNext = { playNextTrack() },
-                    onPrevious = { playPreviousTrack() },
-                    onSeekTo = { player.seekTo(it) },
+                    isShuffle = remoteNow?.shuffle ?: isShuffle,
+                    isRepeat = remoteNow?.let { it.repeatContext || it.repeatTrack } ?: isRepeat,
+                    onToggleShuffle = {
+                        if (remoteNow != null) {
+                            val on = !remoteNow.shuffle
+                            remote { client.connectControl.setShuffle(it, on) }
+                        } else isShuffle = !isShuffle
+                    },
+                    onToggleRepeat = {
+                        if (remoteNow != null) {
+                            val on = !(remoteNow.repeatContext || remoteNow.repeatTrack)
+                            remote { client.connectControl.setRepeat(it, if (on) 1 else 0) }
+                        } else isRepeat = !isRepeat
+                    },
+                    onNext = { if (remoteNow != null) remote { client.connectControl.skipNext(it) } else playNextTrack() },
+                    onPrevious = { if (remoteNow != null) remote { client.connectControl.skipPrev(it) } else playPreviousTrack() },
+                    onSeekTo = { if (remoteNow != null) remote { id -> client.connectControl.seekTo(id, it) } else player.seekTo(it) },
                     onCollapse = { showFullPlayer = false },
                     playbackQueue = playbackQueue,
                     onClearQueue = { playbackQueue.clear() },
