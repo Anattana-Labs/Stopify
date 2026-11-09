@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.sp
 import com.shashwat.stopify.ui.components.PrismButton
 import coil.compose.AsyncImage
 import com.shashwat.stopify.data.SpotifyPlaylistSummary
+import com.shashwat.stopify.data.LibraryKind
+import com.shashwat.stopify.data.DownloadState
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyUserProfile
 import com.shashwat.stopify.data.SpotifyWebClient
@@ -61,14 +63,19 @@ import kotlinx.coroutines.launch
 
 enum class LibraryFilter(val label: String) {
     ALL("All"),
-    DOWNLOADED("Downloaded"),
+    RECENTS("Recents"),
     PLAYLISTS("Playlists"),
+    ALBUMS("Albums"),
+    ARTISTS("Artists"),
+    PODCASTS("Podcasts"),
+    DOWNLOADED("Downloaded"),
     FOLDERS("Folders"),
     LIKED("Liked Songs")
 }
 
 enum class LibrarySort(val label: String) {
     RECENTS("Recently Played"),
+    ADDED("Recently Added"),
     NAME("Alphabetical"),
     CREATOR("Creator")
 }
@@ -129,17 +136,11 @@ fun SimpLibraryScreen(
     fun refreshData() {
         isLoadingPlaylists = true
         coroutineScope.launch {
-            val res = client.fetchUserPlaylists(prefs)
+            val res = client.fetchFullLibrary(prefs)
             if (res.isSuccess) {
                 playlists = res.getOrThrow()
             }
             isLoadingPlaylists = false
-        }
-        coroutineScope.launch {
-            val recentsRes = client.fetchSpotifyRecentlyPlayed(prefs)
-            if (recentsRes.isSuccess) {
-                spotifyRecents = recentsRes.getOrThrow()
-            }
         }
         coroutineScope.launch {
             val likedRes = client.fetchLikedSongs(prefs)
@@ -173,9 +174,13 @@ fun SimpLibraryScreen(
     // Filter and sort playlists & folders
     val filteredPlaylists = remember(playlists, searchQuery, selectedSort, selectedFilter) {
         val byFilter = when (selectedFilter) {
-            LibraryFilter.PLAYLISTS -> playlists.filter { !it.isFolder }
-            LibraryFilter.FOLDERS -> playlists.filter { it.isFolder }
-            else -> playlists
+            LibraryFilter.PLAYLISTS -> playlists.filter { it.kind == LibraryKind.PLAYLIST }
+            LibraryFilter.FOLDERS -> playlists.filter { it.kind == LibraryKind.FOLDER }
+            LibraryFilter.ALBUMS -> playlists.filter { it.kind == LibraryKind.ALBUM }
+            LibraryFilter.ARTISTS -> playlists.filter { it.kind == LibraryKind.ARTIST }
+            LibraryFilter.PODCASTS -> playlists.filter { it.kind == LibraryKind.PODCAST || it.kind == LibraryKind.AUDIOBOOK }
+            LibraryFilter.ALL -> playlists
+            else -> emptyList()
         }
         val filtered = if (searchQuery.isBlank()) {
             byFilter
@@ -188,11 +193,19 @@ fun SimpLibraryScreen(
         when (selectedSort) {
             LibrarySort.NAME -> filtered.sortedBy { it.name.lowercase() }
             LibrarySort.CREATOR -> filtered.sortedBy { it.ownerName.lowercase() }
-            LibrarySort.RECENTS -> filtered
+            LibrarySort.ADDED -> filtered.sortedByDescending { it.addedAtMs }
+            LibrarySort.RECENTS -> filtered.sortedByDescending { it.pinned }
         }
     }
 
+    val recentTracks = remember(spotifyRecents, playbackHistory, searchQuery) {
+        val merged = (playbackHistory + spotifyRecents).distinctBy { it.uri }
+        if (searchQuery.isBlank()) merged else merged.filter {
+            it.name.contains(searchQuery, true) || it.artist.contains(searchQuery, true)
+        }
+    }
     val downloadManager = remember { StopifyDownloadManager.getInstance(context) }
+    val downloadJobs by downloadManager.jobs.collectAsState()
     val downloadedTracks by downloadManager.downloadedTracks.collectAsState()
     val filteredDownloads = remember(downloadedTracks, searchQuery) {
         if (searchQuery.isBlank()) {
@@ -476,6 +489,50 @@ fun SimpLibraryScreen(
                 }
             }
 
+            // ── DOWNLOAD QUEUE with live progress ────────────────────
+            if ((selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.DOWNLOADED) && downloadJobs.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Downloading · ${downloadJobs.size}",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+                items(downloadJobs, key = { "dl_" + it.track.id }) { job ->
+                    DownloadJobRow(
+                        job = job,
+                        onCancel = { downloadManager.dismissJob(job.track.id) },
+                        onRetry = { downloadManager.enqueue(job.track) }
+                    )
+                }
+            }
+
+            // ── RECENTS (everything played lately) ───────────────────
+            if (selectedFilter == LibraryFilter.RECENTS) {
+                if (recentTracks.isEmpty()) {
+                    item {
+                        EmptyLibraryState(
+                            title = "Nothing played yet",
+                            subtitle = "Songs you listen to will show up here",
+                            actionLabel = null,
+                            onAction = {}
+                        )
+                    }
+                } else {
+                    items(recentTracks, key = { "rc_" + it.uri }) { t ->
+                        val isCurrent = playbackState.currentTrack?.uri == t.uri
+                        SimpTrackItem(
+                            track = t,
+                            isPlaying = isCurrent && playbackState.isPlaying,
+                            isCurrentTrack = isCurrent,
+                            onClick = { onPlayTrack(t) },
+                            onMoreClick = { selectedOptionTrack = t },
+                            showCover = true
+                        )
+                    }
+                }
+            }
+
             // ── DOWNLOADED SONGS SECTION ─────────────────────────────
             if (selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.DOWNLOADED) {
                 if (filteredDownloads.isNotEmpty()) {
@@ -542,7 +599,7 @@ fun SimpLibraryScreen(
             }
 
             // ── PLAYLISTS & FOLDERS SECTION ──────────────────────────
-            if (selectedFilter == LibraryFilter.ALL || selectedFilter == LibraryFilter.PLAYLISTS || selectedFilter == LibraryFilter.FOLDERS) {
+            if (selectedFilter != LibraryFilter.DOWNLOADED && selectedFilter != LibraryFilter.RECENTS && selectedFilter != LibraryFilter.LIKED) {
                 if (isLoadingPlaylists) {
                     item {
                         Box(
@@ -558,12 +615,12 @@ fun SimpLibraryScreen(
                             )
                         }
                     }
-                } else if (filteredPlaylists.isEmpty() && (selectedFilter == LibraryFilter.PLAYLISTS || selectedFilter == LibraryFilter.FOLDERS)) {
+                } else if (filteredPlaylists.isEmpty() && selectedFilter != LibraryFilter.ALL) {
                     item {
                         EmptyLibraryState(
-                            title = if (searchQuery.isNotEmpty()) "No results found" else "No playlists yet",
-                            subtitle = if (searchQuery.isNotEmpty()) "Try searching with a different keyword" else "Create your first custom playlist to get started",
-                            actionLabel = if (searchQuery.isNotEmpty()) null else "Create Playlist",
+                            title = if (searchQuery.isNotEmpty()) "No results found" else "Nothing here yet",
+                            subtitle = if (searchQuery.isNotEmpty()) "Try searching with a different keyword" else "Save ${selectedFilter.label.lowercase()} on Spotify and they will appear here",
+                            actionLabel = if (searchQuery.isNotEmpty() || selectedFilter != LibraryFilter.PLAYLISTS) null else "Create Playlist",
                             onAction = { showCreatePlaylistDialog = true }
                         )
                     }
@@ -574,8 +631,8 @@ fun SimpLibraryScreen(
                             PlaylistListItem(
                                 playlist = playlist,
                                 accentColor = accentGreen,
-                                onClick = { onPlayCollection("spotify:playlist:${playlist.id}", playlist.name) },
-                                onMoreClick = { selectedOptionPlaylist = playlist }
+                                onClick = { onPlayCollection(playlist.uri, playlist.name) },
+                                onMoreClick = { if (playlist.kind == LibraryKind.PLAYLIST) selectedOptionPlaylist = playlist else onPlayCollection(playlist.uri, playlist.name) }
                             )
                         }
                     } else {
@@ -591,8 +648,8 @@ fun SimpLibraryScreen(
                                         PlaylistGridCard(
                                             playlist = playlist,
                                             accentColor = accentGreen,
-                                            onClick = { onPlayCollection("spotify:playlist:${playlist.id}", playlist.name) },
-                                            onMoreClick = { selectedOptionPlaylist = playlist }
+                                            onClick = { onPlayCollection(playlist.uri, playlist.name) },
+                                            onMoreClick = { if (playlist.kind == LibraryKind.PLAYLIST) selectedOptionPlaylist = playlist else onPlayCollection(playlist.uri, playlist.name) }
                                         )
                                     }
                                 }
@@ -814,6 +871,7 @@ fun PlaylistListItem(
     onClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
+    val artShape = if (playlist.kind == LibraryKind.ARTIST) CircleShape else RoundedCornerShape(14.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -826,8 +884,8 @@ fun PlaylistListItem(
         Box(
             modifier = Modifier
                 .size(62.dp)
-                .shadow(4.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.2f))
-                .clip(RoundedCornerShape(14.dp))
+                .shadow(4.dp, artShape, spotColor = Color.Black.copy(alpha = 0.2f))
+                .clip(artShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {
@@ -869,7 +927,7 @@ fun PlaylistListItem(
             val sub = if (playlist.isFolder) {
                 "Folder • ${if (playlist.trackCount > 0) "${playlist.trackCount} items" else "Spotify"}"
             } else {
-                "Playlist • ${playlist.ownerName} • ${playlist.trackCount} tracks"
+                libraryKindSubtitle(playlist)
             }
             Text(
                 text = sub,
@@ -976,7 +1034,7 @@ fun PlaylistGridCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = if (playlist.isFolder) "Folder" else "${playlist.trackCount} tracks",
+                text = libraryKindSubtitle(playlist),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -1123,6 +1181,86 @@ fun EmptyLibraryState(
                     )
                 }
             }
+        }
+    }
+}
+
+
+private fun libraryKindSubtitle(p: SpotifyPlaylistSummary): String = when (p.kind) {
+    LibraryKind.FOLDER -> "Folder"
+    LibraryKind.ARTIST -> "Artist"
+    LibraryKind.ALBUM -> "Album" + if (p.ownerName.isNotBlank()) " • ${p.ownerName}" else ""
+    LibraryKind.PODCAST -> "Podcast" + if (p.ownerName.isNotBlank()) " • ${p.ownerName}" else ""
+    LibraryKind.AUDIOBOOK -> "Audiobook" + if (p.ownerName.isNotBlank()) " • ${p.ownerName}" else ""
+    LibraryKind.PLAYLIST -> "Playlist • ${p.ownerName}" + if (p.trackCount > 0) " • ${p.trackCount} tracks" else ""
+}
+
+// ── COMPOSABLE: ONE QUEUED / RUNNING / FAILED DOWNLOAD ───────────────
+@Composable
+fun DownloadJobRow(job: com.shashwat.stopify.data.DownloadJob, onCancel: () -> Unit, onRetry: () -> Unit) {
+    val failed = job.state == DownloadState.FAILED
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pane(PaneShape)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!job.track.coverUrl.isNullOrEmpty()) {
+                AsyncImage(
+                    model = job.track.coverUrl,
+                    contentDescription = job.track.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                job.track.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = when (job.state) {
+                    DownloadState.QUEUED -> "Waiting to download"
+                    DownloadState.DOWNLOADING -> "Downloading ${(job.progress * 100).toInt()}%"
+                    DownloadState.FAILED -> "Failed: ${job.error ?: "unknown error"}"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!failed) {
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { job.progress },
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                )
+            }
+        }
+        if (failed) {
+            IconButton(onClick = onRetry, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Rounded.Refresh, contentDescription = "Retry download", tint = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Rounded.Close, contentDescription = "Cancel download", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

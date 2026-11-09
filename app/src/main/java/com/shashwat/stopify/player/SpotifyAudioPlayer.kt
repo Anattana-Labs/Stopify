@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -71,8 +73,105 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
     @Volatile
     var onTrackCompleted: ((SpotifyTrack) -> Unit)? = null
 
+    /** Fired (main thread) once per track when it is close to its end, so the next one can be preloaded. */
+    @Volatile
+    var onNearEnd: ((SpotifyTrack) -> Unit)? = null
+
+    /** Fired (main thread) when ExoPlayer moved on to the preloaded track by itself: (finished, started). */
+    @Volatile
+    var onAutoAdvanced: ((SpotifyTrack, SpotifyTrack) -> Unit)? = null
+
     @Volatile
     var onSkipToNext: (() -> Unit)? = null
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingNext: SpotifyTrack? = null
+    private var nearEndFiredFor: String? = null
+
+    /** True when the next track is already queued inside ExoPlayer for a gapless hand-over. */
+    fun hasPreloadedNext(): Boolean = pendingNext != null
+
+    private val nearEndTicker = object : Runnable {
+        override fun run() {
+            try {
+                val p = exoPlayer
+                val cur = _playbackState.value.currentTrack
+                if (p != null && cur != null && p.isPlaying && pendingNext == null && nearEndFiredFor != cur.id) {
+                    val dur = p.duration
+                    if (dur > 0 && dur - p.currentPosition <= 30_000L) {
+                        nearEndFiredFor = cur.id
+                        onNearEnd?.invoke(cur)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "near-end check failed", e)
+            }
+            if (exoPlayer != null) mainHandler.postDelayed(this, 1_000L)
+        }
+    }
+
+    private fun buildMediaItem(track: SpotifyTrack, audioUrl: String, accessToken: String, clientToken: String?): MediaItem {
+        val localAudio = com.shashwat.stopify.data.StopifyDownloadManager.getInstance(appContext).getDownloadedAudioFile(track.id)
+        val effectiveAudioUri = if (localAudio != null && localAudio.exists()) Uri.fromFile(localAudio) else Uri.parse(audioUrl)
+
+        val drmHeaders = mapOf(
+            "authorization" to "Bearer $accessToken",
+            "client-token" to (clientToken?.ifEmpty { null } ?: SpotifyWebClient.CLIENT_TOKEN),
+            "app-platform" to SpotifyWebClient.APP_PLATFORM,
+            "spotify-app-version" to SpotifyWebClient.SPOTIFY_APP_VERSION,
+            "origin" to "https://open.spotify.com",
+            "referer" to "https://open.spotify.com/",
+            "user-agent" to SpotifyWebClient.USER_AGENT
+        )
+        val drmConfiguration = MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
+            .setLicenseUri(Uri.parse(WIDEVINE_LICENSE_URL))
+            .setLicenseRequestHeaders(drmHeaders)
+            .build()
+        val mediaMetadata = MediaMetadata.Builder()
+            .setTitle(track.name)
+            .setArtist(track.artist)
+            .setAlbumTitle(track.album)
+            .setArtworkUri(if (!track.coverUrl.isNullOrEmpty()) Uri.parse(track.coverUrl) else null)
+            .build()
+        return MediaItem.Builder()
+            .setMediaId(track.id)
+            .setUri(effectiveAudioUri)
+            .setMediaMetadata(mediaMetadata)
+            .setDrmConfiguration(drmConfiguration)
+            .build()
+    }
+
+    /**
+     * Appends the next track behind the current one. ExoPlayer then switches by itself at the end of the current
+     * track, with no app code needed at that moment - this is what keeps playback going with the screen locked.
+     */
+    fun prepareNext(track: SpotifyTrack, audioUrl: String, accessToken: String, clientToken: String? = null) {
+        mainHandler.post {
+            val player = exoPlayer ?: return@post
+            val cur = _playbackState.value.currentTrack ?: return@post
+            if (cur.id == track.id || pendingNext != null || player.mediaItemCount != 1) return@post
+            if (player.playbackState == Player.STATE_ENDED || player.playbackState == Player.STATE_IDLE) return@post
+            try {
+                player.addMediaItem(buildMediaItem(track, audioUrl, accessToken, clientToken))
+                pendingNext = track
+                Log.d(TAG, "Preloaded next track '${track.name}' for gapless hand-over")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not preload next track", e)
+            }
+        }
+    }
+
+    /** Drops a preloaded track (e.g. the queue changed) so it will not start by itself. */
+    fun clearPreloadedNext() {
+        mainHandler.post {
+            val player = exoPlayer ?: return@post
+            if (pendingNext != null && player.mediaItemCount > 1) {
+                player.removeMediaItems(1, player.mediaItemCount)
+            }
+            pendingNext = null
+            nearEndFiredFor = null
+        }
+    }
 
     @Volatile
     var onSkipToPrevious: (() -> Unit)? = null
@@ -132,6 +231,8 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            // Keeps CPU and Wi-Fi awake while playing, so the next track can be fetched with the screen off.
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
         player.addListener(object : Player.Listener {
@@ -165,6 +266,27 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
                 }
             }
 
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val next = pendingNext ?: return
+                if (mediaItem == null || mediaItem.mediaId != next.id) return
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) return
+                val finished = _playbackState.value.currentTrack
+                pendingNext = null
+                nearEndFiredFor = null
+                _playbackState.value = _playbackState.value.copy(
+                    currentTrack = next,
+                    currentPositionMs = 0L,
+                    durationMs = next.durationMs,
+                    isBuffering = false,
+                    error = null
+                )
+                // Remove the finished item so the playlist holds only what is playing now.
+                mainHandler.post {
+                    try { if (player.currentMediaItemIndex > 0) player.removeMediaItems(0, player.currentMediaItemIndex) } catch (_: Exception) {}
+                }
+                if (finished != null) onAutoAdvanced?.invoke(finished, next)
+            }
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 Log.d(TAG, "ExoPlayer onIsPlayingChanged: $isPlaying")
                 _playbackState.value = _playbackState.value.copy(
@@ -186,6 +308,8 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
 
         exoPlayer = player
         activePlayer = player
+        mainHandler.removeCallbacks(nearEndTicker)
+        mainHandler.postDelayed(nearEndTicker, 1_000L)
         return player
     }
 
@@ -198,46 +322,11 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
         )
 
         try {
-            val localAudio = com.shashwat.stopify.data.StopifyDownloadManager.getInstance(appContext).getDownloadedAudioFile(track.id)
-            val effectiveAudioUri = if (localAudio != null && localAudio.exists()) {
-                Log.d(TAG, "Playing track from offline local file: ${localAudio.absolutePath}")
-                Uri.fromFile(localAudio)
-            } else if (audioUrl.startsWith("file://")) {
-                Uri.parse(audioUrl)
-            } else {
-                Uri.parse(audioUrl)
-            }
-
-            val drmHeaders = mapOf(
-                "authorization" to "Bearer $accessToken",
-                "client-token" to (clientToken?.ifEmpty { null } ?: SpotifyWebClient.CLIENT_TOKEN),
-                "app-platform" to SpotifyWebClient.APP_PLATFORM,
-                "spotify-app-version" to SpotifyWebClient.SPOTIFY_APP_VERSION,
-                "origin" to "https://open.spotify.com",
-                "referer" to "https://open.spotify.com/",
-                "user-agent" to SpotifyWebClient.USER_AGENT
-            )
-
-            val drmConfiguration = MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
-                .setLicenseUri(Uri.parse(WIDEVINE_LICENSE_URL))
-                .setLicenseRequestHeaders(drmHeaders)
-                .build()
-
-            val mediaMetadata = MediaMetadata.Builder()
-                .setTitle(track.name)
-                .setArtist(track.artist)
-                .setAlbumTitle(track.album)
-                .setArtworkUri(if (!track.coverUrl.isNullOrEmpty()) Uri.parse(track.coverUrl) else null)
-                .build()
-
-            val mediaItem = MediaItem.Builder()
-                .setMediaId(track.id)
-                .setUri(effectiveAudioUri)
-                .setMediaMetadata(mediaMetadata)
-                .setDrmConfiguration(drmConfiguration)
-                .build()
+            val mediaItem = buildMediaItem(track, audioUrl, accessToken, clientToken)
 
             val player = getOrCreatePlayer()
+            pendingNext = null
+            nearEndFiredFor = null
             player.stop()
             player.clearMediaItems()
             player.setMediaItem(mediaItem)
@@ -342,6 +431,7 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
     }
 
     fun releasePlayer() {
+        mainHandler.removeCallbacks(nearEndTicker)
         activeMediaSession = null
         activePlayer = null
 

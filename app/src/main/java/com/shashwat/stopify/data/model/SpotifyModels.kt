@@ -79,8 +79,14 @@ data class SpotifyPlaylistSummary(
     val ownerName: String,
     val coverUrl: String?,
     val trackCount: Int,
-    val isFolder: Boolean = false
+    val isFolder: Boolean = false,
+    /** What kind of library entry this is (playlist, album, artist, podcast, folder). */
+    val kind: LibraryKind = if (isFolder) LibraryKind.FOLDER else LibraryKind.PLAYLIST,
+    val addedAtMs: Long = 0L,
+    val pinned: Boolean = false
 )
+
+enum class LibraryKind { PLAYLIST, FOLDER, ALBUM, ARTIST, PODCAST, AUDIOBOOK }
 
 data class SpotifyLyricLine(
     val startTimeMs: Long,

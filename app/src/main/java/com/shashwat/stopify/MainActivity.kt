@@ -229,7 +229,7 @@ fun SimpMusicApp(
     onGlassStyleChange: (GlassStyle) -> Unit = {},
     prefs: android.content.SharedPreferences? = null
 ) {
-    val coroutineScope = rememberCoroutineScope()
+    val coroutineScope = remember { kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate) }
     val context = LocalContext.current
     val appContext = context.applicationContext
     var currentTab by remember { mutableStateOf(NavigationTab.HOME) }
@@ -248,8 +248,8 @@ fun SimpMusicApp(
     var showOnboarding by remember { mutableStateOf(!hasCompletedOnboarding && !hasAnySession) }
     var showFullPlayer by remember { mutableStateOf(false) }
     val playbackState by player.playbackState.collectAsState()
-    val playbackQueue = remember { mutableStateListOf<SpotifyTrack>() }
-    val previousTracks = remember { mutableStateListOf<SpotifyTrack>() }
+    val playbackQueue = remember { PlaybackQueueStore.queue }
+    val previousTracks = remember { PlaybackQueueStore.previous }
     val playbackHistory = remember { mutableStateListOf<SpotifyTrack>() }
     var isAutoQueueEnabled by remember { mutableStateOf(true) }
     var isShuffle by remember { mutableStateOf(false) }
@@ -262,6 +262,7 @@ fun SimpMusicApp(
     var viewingArtistName by remember { mutableStateOf<String?>(null) }
     var viewingArtistCover by remember { mutableStateOf<String?>(null) }
     var viewingSettings by remember { mutableStateOf(false) }
+    var viewingRecents by remember { mutableStateOf(false) }
     var trackToAddToPlaylist by remember { mutableStateOf<SpotifyTrack?>(null) }
     var favoriteTrackIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var userProfile by remember { mutableStateOf<SpotifyUserProfile?>(null) }
@@ -470,7 +471,7 @@ fun SimpMusicApp(
 
             if (isAutoQueueEnabled && playbackQueue.size < 3) {
                 launch {
-                    val autoTracks = client.fetchAutoplayQueue(track)
+                    val autoTracks = client.fetchAutoplayQueue(track, (playbackHistory.take(30) + previousTracks.takeLast(20)).map { it.uri }.toSet())
                     val filtered = autoTracks.filter { it.uri != track.uri && playbackQueue.none { q -> q.uri == it.uri } }
                     if (filtered.isNotEmpty()) {
                         playbackQueue.addAll(filtered)
@@ -494,7 +495,7 @@ fun SimpMusicApp(
             if (current != null && isAutoQueueEnabled) {
                 statusLog = "Autoqueue fetching next tracks for '${current.artist}'..."
                 coroutineScope.launch {
-                    val autoTracks = client.fetchAutoplayQueue(current)
+                    val autoTracks = client.fetchAutoplayQueue(current, (playbackHistory.take(30) + previousTracks.takeLast(20)).map { it.uri }.toSet())
                     val filtered = autoTracks.filter { it.uri != current.uri }
                     if (filtered.isNotEmpty()) {
                         val next = filtered.first()
@@ -540,11 +541,47 @@ fun SimpMusicApp(
         player.onSkipToPrevious = {
             playPreviousTrack()
         }
-        onDispose {
-            player.onTrackCompleted = null
-            player.onSkipToNext = null
-            player.onSkipToPrevious = null
+        player.onNearEnd = { cur ->
+            coroutineScope.launch {
+                if (isRepeat || client.connectCluster.value.playingElsewhere) return@launch
+                var next: SpotifyTrack? = if (playbackQueue.isNotEmpty()) {
+                    if (isShuffle) playbackQueue.random() else playbackQueue.first()
+                } else null
+                if (next == null && isAutoQueueEnabled) {
+                    val auto = client.fetchAutoplayQueue(cur, (playbackHistory.take(30) + previousTracks.takeLast(20)).map { it.uri }.toSet())
+                        .filter { it.uri != cur.uri }
+                    if (auto.isNotEmpty()) {
+                        playbackQueue.addAll(auto)
+                        next = auto.first()
+                    }
+                }
+                val n = next ?: return@launch
+                val local = com.shashwat.stopify.data.StopifyDownloadManager.getInstance(appContext).getDownloadedAudioFile(n.id)
+                val url = if (local != null) android.net.Uri.fromFile(local).toString()
+                else client.resolveTrackAudioStream(n.uri).getOrNull()
+                if (url != null && player.playbackState.value.currentTrack?.id == cur.id) {
+                    val token = client.getAccessToken().getOrElse { SpotifyWebClient.FALLBACK_BEARER_TOKEN }
+                    player.prepareNext(n, url, token, client.customClientToken)
+                }
+            }
         }
+        player.onAutoAdvanced = { finished, started ->
+            val idx = playbackQueue.indexOfFirst { it.uri == started.uri }
+            if (idx >= 0) playbackQueue.removeAt(idx)
+            previousTracks.add(finished)
+            if (previousTracks.size > 50) previousTracks.removeAt(0)
+            recordLocalPlay(started)
+            coroutineScope.launch {
+                client.reportPlaybackToApi(finished, finished.durationMs, prefs, isFinished = true)
+                client.reportPlaybackToApi(started, 0L, prefs)
+                if (isAutoQueueEnabled && playbackQueue.size < 3) {
+                    val auto = client.fetchAutoplayQueue(started, (playbackHistory.take(30) + previousTracks.takeLast(20)).map { it.uri }.toSet())
+                    playbackQueue.addAll(auto.filter { a -> a.uri != started.uri && playbackQueue.none { q -> q.uri == a.uri } })
+                }
+            }
+        }
+        // Callbacks stay registered when the activity goes away: playback must keep advancing with the screen off.
+        onDispose { }
     }
 
     /**
@@ -727,11 +764,13 @@ fun SimpMusicApp(
     val albumZ = remember(viewingAlbumUri) { if (viewingAlbumUri != null) ++zCounter[0] else 0 }
     val playlistZ = remember(viewingPlaylistUri) { if (viewingPlaylistUri != null) ++zCounter[0] else 0 }
     val artistZ = remember(viewingArtistUri) { if (viewingArtistUri != null) ++zCounter[0] else 0 }
+    val recentsZ = remember(viewingRecents) { if (viewingRecents) ++zCounter[0] else 0 }
 
     // Back handling
-    BackHandler(enabled = viewingSettings || viewingAlbumUri != null || viewingPlaylistUri != null || viewingArtistUri != null) {
-        val top = maxOf(maxOf(settingsZ, albumZ), maxOf(playlistZ, artistZ))
+    BackHandler(enabled = viewingRecents || viewingSettings || viewingAlbumUri != null || viewingPlaylistUri != null || viewingArtistUri != null) {
+        val top = maxOf(maxOf(settingsZ, albumZ), maxOf(maxOf(playlistZ, artistZ), recentsZ))
         when (top) {
+            recentsZ -> viewingRecents = false
             settingsZ -> viewingSettings = false
             albumZ -> viewingAlbumUri = null
             playlistZ -> viewingPlaylistUri = null
@@ -850,6 +889,7 @@ fun SimpMusicApp(
                     onRefresh = { loadHome(force = true) },
                     listState = homeListState,
                     onOpenSettings = { viewingSettings = true },
+                    onOpenRecents = { viewingRecents = true },
                     onMediaItemClick = { playMediaItem(it) },
                     recentlyPlayed = playbackHistory,
                     onPlayTrack = { playTrackInternal(it) },
@@ -906,6 +946,12 @@ fun SimpMusicApp(
                             playTrackInternal(tr)
                         } else if (uri.contains(":album:")) {
                             viewingAlbumUri = uri
+                        } else if (uri.contains(":artist:")) {
+                            viewingArtistUri = uri
+                            viewingArtistName = name
+                            viewingArtistCover = null
+                        } else if (uri.contains(":show:") || uri.contains(":audiobook:")) {
+                            statusLog = "Podcasts and audiobooks aren't playable here yet"
                         } else {
                             viewingPlaylistUri = uri
                         }
@@ -930,9 +976,9 @@ fun SimpMusicApp(
                 )
             }
         }
-    }
 
-        // Subscreen Overlays (Animated slide-in)
+        // Subscreen Overlays (Animated slide-in). They live inside the backdrop source so glass
+        // on top of a sub-screen refracts that sub-screen, not the tab underneath it.
         AnimatedVisibility(
             visible = viewingAlbumUri != null,
             modifier = Modifier.fillMaxSize().zIndex(albumZ.toFloat()),
@@ -1030,6 +1076,43 @@ fun SimpMusicApp(
         }
 
         AnimatedVisibility(
+            visible = viewingRecents,
+            modifier = Modifier.fillMaxSize().zIndex(recentsZ.toFloat()),
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+        ) {
+            com.shashwat.stopify.ui.screens.SimpRecentsScreen(
+                tracks = playbackHistory.toList(),
+                playbackState = playbackState,
+                onBack = { viewingRecents = false },
+                onPlayTrack = { playTrackInternal(it) },
+                onPlayAll = { list ->
+                    if (list.isNotEmpty()) {
+                        playbackQueue.clear()
+                        playbackQueue.addAll(list.drop(1))
+                        playTrackInternal(list.first())
+                    }
+                },
+                onPlayNext = { track ->
+                    playbackQueue.add(0, track)
+                    statusLog = "'${track.name}' will play next"
+                },
+                onAddToQueue = { track ->
+                    playbackQueue.add(track)
+                    statusLog = "Added '${track.name}' to queue"
+                },
+                onAddToPlaylist = { trackToAddToPlaylist = it },
+                onViewAlbum = { viewingAlbumUri = it },
+                onViewArtist = { artistUri, artistName ->
+                    viewingArtistUri = artistUri
+                    viewingArtistName = artistName
+                },
+                onToggleFavorite = onToggleFavoriteLambda,
+                isFavorite = { favoriteTrackIds.contains(it.id) }
+            )
+        }
+
+        AnimatedVisibility(
             visible = viewingSettings,
             modifier = Modifier.fillMaxSize().zIndex(settingsZ.toFloat()),
             enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
@@ -1074,6 +1157,8 @@ fun SimpMusicApp(
             )
         }
 
+        } // end of backdrop source
+
     // Bottom dock: player strip + navigation fused into one object
     SimpDock(
         modifier = Modifier.align(Alignment.BottomCenter).zIndex(1000f),
@@ -1083,6 +1168,7 @@ fun SimpMusicApp(
             viewingPlaylistUri = null
             viewingArtistUri = null
             viewingSettings = false
+            viewingRecents = false
             currentTab = tab
         },
         hasPlayer = uiTrack != null,
@@ -1133,6 +1219,9 @@ fun SimpMusicApp(
             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
         ) {
             uiTrack?.let { currentTrack ->
+                val fullBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
+                CompositionLocalProvider(LocalBackdrop provides fullBackdrop) {
+                Box(Modifier.fillMaxSize().layerBackdrop(fullBackdrop)) {
                 SimpFullPlayer(
                     track = currentTrack,
                     playbackState = uiPlayback,
@@ -1206,6 +1295,8 @@ fun SimpMusicApp(
                     isFavoriteTrack = playbackState.currentTrack?.id?.let { favoriteTrackIds.contains(it) } ?: false,
                     isFavorite = { favoriteTrackIds.contains(it.id) }
                 )
+                }
+                }
             }
         }
 
