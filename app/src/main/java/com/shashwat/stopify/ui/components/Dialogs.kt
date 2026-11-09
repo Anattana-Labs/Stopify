@@ -63,6 +63,8 @@ fun TrackOptionsMenu(
     val downloadManager = remember { StopifyDownloadManager.getInstance(context) }
     val downloadedSet by downloadManager.downloadedTrackIds.collectAsState()
     val effectivelyDownloaded = isDownloaded ?: downloadedSet.contains(track.id)
+    val downloadJobs by downloadManager.jobs.collectAsState()
+    val activeJob = downloadJobs.firstOrNull { it.track.id == track.id && it.state != com.shashwat.stopify.data.DownloadState.FAILED }
     val coroutineScope = rememberCoroutineScope()
 
     PrismSheet(onDismiss = onDismissRequest) {
@@ -173,7 +175,11 @@ fun TrackOptionsMenu(
 
             // 5. Download / Remove Download
             TrackOptionRow(
-                title = if (effectivelyDownloaded) "Remove Download" else "Download",
+                title = when {
+                    effectivelyDownloaded -> "Remove Download"
+                    activeJob != null -> "Cancel Download (${(activeJob.progress * 100).toInt()}%)"
+                    else -> "Download"
+                },
                 icon = if (effectivelyDownloaded) Icons.Rounded.FileDownloadDone else Icons.Rounded.Download,
                 iconTint = if (effectivelyDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 onClick = {
