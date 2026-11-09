@@ -34,3 +34,6 @@ val DockShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 /** Floating mini player card (joined into the bar's glass) and the navigation capsule. */
 val MiniPlayerShape = RoundedCornerShape(22.dp)
 val NavPillShape = RoundedCornerShape(28.dp)
+
+/** The big cover in the full player and on album / playlist / artist heroes. */
+val ArtworkShape = RoundedCornerShape(28.dp)

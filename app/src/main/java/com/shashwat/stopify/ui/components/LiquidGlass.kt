@@ -268,7 +268,10 @@ fun Modifier.drawInteractiveGlass(
     blurScale: Float = 1f,
     minScrim: Float = 0.15f,
     maxScrim: Float = 0.5f,
-    darkenScrim: Float? = null
+    darkenScrim: Float? = null,
+    liquid: Boolean = true,
+    blurDp: Float? = null,
+    scrimColor: Color = Color.Black
 ): Modifier =
     this
         .drawBackdrop(
@@ -285,7 +288,7 @@ fun Modifier.drawInteractiveGlass(
                     saturation = 1.4f,
                 )
                 blur(
-                    (
+                    if (blurDp != null) blurDp.dp.toPx() * blurScale else (
                         if (l > 0f) {
                             lerp(8f.dp.toPx(), 16f.dp.toPx(), l)
                         } else {
@@ -293,7 +296,7 @@ fun Modifier.drawInteractiveGlass(
                         }
                     ) * blurScale + 2f.dp.toPx() * press,
                 )
-                lens(size.minDimension / 4f + 2f.dp.toPx() * press, size.minDimension / 2f, false)
+                if (liquid) lens(size.minDimension / 4f + 2f.dp.toPx() * press, size.minDimension / 2f, false)
             },
             onDrawBackdrop = { drawBackdrop ->
                 drawBackdrop()
@@ -301,7 +304,7 @@ fun Modifier.drawInteractiveGlass(
             },
             onDrawSurface = {
                 val darken = darkenScrim ?: lerp(minScrim, maxScrim, ((luminance() - 0.3f) / 0.5f).coerceIn(0f, 1f))
-                drawRect(Color.Black.copy(alpha = darken))
+                drawRect(scrimColor.copy(alpha = darken))
                 val press = interaction?.pressProgress ?: 0f
                 if (press > 0f) {
                     drawRect(

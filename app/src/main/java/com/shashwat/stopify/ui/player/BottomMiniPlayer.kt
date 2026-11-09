@@ -47,7 +47,7 @@ import kotlin.math.roundToInt
 
 /**
  * The player strip of the dock. It has no surface of its own: the dock (see SimpDock) provides the
- * background, so the player and the navigation read as one object. A hairline at the very top shows progress.
+ * background, so the player and the navigation read as one object.
  * Tap = open player. Swipe left/right = next/previous. Swipe up = open player.
  */
 @Composable
@@ -87,7 +87,7 @@ fun SimpBottomMiniPlayer(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 4.dp),
+                .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
@@ -198,24 +198,6 @@ fun SimpBottomMiniPlayer(
                     modifier = Modifier.size(26.dp)
                 )
             }
-        }
-        // Progress in split light, inset along the bottom of the card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 8.dp)
-                .height(2.5.dp)
-                .clip(CircleShape)
-                .background(scheme.onSurface.copy(alpha = 0.12f))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress)
-                    .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(spectrumBrush(0f, 900f))
-            )
         }
     }
 }

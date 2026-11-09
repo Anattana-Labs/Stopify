@@ -3,6 +3,7 @@ package com.shashwat.stopify.ui.player
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -143,25 +144,11 @@ fun FullScreenLyricsViewer(
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
                 Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = themePrimary.copy(alpha = if (isLightBg) 0.14f else 0.22f),
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    ) {
-                        Text(
-                            text = "LYRICS",
-                            color = if (isLightBg) themePrimary else activeHighlightColor,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.2.sp,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
-                        )
-                    }
                     Text(
                         text = track.name,
                         color = titleColor,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Light,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -178,9 +165,10 @@ fun FullScreenLyricsViewer(
                 IconButton(
                     onClick = onClose,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
-                        .background(if (isLightBg) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White.copy(alpha = 0.12f))
+                        .background(if (isLightBg) Color.White.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.14f))
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.KeyboardArrowDown,
@@ -263,23 +251,12 @@ fun FullScreenLyricsViewer(
                                     }
                                     .padding(vertical = 4.dp)
                             ) {
-                                if (isSynced && isActive) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(4.dp)
-                                            .height(28.dp)
-                                            .clip(RoundedCornerShape(2.dp))
-                                            .background(themePrimary)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                }
-
                                 Text(
                                     text = text,
                                     color = color,
-                                    fontSize = if (isActive) 26.sp else 23.sp,
-                                    fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
-                                    lineHeight = 34.sp,
+                                    fontSize = if (isActive) 30.sp else 26.sp,
+                                    fontWeight = if (isActive) FontWeight.Normal else FontWeight.Light,
+                                    lineHeight = 38.sp,
                                     modifier = Modifier.weight(1f)
                                 )
                             }

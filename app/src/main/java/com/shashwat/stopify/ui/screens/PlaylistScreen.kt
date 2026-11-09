@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shashwat.stopify.ui.theme.ArtworkShape
 import com.shashwat.stopify.ui.components.PrismButton
 import coil.compose.AsyncImage
 import com.shashwat.stopify.ui.components.RoundAction
@@ -138,7 +139,7 @@ fun SimpPlaylistScreen(
                 Box(
                     modifier = Modifier
                         .size(240.dp)
-                        .clip(RoundedCornerShape(22.dp))
+                        .clip(ArtworkShape)
                         .align(Alignment.CenterHorizontally)
                         .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                 )
@@ -214,8 +215,8 @@ fun SimpPlaylistScreen(
                             modifier = Modifier
                                 .padding(vertical = 12.dp)
                                 .size(230.dp)
-                                .shadow(24.dp, RoundedCornerShape(22.dp), spotColor = Color.Black.copy(alpha = 0.6f))
-                            .clip(RoundedCornerShape(22.dp))
+                                .shadow(24.dp, ArtworkShape, spotColor = Color.Black.copy(alpha = 0.6f))
+                            .clip(ArtworkShape)
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                         ) {
                             if (!playlist.coverUrl.isNullOrEmpty()) {

@@ -30,6 +30,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
 import com.shashwat.stopify.ui.components.RoundAction
+import androidx.compose.foundation.border
+import androidx.compose.ui.semantics.Role
+import com.shashwat.stopify.ui.theme.PrismTokens
+import com.shashwat.stopify.ui.theme.glassEdge
+import com.shashwat.stopify.ui.theme.glassFill
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -90,7 +95,9 @@ fun SimpArtistScreen(
         // 3. Fetch albums
         val albumsRes = client.searchMulti(artistName, SpotifyItemType.ALBUM)
         if (albumsRes.isSuccess) {
-            albums = albumsRes.getOrThrow().filter { it.type == SpotifyItemType.ALBUM }
+            val all = albumsRes.getOrThrow().filter { it.type == SpotifyItemType.ALBUM }
+            val mine = all.filter { it.subtitle.contains(artistName.trim(), ignoreCase = true) }
+            albums = if (mine.isNotEmpty()) mine else all
         }
         isLoading = false
     }
@@ -153,7 +160,9 @@ fun SimpArtistScreen(
         ) {
             // Top App Bar
             item {
+                Box(Modifier.padding(horizontal = PrismTokens.Space.gutter, vertical = 10.dp)) {
                     RoundAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
+                }
             }
 
             // Hero Circular Avatar & Info Header
@@ -164,11 +173,11 @@ fun SimpArtistScreen(
                         .padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // 180dp Circular Avatar
+                    // Circular portrait, lifted off the tinted ground
                     Box(
                         modifier = Modifier
-                            .padding(vertical = 12.dp)
-                            .size(180.dp)
+                            .padding(vertical = 8.dp)
+                            .size(168.dp)
                             .shadow(24.dp, CircleShape, spotColor = dynamicTint.copy(alpha = 0.45f))
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
@@ -194,27 +203,17 @@ fun SimpArtistScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Verified Badge + Name
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = "Verified",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Verified Artist",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Text(
+                        text = "Artist",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
                         text = artistName,
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.headlineLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
@@ -234,8 +233,9 @@ fun SimpArtistScreen(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                .clickable {
+                                .background(glassFill(1.6f))
+                                .border(1.dp, glassEdge(), CircleShape)
+                                .clickable(role = Role.Button, onClickLabel = "Shuffle") {
                                     topTracks.shuffled().firstOrNull()?.let { onPlayTrack(it) }
                                 },
                             contentAlignment = Alignment.Center
@@ -288,7 +288,7 @@ fun SimpArtistScreen(
                     text = "Popular Tracks",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = PrismTokens.Space.gutter, vertical = 8.dp)
                 )
             }
 
@@ -299,11 +299,13 @@ fun SimpArtistScreen(
                     }
                 }
             } else {
-                itemsIndexed(topTracks) { index, track ->
+                val fallbackCover = topTracks.firstOrNull { !it.coverUrl.isNullOrEmpty() }?.coverUrl ?: currentCoverUrl
+                itemsIndexed(topTracks) { _, rawTrack ->
+                    // A song without its own artwork borrows the artist's, so every row has a thumbnail
+                    val track = if (rawTrack.coverUrl.isNullOrEmpty()) rawTrack.copy(coverUrl = fallbackCover) else rawTrack
                     val isCurrent = playbackState.currentTrack?.uri == track.uri
                     SimpTrackItem(
                         track = track,
-                        index = index + 1,
                         isPlaying = isCurrent && playbackState.isPlaying,
                         isCurrentTrack = isCurrent,
                         onClick = { onPlayTrack(track) },
@@ -324,7 +326,7 @@ fun SimpArtistScreen(
 
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(horizontal = 20.dp)
+                            contentPadding = PaddingValues(horizontal = PrismTokens.Space.gutter)
                         ) {
                             items(albums) { album ->
                                 SimpSquareCard(

@@ -84,20 +84,12 @@ fun SimpDock(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .shadow(12.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
-                    .clip(cardShape)
-                    .background(scheme.surfaceContainerHigh)
-                    .background(glassFill(0.8f))
-                    .border(0.8.dp, glassEdge(), cardShape)
+                    .glassSurface(cardShape, 12.dp)
             ) { player() }
         }
         Row(
             modifier = Modifier
-                .shadow(10.dp, NavPillShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
-                .clip(NavPillShape)
-                .background(scheme.surfaceContainerHigh)
-                .background(glassFill(0.8f))
-                .border(0.8.dp, glassEdge(), NavPillShape)
+                .glassSurface(NavPillShape, 10.dp)
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
