@@ -84,7 +84,8 @@ fun SimpSearchScreen(
     val artists = remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.ARTIST } }
     val albums = remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.ALBUM } }
     val playlists = remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.PLAYLIST } }
-    val songs = remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.TRACK || it.uri.contains(":track:") } }
+    val songs =
+        remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.TRACK || it.uri.contains(":track:") } }
 
     Box(
         modifier = modifier
@@ -107,7 +108,12 @@ fun SimpSearchScreen(
                     onQueryChange(it)
                     if (it.length >= 2) onSearch(it)
                 },
-                placeholder = { Text("What do you want to listen to?", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)) },
+                placeholder = {
+                    Text(
+                        "Search...",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.Search,
@@ -121,7 +127,11 @@ fun SimpSearchScreen(
                             onQueryChange("")
                             focusManager.clearFocus()
                         }) {
-                            Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "Clear",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 },
@@ -342,11 +352,13 @@ fun SimpSearchScreen(
                 onAddToQueue = { onAddToQueue(optTrack) },
                 onAddToPlaylist = { onAddToPlaylist(optTrack) },
                 onViewAlbum = {
-                    val alb = optTrack.albumUri ?: if (optTrack.album.isNotBlank()) "spotify:album:${optTrack.id}" else null
+                    val alb =
+                        optTrack.albumUri ?: if (optTrack.album.isNotBlank()) "spotify:album:${optTrack.id}" else null
                     if (alb != null) onViewAlbum(alb)
                 },
                 onViewArtist = {
-                    val art = optTrack.artistUri ?: if (optTrack.artist.isNotBlank()) "spotify:artist:${optTrack.artist}" else null
+                    val art = optTrack.artistUri
+                        ?: if (optTrack.artist.isNotBlank()) "spotify:artist:${optTrack.artist}" else null
                     if (art != null) onViewArtist(art, optTrack.artist)
                 },
                 onToggleFavorite = { onToggleFavorite(optTrack) },
