@@ -139,12 +139,12 @@ fun QueueOverlayContent(
                                     contentDescription = currentTrack.name,
                                     modifier = Modifier
                                         .size(48.dp)
-                                        .clip(RoundedCornerShape(6.dp)),
+                                        .clip(RoundedCornerShape(10.dp)),
                                     contentScale = ContentScale.Crop
                                 )
                             } else {
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = RoundedCornerShape(10.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainer,
                                     modifier = Modifier.size(48.dp)
                                 ) {
@@ -243,7 +243,7 @@ fun QueueOverlayContent(
                                 Row(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(RoundedCornerShape(10.dp))
                                         .clickable {
                                             onPlayTrackFromQueue(index)
                                             onClose()

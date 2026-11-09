@@ -43,6 +43,7 @@ import com.shashwat.stopify.ui.components.PrismOutlinedButton
 import com.shashwat.stopify.ui.components.PrismSwitch
 import com.shashwat.stopify.ui.components.PrismTonalButton
 import com.shashwat.stopify.ui.components.Segmented
+import com.shashwat.stopify.ui.components.GlassStyle
 import com.shashwat.stopify.ui.components.SubPageHeader
 import com.shashwat.stopify.ui.theme.ThemeColorMode
 import kotlinx.coroutines.launch
@@ -60,6 +61,8 @@ fun SimpSettingsScreen(
     onThemeChange: (AppThemeMode) -> Unit = {},
     currentColorMode: ThemeColorMode = ThemeColorMode.SYSTEM,
     onColorModeChange: (ThemeColorMode) -> Unit = {},
+    currentGlassStyle: GlassStyle = GlassStyle.BLUR,
+    onGlassStyleChange: (GlassStyle) -> Unit = {},
     onOpenCookieManager: () -> Unit,
     onPlayTrack: (SpotifyTrack) -> Unit,
     onPlayNext: (SpotifyTrack) -> Unit = {},
@@ -466,7 +469,32 @@ fun SimpSettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     onSelect = onThemeChange
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(8.dp))
+                Hairline(Modifier.padding(horizontal = 16.dp))
+
+                Text(
+                    text = "Glass",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                )
+                Segmented(
+                    options = GlassStyle.values().toList(),
+                    selected = currentGlassStyle,
+                    label = { it.label },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    onSelect = onGlassStyleChange
+                )
+                Text(
+                    text = when (currentGlassStyle) {
+                        GlassStyle.OFF -> "Plain surfaces. Lightest on battery."
+                        GlassStyle.BLUR -> "The dock and mini player blur what scrolls beneath them."
+                        GlassStyle.LIQUID -> "Blur with a refracting, lens-like rim."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+                Spacer(Modifier.height(12.dp))
             }
 
             // ── 5. HISTORY & SYNC ───────────────────────────────────

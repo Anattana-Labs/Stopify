@@ -20,6 +20,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import com.shashwat.stopify.ui.theme.ArtworkShape
+import com.shashwat.stopify.ui.theme.PaneShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -51,7 +54,6 @@ import com.shashwat.stopify.data.SpotifyWebClient
 import com.shashwat.stopify.player.PlaybackState
 import com.shashwat.stopify.ui.components.SimpPlayerControlLayout
 import com.shashwat.stopify.ui.components.PrismScrubber
-import com.shashwat.stopify.ui.components.Eyebrow
 import com.shashwat.stopify.ui.theme.spectrumRing
 import com.shashwat.stopify.ui.theme.glassFill
 import com.shashwat.stopify.ui.theme.glassEdge
@@ -139,9 +141,6 @@ fun SimpFullPlayer(
     val fg = if (onVideo) Color.White else scheme.onSurface
     val fgMuted = if (onVideo) Color.White.copy(alpha = 0.78f) else scheme.onSurfaceVariant
     val isFav = isFavorite?.invoke(track) ?: isFavoriteTrack
-    val activeLine = remember(colorLyrics, positionMs / 500) {
-        colorLyrics?.lines?.lastOrNull { it.startTimeMs <= positionMs }?.words?.takeIf { it.isNotBlank() }
-    }
 
     // Swipe down closes the player
     val closeDrag = Modifier.pointerInput(Unit) {
@@ -173,7 +172,28 @@ fun SimpFullPlayer(
             )
         }
 
-        val artSize = minOf(maxWidth - 48.dp, maxHeight * 0.42f).coerceAtLeast(160.dp)
+        val gutter = 22.dp
+        val artSize = minOf(maxWidth - gutter * 2, maxHeight * 0.40f).coerceAtLeast(160.dp)
+
+        // Ambient: the cover, blown up and softened, lights the top of the room
+        if (!onVideo && !track.coverUrl.isNullOrEmpty()) {
+            AsyncImage(
+                model = track.coverUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(maxHeight * 0.6f)
+                    .alpha(0.5f)
+                    .blur(70.dp)
+            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(maxHeight * 0.6f)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, ground)))
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -181,11 +201,11 @@ fun SimpFullPlayer(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = gutter)
                 .padding(bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header
+            // Header: glass chevron, where it is playing from, options
             Row(
                 modifier = Modifier.fillMaxWidth().then(closeDrag).padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -195,7 +215,12 @@ fun SimpFullPlayer(
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Eyebrow(if (deviceName != null) "Playing on $deviceName" else "Now playing", color = if (deviceName != null) scheme.primary else fgMuted)
+                    Text(
+                        if (deviceName != null) "Playing on $deviceName" else "Playing from",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (deviceName != null) scheme.primary else fgMuted,
+                        maxLines = 1
+                    )
                     Text(
                         track.album.ifBlank { "Stopify" },
                         style = MaterialTheme.typography.titleSmall,
@@ -209,14 +234,15 @@ fun SimpFullPlayer(
 
             Spacer(Modifier.height(20.dp))
 
-            // Artwork: soft 22 dp corners lifted off the ground. Sideways swipe skips.
+            // Cover: 28 dp corners, lifted. Sideways swipe skips; swipe down closes.
             var dragX by remember { mutableFloatStateOf(0f) }
             Box(
                 modifier = Modifier
                     .size(artSize)
-                    .shadow(28.dp, RoundedCornerShape(22.dp), ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f))
-                    .clip(RoundedCornerShape(22.dp))
+                    .shadow(32.dp, ArtworkShape, ambientColor = Color.Black.copy(alpha = 0.4f), spotColor = Color.Black.copy(alpha = 0.4f))
+                    .clip(ArtworkShape)
                     .background(scheme.surfaceContainerHighest)
+                    .border(1.dp, glassEdge(), ArtworkShape)
                     .pointerInput(track.id) {
                         detectHorizontalDragGestures(
                             onDragStart = { dragX = 0f },
@@ -241,14 +267,14 @@ fun SimpFullPlayer(
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(26.dp))
 
-            // Title row
+            // Title block: a light title, the artist beneath, the heart as a glass disc
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                     Text(
                         track.name,
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineMedium,
                         color = fg,
                         maxLines = 1,
                         modifier = Modifier.basicMarquee()
@@ -260,53 +286,45 @@ fun SimpFullPlayer(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable(onClickLabel = "Open artist") {
                                 val uri = track.artistUri ?: if (track.artist.isNotBlank()) "spotify:artist:${track.artist}" else null
                                 if (uri != null) onViewArtist(uri, track.artist)
                             }
-                            .padding(vertical = 4.dp)
+                            .padding(vertical = 6.dp)
                     )
                 }
                 PlayerIconButton(
                     if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     if (isFav) "Remove from favourites" else "Add to favourites",
                     if (isFav) scheme.primary else fg,
-                    onClick = { onToggleFavorite(track) }
+                    onClick = { onToggleFavorite(track) },
+                    size = 48.dp,
+                    glass = true
                 )
             }
 
-            // Status line: error with retry, or the current lyric line
-            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp), contentAlignment = Alignment.CenterStart) {
-                when {
-                    playbackState.error != null -> Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(onClickLabel = "Retry") { onTogglePlayPause() }
-                            .heightIn(min = 40.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Rounded.ErrorOutline, null, tint = scheme.error, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Couldn't play this track. Tap to retry.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (onVideo) Color.White else scheme.error
-                        )
-                    }
-                    activeLine != null -> Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(onClickLabel = "Open lyrics") { showLyrics = true }
-                            .heightIn(min = 40.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Rounded.Lyrics, null, tint = fgMuted, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(activeLine, style = MaterialTheme.typography.bodyMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+            if (playbackState.error != null) {
+                Row(
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClickLabel = "Retry") { onTogglePlayPause() }
+                        .heightIn(min = 44.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.ErrorOutline, null, tint = if (onVideo) Color.White else scheme.error, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Couldn't play this track. Tap to retry.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (onVideo) Color.White else scheme.error
+                    )
                 }
             }
+
+            Spacer(Modifier.height(14.dp))
 
             // Scrubber
             PrismScrubber(
@@ -329,9 +347,9 @@ fun SimpFullPlayer(
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
-            // Transport
+            // Transport: shuffle and repeat small at the edges; previous and next as glass discs round a wide play pill
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -341,25 +359,27 @@ fun SimpFullPlayer(
                     Icons.Rounded.Shuffle, if (isShuffle) "Shuffle on" else "Shuffle off",
                     if (isShuffle) scheme.primary else fgMuted, onToggleShuffle
                 )
-                PlayerIconButton(Icons.Rounded.SkipPrevious, "Previous", fg, onPrevious, size = 56.dp, iconSize = 34.dp)
+                PlayerIconButton(Icons.Rounded.SkipPrevious, "Previous", fg, onPrevious, size = 60.dp, iconSize = 30.dp, glass = true)
                 val label = when {
                     playbackState.error != null -> "Retry"
                     playbackState.isPlaying -> "Pause"
                     else -> "Play"
                 }
+                val pillShape = RoundedCornerShape(34.dp)
                 Box(
                     modifier = Modifier
-                        .size(76.dp)
-                        .clip(CircleShape)
+                        .width(96.dp)
+                        .height(68.dp)
+                        .clip(pillShape)
                         .background(if (onVideo) Color.White else scheme.onSurface)
-                        .then(if (playbackState.isPlaying) Modifier.spectrumRing(CircleShape, 2.dp) else Modifier)
+                        .then(if (playbackState.isPlaying) Modifier.spectrumRing(pillShape, 2.dp) else Modifier)
                         .clickable(onClickLabel = label, role = Role.Button, onClick = onTogglePlayPause)
                         .semantics { contentDescription = label },
                     contentAlignment = Alignment.Center
                 ) {
                     when {
                         playbackState.isBuffering -> CircularProgressIndicator(
-                            modifier = Modifier.size(30.dp), strokeWidth = 3.dp, color = scheme.surface
+                            modifier = Modifier.size(28.dp), strokeWidth = 3.dp, color = scheme.surface
                         )
                         else -> Icon(
                             when {
@@ -367,18 +387,54 @@ fun SimpFullPlayer(
                                 playbackState.isPlaying -> Icons.Rounded.Pause
                                 else -> Icons.Rounded.PlayArrow
                             },
-                            null, tint = if (onVideo) Color.Black else scheme.surface, modifier = Modifier.size(40.dp)
+                            null, tint = if (onVideo) Color.Black else scheme.surface, modifier = Modifier.size(38.dp)
                         )
                     }
                 }
-                PlayerIconButton(Icons.Rounded.SkipNext, "Next", fg, onNext, size = 56.dp, iconSize = 34.dp)
+                PlayerIconButton(Icons.Rounded.SkipNext, "Next", fg, onNext, size = 60.dp, iconSize = 30.dp, glass = true)
                 PlayerIconButton(
                     Icons.Rounded.Repeat, if (isRepeat) "Repeat on" else "Repeat off",
                     if (isRepeat) scheme.primary else fgMuted, onToggleRepeat
                 )
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(22.dp))
+
+            // Lyrics pane: the line now singing between its neighbours. Tap to open the full view.
+            val lines = colorLyrics?.lines.orEmpty()
+            val activeIdx = remember(colorLyrics, positionMs / 500) { lines.indexOfLast { it.startTimeMs <= positionMs } }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(PaneShape)
+                    .background(if (onVideo) Color.White.copy(alpha = 0.14f) else glassFill(1.2f))
+                    .border(1.dp, glassEdge(), PaneShape)
+                    .clickable(onClickLabel = "Open lyrics") { showLyrics = true }
+                    .padding(horizontal = 18.dp, vertical = 14.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Lyrics, null, tint = fgMuted, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Lyrics", style = MaterialTheme.typography.labelLarge, color = fgMuted, modifier = Modifier.weight(1f))
+                    Icon(Icons.Rounded.OpenInFull, null, tint = fgMuted, modifier = Modifier.size(14.dp))
+                }
+                Spacer(Modifier.height(8.dp))
+                when {
+                    isLyricsLoading -> Text("Finding the words…", style = MaterialTheme.typography.bodyMedium, color = fgMuted)
+                    lines.isEmpty() -> Text("No lyrics for this track.", style = MaterialTheme.typography.bodyMedium, color = fgMuted)
+                    else -> {
+                        val at = activeIdx.coerceAtLeast(0)
+                        val prev = if (activeIdx > 0) lines[at - 1].words.takeIf { it.isNotBlank() } else null
+                        val cur = lines[at].words.takeIf { it.isNotBlank() } ?: "♪"
+                        val next = lines.getOrNull(at + 1)?.words?.takeIf { it.isNotBlank() }
+                        if (prev != null) Text(prev, style = MaterialTheme.typography.bodyMedium, color = fgMuted.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(cur, style = MaterialTheme.typography.titleLarge, color = fg, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(vertical = 2.dp))
+                        if (next != null) Text(next, style = MaterialTheme.typography.bodyMedium, color = fgMuted.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
 
             // Tools: every one of these does something
             Row(
@@ -389,7 +445,6 @@ fun SimpFullPlayer(
                     .border(1.dp, glassEdge(), CircleShape),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                PlayerTool(Icons.Rounded.Lyrics, "Lyrics", fg, Modifier.weight(1f)) { showLyrics = true }
                 PlayerTool(Icons.Rounded.Speaker, deviceName ?: "Devices", if (deviceName != null) scheme.primary else fg, Modifier.weight(1f)) { onOpenDevices() }
                 PlayerTool(Icons.Rounded.PlaylistAdd, "Save", fg, Modifier.weight(1f)) { onAddToPlaylist(track) }
                 PlayerTool(

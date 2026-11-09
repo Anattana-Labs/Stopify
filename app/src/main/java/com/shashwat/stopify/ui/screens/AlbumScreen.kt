@@ -28,6 +28,7 @@ import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.platform.LocalContext
 import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import com.shashwat.stopify.ui.theme.ArtworkShape
 import com.shashwat.stopify.ui.components.RoundAction
 import coil.imageLoader
 import coil.request.ImageRequest
@@ -118,7 +119,7 @@ fun SimpAlbumScreen(
                 Box(
                     modifier = Modifier
                         .size(240.dp)
-                        .clip(RoundedCornerShape(22.dp))
+                        .clip(ArtworkShape)
                         .align(Alignment.CenterHorizontally)
                         .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                 )
@@ -189,8 +190,8 @@ fun SimpAlbumScreen(
                             modifier = Modifier
                                 .padding(vertical = 12.dp)
                                 .size(240.dp)
-                                .shadow(24.dp, RoundedCornerShape(22.dp), spotColor = dynamicTint.copy(alpha = 0.45f))
-                                .clip(RoundedCornerShape(22.dp))
+                                .shadow(24.dp, ArtworkShape, spotColor = dynamicTint.copy(alpha = 0.45f))
+                                .clip(ArtworkShape)
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                         ) {
                             if (!album.coverUrl.isNullOrEmpty()) {

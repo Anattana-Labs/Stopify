@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.shashwat.stopify.ui.components.PrismSheet
 import com.shashwat.stopify.ui.components.PrismChip
 import com.shashwat.stopify.ui.components.RoundAction
 import com.shashwat.stopify.ui.components.ScreenHeader
@@ -628,11 +629,7 @@ fun SimpLibraryScreen(
         // ── PLAYLIST OPTIONS BOTTOM SHEET ────────────────────────────
         if (selectedOptionPlaylist != null) {
             val pl = selectedOptionPlaylist!!
-            ModalBottomSheet(
-                onDismissRequest = { selectedOptionPlaylist = null },
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-            ) {
+            PrismSheet(onDismiss = { selectedOptionPlaylist = null }) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

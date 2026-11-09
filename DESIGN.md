@@ -18,13 +18,14 @@ Source of truth: `Yigder/Prism` (`ui/theme/Theme.kt`, `Tokens.kt`, `Spectrum.kt`
 
 ## Structure
 - Dock (`Navbar.kt`): two separate floating objects. The mini player is its own rounded card (cover, title, play pill, next, split-light progress); beneath it a compact navigation pill only as wide as its three tabs. The current tab shows icon + label, the others icon only.
-- Mini player (`BottomMiniPlayer.kt`): no favourite button (it lives in the full player). When another Connect device is playing, the artist line becomes "speaker icon + device name" in the accent colour. Tap or swipe up opens, swipe sideways skips.
+- Glass (`GlassSurface.kt`, Settings → Appearance → Glass): `Solid` / `Blurred` / `Liquid`. `Modifier.glassSurface` backs the dock and mini player with the live backdrop (blur, or blur plus a refracting lens rim). Bottom sheets use `PrismSheet`: tinted pane, light falling from the top edge, fine grain, lit rim, short handle.
+- Mini player (`BottomMiniPlayer.kt`): no progress bar, no favourite button (it lives in the full player). When another Connect device is playing, the artist line becomes "speaker icon + device name" in the accent colour. Tap or swipe up opens, swipe sideways skips.
 - Connect (`ConnectDevicesSheet.kt`, `data/SpotifyConnect*.kt`): the device menu is a bottom sheet from the full player's tool capsule. Playback on other devices is mirrored live in both players and controlled remotely.
 - Home: large light title with the greeting beneath, round glass actions, a "resume" pane, a recents ledger, shelves with a quiet strapline over a light title. Cards have no borders.
 - Library / Search: page header, glass search pill, chips (picked chip carries the split-light ring), Liked tile in split light.
 - Settings: sub-page header with glass back button, small-caps group labels over lifted panes, hairline row dividers, split-light switches, segmented glass capsule for display mode.
-- Full player: ambient ground from the cover, 22 dp cover lifted with a shadow, light title, split-light scrubber, solid ink play disc (ringed in split light while playing), glass tool capsule.
-- Album / playlist / artist: glass back disc, 22 dp hero cover, solid ink play pill.
+- Full player: cover blurred into the ground, 28 dp cover lifted with a shadow, light 28 sp title with a glass heart, split-light scrubber, transport of glass prev/next discs round a wide ink play pill (ringed in split light while playing), a lyrics pane (line before, now, after), glass tool capsule (devices, save, queue).
+- Album / playlist / artist: sub-screens stack by opening order (an album opened from an artist covers it); glass back disc, 28 dp hero cover (artist: round portrait), every top-track row has a thumbnail, solid ink play pill.
 
 ## Avoided
 Coral/teal "Oxide" palette, Bricolage/Hanken pair, hard 1 dp outlines on every card, bold headings, accent-filled primary buttons.

@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.zIndex
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
@@ -127,6 +128,13 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            val savedGlassStr = prefs.getString("stopify_glass_style", GlassStyle.BLUR.name) ?: GlassStyle.BLUR.name
+            var currentGlassStyle by remember {
+                mutableStateOf(
+                    try { GlassStyle.valueOf(savedGlassStr) } catch (e: Exception) { GlassStyle.BLUR }
+                )
+            }
+
             // Dynamic color extraction from active track artwork
             LaunchedEffect(playbackState.currentTrack?.coverUrl) {
                 val coverUrl = playbackState.currentTrack?.coverUrl
@@ -164,6 +172,7 @@ class MainActivity : ComponentActivity() {
                 colorMode = currentColorMode,
                 seedColor = artworkSeedColor
             ) {
+                CompositionLocalProvider(LocalGlassStyle provides currentGlassStyle) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -182,9 +191,15 @@ class MainActivity : ComponentActivity() {
                             currentColorMode = newColorMode
                             prefs.edit().putString("stopify_color_mode", newColorMode.name).apply()
                         },
+                        glassStyle = currentGlassStyle,
+                        onGlassStyleChange = { g ->
+                            currentGlassStyle = g
+                            prefs.edit().putString("stopify_glass_style", g.name).apply()
+                        },
                         prefs = prefs
                     )
 
+                }
                 }
             }
         }
@@ -210,6 +225,8 @@ fun SimpMusicApp(
     onThemeChange: (AppThemeMode) -> Unit = {},
     colorMode: ThemeColorMode = ThemeColorMode.SYSTEM,
     onColorModeChange: (ThemeColorMode) -> Unit = {},
+    glassStyle: GlassStyle = GlassStyle.BLUR,
+    onGlassStyleChange: (GlassStyle) -> Unit = {},
     prefs: android.content.SharedPreferences? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -703,13 +720,22 @@ fun SimpMusicApp(
         }
     }
 
+    // Sub-screens stack in the order they were opened: whichever opened last sits on top (an album opened from
+    // an artist page must cover it, and back must close it first).
+    val zCounter = remember { intArrayOf(0) }
+    val settingsZ = remember(viewingSettings) { if (viewingSettings) ++zCounter[0] else 0 }
+    val albumZ = remember(viewingAlbumUri) { if (viewingAlbumUri != null) ++zCounter[0] else 0 }
+    val playlistZ = remember(viewingPlaylistUri) { if (viewingPlaylistUri != null) ++zCounter[0] else 0 }
+    val artistZ = remember(viewingArtistUri) { if (viewingArtistUri != null) ++zCounter[0] else 0 }
+
     // Back handling
     BackHandler(enabled = viewingSettings || viewingAlbumUri != null || viewingPlaylistUri != null || viewingArtistUri != null) {
-        when {
-            viewingSettings -> viewingSettings = false
-            viewingAlbumUri != null -> viewingAlbumUri = null
-            viewingPlaylistUri != null -> viewingPlaylistUri = null
-            viewingArtistUri != null -> viewingArtistUri = null
+        val top = maxOf(maxOf(settingsZ, albumZ), maxOf(playlistZ, artistZ))
+        when (top) {
+            settingsZ -> viewingSettings = false
+            albumZ -> viewingAlbumUri = null
+            playlistZ -> viewingPlaylistUri = null
+            else -> viewingArtistUri = null
         }
     }
 
@@ -909,7 +935,7 @@ fun SimpMusicApp(
         // Subscreen Overlays (Animated slide-in)
         AnimatedVisibility(
             visible = viewingAlbumUri != null,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().zIndex(albumZ.toFloat()),
             enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
             exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
         ) {
@@ -941,7 +967,7 @@ fun SimpMusicApp(
 
         AnimatedVisibility(
             visible = viewingPlaylistUri != null,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().zIndex(playlistZ.toFloat()),
             enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
             exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
         ) {
@@ -974,7 +1000,7 @@ fun SimpMusicApp(
 
         AnimatedVisibility(
             visible = viewingArtistUri != null,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().zIndex(artistZ.toFloat()),
             enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
             exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
         ) {
@@ -1005,7 +1031,7 @@ fun SimpMusicApp(
 
         AnimatedVisibility(
             visible = viewingSettings,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().zIndex(settingsZ.toFloat()),
             enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
             exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
         ) {
@@ -1015,6 +1041,8 @@ fun SimpMusicApp(
                 onThemeChange = onThemeChange,
                 currentColorMode = colorMode,
                 onColorModeChange = onColorModeChange,
+                currentGlassStyle = glassStyle,
+                onGlassStyleChange = onGlassStyleChange,
                 onOpenCookieManager = { showCookieDialog = true },
                 onPlayTrack = { playTrackInternal(it) },
                 onPlayNext = { track ->
@@ -1048,7 +1076,7 @@ fun SimpMusicApp(
 
     // Bottom dock: player strip + navigation fused into one object
     SimpDock(
-        modifier = Modifier.align(Alignment.BottomCenter),
+        modifier = Modifier.align(Alignment.BottomCenter).zIndex(1000f),
         currentTab = currentTab,
         onTabSelect = { tab ->
             viewingAlbumUri = null
@@ -1098,6 +1126,7 @@ fun SimpMusicApp(
         AnimatedVisibility(
             visible = showFullPlayer && uiTrack != null,
             modifier = Modifier
+                .zIndex(2000f)
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),

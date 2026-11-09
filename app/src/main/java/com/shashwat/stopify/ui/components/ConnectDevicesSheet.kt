@@ -47,12 +47,7 @@ fun ConnectDevicesSheet(
     onVolume: (ConnectDevice, Float) -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = scheme.surfaceContainerHigh,
-        contentColor = scheme.onSurface,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-    ) {
+    PrismSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Text(
                 "Connect to a device",
