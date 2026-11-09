@@ -104,35 +104,3 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
-
-tasks.register("generateAppIcons") {
-    doLast {
-        val srcFile = rootProject.file("logo.png")
-        if (!srcFile.exists()) return@doLast
-        val resDir = file("src/main/res")
-
-        val folders = listOf(
-            "drawable",
-            "mipmap-mdpi",
-            "mipmap-hdpi",
-            "mipmap-xhdpi",
-            "mipmap-xxhdpi",
-            "mipmap-xxxhdpi"
-        )
-
-        File(resDir, "drawable/ic_launcher_foreground.xml").delete()
-        for (folder in folders) {
-            val dir = File(resDir, folder).apply { mkdirs() }
-            File(dir, "ic_launcher.webp").delete()
-            File(dir, "ic_launcher_round.webp").delete()
-            srcFile.copyTo(File(dir, "ic_launcher.png"), overwrite = true)
-            srcFile.copyTo(File(dir, "ic_launcher_round.png"), overwrite = true)
-        }
-
-        srcFile.copyTo(File(resDir, "drawable/ic_launcher_foreground.png"), overwrite = true)
-    }
-}
-
-tasks.named("preBuild") {
-    dependsOn("generateAppIcons")
-}
