@@ -1,7 +1,7 @@
 # Stopify
 
 <p align="center">
-  <img src="logo.png" alt="Stopify Logo" width="180" height="180" />
+  <img src="logo.png" alt="Stopify Logo" width="160" height="160" />
 </p>
 
 <p align="center">
@@ -35,6 +35,36 @@ Traditional open-source Spotify clients (such as librespot, Spotube, etc.) rely 
 2. **YouTube scraping fallbacks**, which do not stream audio from Spotify's servers directly.
 
 **Stopify solves this fundamentally** by speaking Spotify's authentic Web Player protocols directly. By masquerading as an authorized browser instance and tapping into Spotify's Dealer WebSocket bus, Stopify streams interactive audio directly from Spotify's content delivery network (CDN) for free tier accounts.
+
+---
+
+## ✨ Features
+
+### 🎧 Core Playback & Audio
+- **Direct Spotify CDN Streaming**: Interactive, on-demand audio stream resolution directly from Spotify's CDN servers for free-tier accounts.
+- **AndroidX Media3 ExoPlayer Engine**: Seamless foreground and background playback with full MediaSession integration and notification controls.
+- **Playback Reliability & Auto-Retry**: Built-in playback watchdog, single in-flight resolution locks, and silent background token refresh.
+- **Offline Download Manager**: Download tracks with metadata and high-res cover art for local offline playback.
+- **Smart Autoqueue**: Persistent playback queue store (`PlaybackQueueStore`) with automatic recommendation autoqueuing when playlist ends.
+- **Synchronized Lyrics**: Line-by-line synchronized lyrics powered by Spotify's internal lyrics provider with an expandable full-screen viewer.
+
+### 🌐 Spotify Connect Sync & Remote Control
+- **Live Cluster Synchronization**: Listens on the Dealer WebSocket for state-machine broadcasts from any active Spotify device.
+- **Remote Playback Control**: Play, pause, skip, and seek other Spotify Connect devices (desktop, web player, smart speakers) straight from Stopify.
+- **Device Picker Bottom Sheet**: Seamlessly transfer playback between devices via the in-player device menu.
+
+### 🎨 Design: "Aura × Spectrum" (Prism UI)
+- **Floating Glass Dock**: Decoupled floating mini-player card and ultra-compact navigation pill.
+- **Glass Surfaces**: Configurable surface rendering modes (`Solid`, `Blurred`, `Liquid` with backdrop blur and refracting lens rim).
+- **Split-Light Gradients**: Accent glow on scrubbers, active tab indicators, and live playing rings.
+- **Outfit Variable Typography**: Clean, contemporary type hierarchy designed for modern high-refresh mobile displays.
+- **Full Player Experience**: Ambient background artwork blur, soft 22dp/28dp elevation shadows, swipe-to-skip gestures, and quick tool capsule.
+- **Dedicated Recents & Merged History**: Persistent listening history ledger and fast resume cards.
+
+### ⚡ Performance & Size Optimization
+- **Lightweight ~5 MB Footprint**: Stripped monolithic icon packs in favor of modular vector icons.
+- **Full R8 Optimization**: Release builds utilize R8 code and resource shrinking for rapid startup and minimal memory footprint.
+- **Adaptive WebP App Icons**: Modern adaptive launcher icon set with themed monochrome and rounded variants.
 
 ---
 
@@ -78,41 +108,24 @@ Because raw HTTP calls to `/get_access_token` are protected by Spotify's edge bo
 
 ---
 
-## 🎨 UI Architecture: Material 3 Expressive
-
-Stopify is designed using Google's **Material 3 Expressive** design system:
-- **Expressive Shapes & Geometry**: Uses 20dp, 28dp, and 32dp corner radii for contemporary containers.
-- **Micro-Animations & Spring Physics**: Interactive spring scales on press states, bouncy floating mini-player action buttons.
-- **Dynamic Equalizer Waveform**: 4-bar animated equalizer that reacts in real-time to track playback state.
-- **Shimmer Skeleton Loading**: Fluid shimmer animation placeholders for track discovery.
-- **Quick Discovery Chips**: Immediate genre & trending track suggestions with animated filtering.
-
----
-
-## 🎵 Android System Media Integration
-
-Stopify is fully integrated into the Android OS media pipeline:
-- **AndroidX Media3 Session (`androidx.media3:media3-session`)**: Standard Android MediaSession support.
-- **Foreground Playback Service (`PlaybackService`)**: Background audio playback with notification controls (play/pause, seek, skip).
-- **Lockscreen Artwork & Metadata**: Full resolution album art and metadata broadcast to system media controls.
-
----
-
 ## 🚀 Building & Running
 
 ### Prerequisites
 - Android Studio Ladybug / Meerkat or later
-- Android SDK 35+ (compiles with Android 36 / Vanilla Ice Cream)
+- Android SDK 35+ (compiles with Android 37 / Vanilla Ice Cream)
 - Java 17+
 
 ### Build from Terminal
 ```bash
 # Clone the repository
-git clone https://github.com/Anattana-Labs/Stopify.git
+git clone https://github.com/myself-tsuki/Stopify.git
 cd Stopify
 
 # Build Debug APK
 ./gradlew assembleDebug
+
+# Build Release APK (R8 Optimized)
+./gradlew assembleRelease
 
 # Install on connected device or emulator
 adb install -r app/build/outputs/apk/debug/app-debug.apk
