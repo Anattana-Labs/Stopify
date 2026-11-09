@@ -55,6 +55,7 @@ fun SimpHomeScreen(
     isLoading: Boolean,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenRecents: () -> Unit = {},
     onMediaItemClick: (SpotifyMediaItem) -> Unit,
     recentlyPlayed: List<SpotifyTrack> = emptyList(),
     onPlayTrack: (SpotifyTrack) -> Unit = {},
@@ -127,7 +128,7 @@ fun SimpHomeScreen(
         if (recentlyPlayed.size > 1) {
             item(key = "ledger") {
                 Column {
-                    SectionHeader(title = "Recently played", strapline = "${recentlyPlayed.size} songs")
+                    SectionHeader(title = "Recently played", strapline = "${recentlyPlayed.size} songs", onMore = onOpenRecents)
                     Spacer(Modifier.height(4.dp))
                     recentlyPlayed.drop(1).take(5).forEachIndexed { i, t ->
                         LedgerRow(index = i + 1, track = t, onClick = { onPlayTrack(t) })

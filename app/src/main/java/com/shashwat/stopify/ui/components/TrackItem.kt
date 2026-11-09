@@ -43,6 +43,8 @@ fun SimpTrackItem(
     val downloadManager = remember { StopifyDownloadManager.getInstance(context) }
     val downloadedSet by downloadManager.downloadedTrackIds.collectAsState()
     val downloaded = isDownloaded ?: downloadedSet.contains(track.id)
+    val downloadJobs by downloadManager.jobs.collectAsState()
+    val job = downloadJobs.firstOrNull { it.track.id == track.id }
 
     val backgroundColor by animateColorAsState(
         targetValue = if (isCurrentTrack) {
@@ -142,6 +144,16 @@ fun SimpTrackItem(
                         )
                     }
                     Spacer(modifier = Modifier.width(5.dp))
+                }
+                if (!downloaded && job != null) {
+                    Text(
+                        text = if (job.state == com.shashwat.stopify.data.DownloadState.FAILED) "Download failed · "
+                        else if (job.state == com.shashwat.stopify.data.DownloadState.QUEUED) "Queued · "
+                        else "${(job.progress * 100).toInt()}% · ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
+                    )
                 }
                 Text(
                     text = track.artist,

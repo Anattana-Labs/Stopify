@@ -283,7 +283,7 @@ fun Modifier.drawInteractiveGlass(
                 val press = interaction?.pressProgress ?: 0f
                 vibrancy()
                 colorControls(
-                    brightness = 0.05f,
+                    brightness = if (scrimColor.red > 0.5f) 0.08f else -0.02f,
                     contrast = 1f,
                     saturation = 1.4f,
                 )
@@ -304,7 +304,26 @@ fun Modifier.drawInteractiveGlass(
             },
             onDrawSurface = {
                 val darken = darkenScrim ?: lerp(minScrim, maxScrim, ((luminance() - 0.3f) / 0.5f).coerceIn(0f, 1f))
-                drawRect(scrimColor.copy(alpha = darken))
+                // Dark theme: the backdrop's own colours are mixed with black.
+                // Light theme: the backdrop is kept and washed with a white gradient.
+                val isLightScrim = scrimColor.red > 0.5f
+                drawRect(
+                    brush = if (isLightScrim) {
+                        Brush.verticalGradient(
+                            listOf(
+                                scrimColor.copy(alpha = (darken + 0.22f).coerceAtMost(0.9f)),
+                                scrimColor.copy(alpha = (darken * 0.55f).coerceIn(0f, 0.9f))
+                            )
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            listOf(
+                                scrimColor.copy(alpha = (darken * 1.15f).coerceAtMost(0.9f)),
+                                scrimColor.copy(alpha = (darken * 0.85f).coerceAtMost(0.9f))
+                            )
+                        )
+                    }
+                )
                 val press = interaction?.pressProgress ?: 0f
                 if (press > 0f) {
                     drawRect(

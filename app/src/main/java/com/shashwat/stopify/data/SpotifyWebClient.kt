@@ -1502,6 +1502,132 @@ class SpotifyWebClient {
         Result.success(results)
     }
 
+    /**
+     * Full "Your Library" as the web player shows it (libraryV3): playlists, folders, saved albums, followed
+     * artists, podcasts and audiobooks. Pages through the results.
+     */
+    suspend fun fetchFullLibrary(prefs: android.content.SharedPreferences? = null): Result<List<SpotifyPlaylistSummary>> = withContext(Dispatchers.IO) {
+        val results = mutableListOf<SpotifyPlaylistSummary>()
+        var failure: Exception? = null
+        var offset = 0
+        val pageSize = 100
+        var guard = 0
+        while (guard++ < 6) {
+            try {
+                val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
+                val conn = (URL("https://api-partner.spotify.com/pathfinder/v2/query").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 10000
+                    readTimeout = 15000
+                    setRequestProperty("authorization", "Bearer $token")
+                    setRequestProperty("client-token", customClientToken ?: CLIENT_TOKEN)
+                    setRequestProperty("content-type", "application/json;charset=UTF-8")
+                    setRequestProperty("app-platform", APP_PLATFORM)
+                    setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                    setRequestProperty("origin", "https://open.spotify.com")
+                    setRequestProperty("referer", "https://open.spotify.com/")
+                    setRequestProperty("user-agent", USER_AGENT)
+                }
+                val payload = JSONObject().apply {
+                    put("variables", JSONObject().apply {
+                        put("filters", JSONArray())
+                        put("order", JSONObject.NULL)
+                        put("textFilter", "")
+                        put("features", JSONArray().apply { put("LIKED_SONGS"); put("YOUR_EPISODES_V2"); put("PRERELEASES"); put("EVENTS") })
+                        put("limit", pageSize)
+                        put("offset", offset)
+                        put("flatten", true)
+                        put("expandedFolders", JSONArray())
+                        put("folderUri", JSONObject.NULL)
+                        put("includeFoldersWhenFlattening", true)
+                    })
+                    put("operationName", "libraryV3")
+                    put("extensions", JSONObject().apply {
+                        put("persistedQuery", JSONObject().apply { put("version", 1); put("sha256Hash", LIBRARY_HASH) })
+                    })
+                }
+                OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    conn.disconnect()
+                    failure = Exception("Library request failed (HTTP $code)")
+                    break
+                }
+                val body = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+                conn.disconnect()
+                val lib = JSONObject(body).optJSONObject("data")?.optJSONObject("me")?.optJSONObject("libraryV3")
+                val items = lib?.optJSONArray("items") ?: break
+                for (i in 0 until items.length()) {
+                    parseLibraryEntry(items.getJSONObject(i))?.let { e ->
+                        if (results.none { it.uri == e.uri }) results.add(e)
+                    }
+                }
+                val total = lib.optInt("totalCount", 0)
+                offset += items.length()
+                if (items.length() < pageSize || (total in 1..offset)) break
+            } catch (e: Exception) {
+                Log.w(TAG, "libraryV3 page failed", e)
+                failure = e
+                break
+            }
+        }
+        if (results.isEmpty() && failure != null) {
+            // Fall back to the playlist-only path so the screen is never empty because of one bad call.
+            return@withContext fetchUserPlaylists(prefs)
+        }
+        Result.success(results)
+    }
+
+    private fun parseLibraryEntry(itObj: JSONObject): SpotifyPlaylistSummary? {
+        val wrapper = itObj.optJSONObject("item") ?: return null
+        val data = wrapper.optJSONObject("data") ?: JSONObject()
+        val typeName = wrapper.optString("__typename")
+        if (typeName == "LibraryPseudoPlaylistResponseWrapper") return null // Liked Songs is its own tile
+        val uri = wrapper.optString("_uri").ifEmpty { wrapper.optString("uri") }.ifEmpty { data.optString("uri") }
+        if (uri.isEmpty()) return null
+        val id = uri.substringAfterLast(":")
+        fun firstSource(o: JSONObject?): String? {
+            if (o == null) return null
+            o.optJSONArray("sources")?.optJSONObject(0)?.optString("url")?.takeIf { it.isNotEmpty() }?.let { return it }
+            o.optJSONArray("items")?.optJSONObject(0)?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")?.takeIf { it.isNotEmpty() }?.let { return it }
+            return null
+        }
+        val kind = when {
+            uri.contains(":folder:") || typeName.contains("Folder", true) -> LibraryKind.FOLDER
+            uri.contains(":playlist:") -> LibraryKind.PLAYLIST
+            uri.contains(":album:") -> LibraryKind.ALBUM
+            uri.contains(":artist:") -> LibraryKind.ARTIST
+            uri.contains(":show:") -> LibraryKind.PODCAST
+            uri.contains(":audiobook:") -> LibraryKind.AUDIOBOOK
+            else -> return null
+        }
+        val name = data.optString("name").ifEmpty { data.optJSONObject("profile")?.optString("name").orEmpty() }
+            .ifEmpty { if (kind == LibraryKind.FOLDER) "Folder" else "Untitled" }
+        val owner = when (kind) {
+            LibraryKind.PLAYLIST -> data.optJSONObject("ownerV2")?.optJSONObject("data")?.optString("name").orEmpty().ifEmpty { "Spotify" }
+            LibraryKind.ALBUM -> data.optJSONObject("artists")?.optJSONArray("items")?.let { arr ->
+                (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.optJSONObject("profile")?.optString("name") }.joinToString(", ")
+            }.orEmpty()
+            LibraryKind.PODCAST -> data.optJSONObject("publisher")?.optString("name").orEmpty()
+            LibraryKind.AUDIOBOOK -> data.optJSONObject("authors")?.optJSONArray("items")?.optJSONObject(0)?.optString("name").orEmpty()
+            LibraryKind.FOLDER -> "Folder"
+            LibraryKind.ARTIST -> "Artist"
+        }
+        val cover = firstSource(data.optJSONObject("images"))
+            ?: firstSource(data.optJSONObject("coverArt"))
+            ?: firstSource(data.optJSONObject("visuals")?.optJSONObject("avatarImage"))
+            ?: firstSource(data.optJSONObject("image"))
+            ?: data.optJSONArray("images")?.optJSONObject(0)?.optString("url")
+        val count = data.optInt("count", 0)
+        val addedAt = itObj.optJSONObject("addedAt")?.optString("isoString").orEmpty()
+        val addedMs = try { java.time.Instant.parse(addedAt).toEpochMilli() } catch (e: Exception) { 0L }
+        return SpotifyPlaylistSummary(
+            id = id, uri = uri, name = name, ownerName = owner, coverUrl = cover, trackCount = count,
+            isFolder = kind == LibraryKind.FOLDER, kind = kind, addedAtMs = addedMs, pinned = itObj.optBoolean("pinned", false)
+        )
+    }
+
     suspend fun createPlaylist(
         name: String,
         description: String = "",
@@ -2295,29 +2421,47 @@ class SpotifyWebClient {
         Result.success(mergedList)
     }
 
-    suspend fun fetchAutoplayQueue(currentTrack: SpotifyTrack): List<SpotifyTrack> = withContext(Dispatchers.IO) {
+    suspend fun fetchAutoplayQueue(
+        currentTrack: SpotifyTrack,
+        excludeUris: Set<String> = emptySet()
+    ): List<SpotifyTrack> = withContext(Dispatchers.IO) {
         try {
-            // First check if state_machine tracks are populated from track-playback state responses
-            val smTracks = stateMachineQueueTracks.toList()
-            if (smTracks.isNotEmpty()) {
-                val filtered = smTracks.filter { it.uri != currentTrack.uri && !it.name.equals(currentTrack.name, ignoreCase = true) }
-                if (filtered.isNotEmpty()) {
-                    Log.d(TAG, "Autoplay queue returning ${filtered.size} tracks from track-playback state_machine")
-                    return@withContext filtered
+            fun ok(t: SpotifyTrack) = t.uri != currentTrack.uri && t.uri !in excludeUris &&
+                !t.name.equals(currentTrack.name, ignoreCase = true)
+
+            // 1. Spotify's own autoplay list, but only when it was produced for this very track.
+            if (lastConnectPlayTrackUri == currentTrack.uri) {
+                val sm = stateMachineQueueTracks.toList().filter { ok(it) }
+                if (sm.isNotEmpty()) return@withContext sm
+                nextTrackFromStateMachine?.takeIf { ok(it) }?.let { return@withContext listOf(it) }
+            }
+
+            // 2. Related songs: the album, the artist, and other artists found around the same title.
+            val pools = mutableListOf<List<SpotifyTrack>>()
+            currentTrack.albumUri?.let { pools.add(fetchAlbumTracks(it).getOrDefault(emptyList())) }
+            if (currentTrack.artist.isNotBlank()) {
+                pools.add(searchTracks("artist:\"${currentTrack.artist.substringBefore(',').trim()}\"").getOrDefault(emptyList()))
+            }
+            pools.add(searchTracks("${currentTrack.name} ${currentTrack.artist.substringBefore(',')}").getOrDefault(emptyList()))
+            pools.add(searchTracks(currentTrack.album.ifBlank { currentTrack.name }).getOrDefault(emptyList()))
+
+            // Interleave the pools, at most 3 songs per artist, no repeats of anything played lately.
+            val perArtist = HashMap<String, Int>()
+            val seen = HashSet<String>()
+            val out = mutableListOf<SpotifyTrack>()
+            var i = 0
+            while (out.size < 15 && pools.any { i < it.size }) {
+                for (pool in pools) {
+                    val t = pool.getOrNull(i) ?: continue
+                    if (!ok(t) || !seen.add(t.uri)) continue
+                    val n = perArtist.getOrDefault(t.artist, 0)
+                    if (n >= 3) continue
+                    perArtist[t.artist] = n + 1
+                    out.add(t)
                 }
+                i++
             }
-
-            // Next check if nextTrackFromStateMachine is present
-            val nextTrack = nextTrackFromStateMachine
-            if (nextTrack != null && nextTrack.uri != currentTrack.uri) {
-                Log.d(TAG, "Autoplay queue returning nextTrackFromStateMachine: ${nextTrack.name}")
-                return@withContext listOf(nextTrack)
-            }
-
-            // Fallback to searching context
-            val query = if (currentTrack.artist.isNotBlank()) "artist:\"${currentTrack.artist}\"" else currentTrack.name
-            val results = searchTracks(query).getOrDefault(emptyList())
-            results.filter { it.uri != currentTrack.uri && !it.name.equals(currentTrack.name, ignoreCase = true) }
+            out.shuffled().sortedBy { if (it.artist == currentTrack.artist) 1 else 0 }
         } catch (e: Exception) {
             Log.w(TAG, "Error fetching autoplay queue", e)
             emptyList()

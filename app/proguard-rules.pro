@@ -19,3 +19,13 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# --- Stopify release shrinking ---
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable
+# WebView JS bridges (token / login) are called by name from JavaScript
+-keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
+# MediaSessionService is bound by name from the manifest
+-keep class com.shashwat.stopify.player.PlaybackService { *; }
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+-dontwarn okhttp3.internal.platform.**

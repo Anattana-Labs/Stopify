@@ -80,7 +80,7 @@ fun Modifier.glassSurface(shape: Shape, elevation: Dp = 10.dp): Modifier {
             liquid = liquid,
             blurDp = if (liquid) 10f else 26f,
             scrimColor = if (dark) Color.Black else Color.White,
-            darkenScrim = if (dark) (if (liquid) 0.30f else 0.42f) else (if (liquid) 0.38f else 0.55f)
+            darkenScrim = if (dark) (if (liquid) 0.34f else 0.46f) else (if (liquid) 0.14f else 0.26f)
         )
         .border(0.8.dp, glassEdge(), shape)
 }
