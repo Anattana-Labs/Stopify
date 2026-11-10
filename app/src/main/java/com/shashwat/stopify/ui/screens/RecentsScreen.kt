@@ -45,6 +45,17 @@ fun SimpRecentsScreen(
     modifier: Modifier = Modifier
 ) {
     var optionTrack by remember { mutableStateOf<SpotifyTrack?>(null) }
+    val now = remember(tracks) { System.currentTimeMillis() }
+    val rows = remember(tracks, now) {
+        val out = mutableListOf<RecentRow>()
+        var last: String? = null
+        tracks.forEach { t ->
+            val label = dayLabel(t.playedAt, now)
+            if (label != last) { out.add(RecentRow.Header(label)); last = label }
+            out.add(RecentRow.Song(t))
+        }
+        out
+    }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -65,17 +76,6 @@ fun SimpRecentsScreen(
                         modifier = Modifier.padding(20.dp)
                     )
                 }
-            }
-            val now = remember(tracks) { System.currentTimeMillis() }
-            val rows = remember(tracks, now) {
-                val out = mutableListOf<RecentRow>()
-                var last: String? = null
-                tracks.forEach { t ->
-                    val label = dayLabel(t.playedAt, now)
-                    if (label != last) { out.add(RecentRow.Header(label)); last = label }
-                    out.add(RecentRow.Song(t))
-                }
-                out
             }
             items(rows, key = { r -> when (r) { is RecentRow.Header -> "h_" + r.label; is RecentRow.Song -> "r_" + r.track.uri } }) { row ->
                 if (row is RecentRow.Header) {

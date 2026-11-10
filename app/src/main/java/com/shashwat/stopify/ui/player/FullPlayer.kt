@@ -703,7 +703,7 @@ fun SpotifyColorLyricsCard(
                                     .width(4.dp)
                                     .height(24.dp)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(themePrimary)
+                                    .background(cardScheme.primary)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                         }
