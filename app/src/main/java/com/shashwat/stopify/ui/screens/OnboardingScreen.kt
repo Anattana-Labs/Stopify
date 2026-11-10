@@ -41,17 +41,12 @@ fun OnboardingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Subtle ambient radial glow behind header
+        // Immersive wash: the accent fades from the top into the page
         Box(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 40.dp)
-                .size(300.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(primaryColor.copy(alpha = 0.22f), Color.Transparent)
-                    )
-                )
+                .fillMaxWidth()
+                .height(420.dp)
+                .background(Brush.verticalGradient(listOf(primaryColor.copy(alpha = 0.55f), primaryColor.copy(alpha = 0.18f), Color.Transparent)))
         )
 
         Column(
@@ -65,33 +60,32 @@ fun OnboardingScreen(
         ) {
             // ── TOP LOGO & HEADER ────────────────────────────────
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 28.dp)
+                horizontalAlignment = Alignment.Start,
+                modifier = Modifier.padding(top = 28.dp).fillMaxWidth()
             ) {
-                // Spotify-themed icon badge
                 Box(
                     modifier = Modifier
-                        .size(84.dp)
-                        .clip(CircleShape)
-                        .background(glassFill(1.6f))
-                        .spectrumRing(CircleShape, 2.dp),
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.onBackground),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.GraphicEq,
                         contentDescription = "Stopify Logo",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(42.dp)
+                        tint = MaterialTheme.colorScheme.background,
+                        modifier = Modifier.size(40.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
                     text = "Welcome to Stopify",
-                    style = MaterialTheme.typography.displaySmall,
+                    style = MaterialTheme.typography.displaySmall.copy(fontSize = 34.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onBackground,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -100,8 +94,8 @@ fun OnboardingScreen(
                     text = "Ad-free, high fidelity Spotify playback powered by Widevine DRM. Connect your account to get started.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 

@@ -121,8 +121,9 @@ fun SimpArtistScreen(
             .background(scheme.background)
     ) {
         // Header image (or tinted wash) fading into the page
-        Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
-            val hero = page?.headerUrl
+        Box(modifier = Modifier.fillMaxWidth().height(440.dp)) {
+            // One image only: the wide header if the artist has one, otherwise the portrait, full-bleed.
+            val hero = page?.headerUrl?.takeIf { it.isNotEmpty() } ?: avatar
             if (!hero.isNullOrEmpty()) {
                 AsyncImage(model = hero, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
@@ -132,8 +133,8 @@ fun SimpArtistScreen(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                tint.copy(alpha = if (hero.isNullOrEmpty()) 0.50f else 0.18f),
-                                scheme.background.copy(alpha = 0.55f),
+                                tint.copy(alpha = if (hero.isNullOrEmpty()) 0.50f else 0.10f),
+                                scheme.background.copy(alpha = 0.35f),
                                 scheme.background
                             )
                         )
@@ -155,22 +156,9 @@ fun SimpArtistScreen(
             item {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.Start
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .padding(vertical = 8.dp)
-                            .size(176.dp)
-                            .shadow(24.dp, CircleShape, spotColor = tint.copy(alpha = 0.5f))
-                            .clip(CircleShape)
-                            .background(scheme.surfaceContainerHighest)
-                    ) {
-                        if (!avatar.isNullOrEmpty()) {
-                            AsyncImage(model = avatar, contentDescription = name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        } else {
-                            Icon(Icons.Rounded.Person, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(80.dp).align(Alignment.Center))
-                        }
-                    }
+                    Spacer(Modifier.height(190.dp))
                     Spacer(Modifier.height(12.dp))
                     Text(
                         if (page?.verified == true) "Verified artist" else "Artist",
@@ -179,9 +167,9 @@ fun SimpArtistScreen(
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = name,
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                         color = scheme.onSurface,
-                        textAlign = TextAlign.Center,
+                        textAlign = TextAlign.Start,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -195,7 +183,7 @@ fun SimpArtistScreen(
                     Spacer(Modifier.height(20.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.Start),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(

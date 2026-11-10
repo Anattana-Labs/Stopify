@@ -43,15 +43,17 @@ fun SimpSquareCard(
         SpotifyItemType.ARTIST -> "Artist"
         else -> ""
     }
+    // Podcasts and episodes ship wide artwork: show it as a 16:9 rectangle, not a cropped square.
+    val wide = item.type == SpotifyItemType.PODCAST || item.type == SpotifyItemType.EPISODE
     Column(
         modifier = modifier
-            .width(152.dp)
+            .width(if (wide) 240.dp else 152.dp)
             .clip(CardShape)
             .clickable { onClick() }
     ) {
         Box(
             modifier = Modifier
-                .size(152.dp)
+                .then(if (wide) Modifier.width(240.dp).height(135.dp) else Modifier.size(152.dp))
                 .clip(CardShape)
                 .background(scheme.surfaceContainerHigh)
         ) {
