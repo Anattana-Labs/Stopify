@@ -321,8 +321,57 @@ suspend fun SpotifyWebClient.fetchShowEpisodes(showUri: String, showName: String
  * playlist seeded on the track, which is what its autoplay is made from.
  */
 suspend fun SpotifyWebClient.fetchSongRadio(seedUri: String): List<SpotifyTrack> {
-    val json = spGet("https://spclient.wg.spotify.com/inspiredby-mix/v2/seed_to_playlist/$seedUri?response-format=json")
+    val trackRe = Regex("spotify:track:[A-Za-z0-9]{22}")
+    fun urisIn(text: String?): List<String> = text?.let { trackRe.findAll(it).map { m -> m.value }.distinct().toList() }.orEmpty()
+
+    val seedRaw = spGetRaw("https://spclient.wg.spotify.com/inspiredby-mix/v2/seed_to_playlist/$seedUri?response-format=json")
         ?: return emptyList()
-    val playlistUri = json.a("mediaItems").objs().firstOrNull()?.s("uri") ?: return emptyList()
-    return fetchPlaylistTracks(playlistUri).getOrDefault(emptyList())
+    // The seed answer names a generated playlist; the web player then reads its track URIs and
+    // decorates them in one pathfinder call (decorateContextTracks).
+    var uris = urisIn(seedRaw).filter { it != seedUri }
+    if (uris.isEmpty()) {
+        val playlistUri = Regex("spotify:playlist:[A-Za-z0-9]+").find(seedRaw)?.value ?: return emptyList()
+        val id = playlistUri.substringAfterLast(":")
+        val sources = listOf(
+            "https://spclient.wg.spotify.com/context-resolve/v1/$playlistUri",
+            "https://spclient.wg.spotify.com/playlist/v2/playlist/$id?format=json",
+            "https://spclient.wg.spotify.com/playlist/v1/playlist/$id?format=json"
+        )
+        for (src in sources) {
+            uris = urisIn(spGetRaw(src)).filter { it != seedUri }
+            if (uris.isNotEmpty()) break
+        }
+        if (uris.isEmpty()) {
+            return fetchPlaylistTracks(playlistUri).getOrDefault(emptyList())
+        }
+    }
+    val decorated = decorateContextTracks(uris.take(50))
+    Log.d(CATALOG_TAG, "Song radio for $seedUri: ${uris.size} uris, ${decorated.size} decorated")
+    return decorated
+}
+
+private suspend fun SpotifyWebClient.spGetRaw(url: String): String? = withContext(Dispatchers.IO) {
+    try {
+        val token = getAccessToken().getOrElse { SpotifyWebClient.FALLBACK_BEARER_TOKEN }
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 20000
+            setRequestProperty("authorization", "Bearer $token")
+            setRequestProperty("client-token", customClientToken ?: SpotifyWebClient.CLIENT_TOKEN)
+            setRequestProperty("app-platform", SpotifyWebClient.APP_PLATFORM)
+            setRequestProperty("spotify-app-version", SpotifyWebClient.SPOTIFY_APP_VERSION)
+            setRequestProperty("accept", "application/json")
+            setRequestProperty("origin", "https://open.spotify.com")
+            setRequestProperty("referer", "https://open.spotify.com/")
+            setRequestProperty("user-agent", SpotifyWebClient.USER_AGENT)
+        }
+        val code = conn.responseCode
+        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.readText().orEmpty()
+        conn.disconnect()
+        if (code in 200..299) body else { Log.w(CATALOG_TAG, "GET $url -> $code"); null }
+    } catch (e: Exception) {
+        Log.w(CATALOG_TAG, "GET failed: $url", e)
+        null
+    }
 }

@@ -256,8 +256,9 @@ class SpotifyConnectService(
                             put("position_as_of_timestamp", positionMs)
                             put("positionAsOfTimestamp", positionMs)
                             put("duration", track.durationMs)
-                            put("is_playing", isPlaying)
-                            put("isPlaying", isPlaying)
+                            // Spotify keeps is_playing true while a track is loaded; a pause is is_paused = true.
+                            put("is_playing", true)
+                            put("isPlaying", true)
                             put("is_paused", !isPlaying)
                             put("isPaused", !isPlaying)
                             put("is_buffering", false)

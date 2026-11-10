@@ -763,7 +763,7 @@ fun SimpMusicApp(
     // Proactively sync live playback state back to Spotify Connect cluster so browser UI updates
     LaunchedEffect(playbackState.isPlaying, playbackState.currentTrack?.uri) {
         val currentTrack = playbackState.currentTrack
-        if (currentTrack != null) {
+        if (currentTrack != null) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
             client.connectService.updateConnectClusterState(
                 track = currentTrack,
                 isPlaying = playbackState.isPlaying,
