@@ -299,6 +299,8 @@ class SpotifyWebClient {
     var nextTrackFromStateMachine: SpotifyTrack? = null
         internal set
     val stateMachineQueueTracks = CopyOnWriteArrayList<SpotifyTrack>()
+    /** The track the current [stateMachineQueueTracks] were produced for (Spotify answers this on the playback report). */
+    @Volatile var stateMachineForUri: String? = null
     @Volatile
     private var stateSeqNum: Int = 2
     @Volatile
@@ -309,6 +311,64 @@ class SpotifyWebClient {
     private var lastReportedPositionMs: Long = 0L
     @Volatile
     private var lastConnectPlayTrackUri: String? = null
+    /** Forget which song Spotify was last told to play here, so the next start sends the "play" command again. */
+    fun invalidateConnectPlay() { lastConnectPlayTrackUri = null }
+
+    /**
+     * Tells Spotify the player was paused or resumed. The web player does this through the same
+     * track-playback state call as its progress reports, with state_ref.paused set; that flag is what
+     * other devices (open.spotify.com, phones) show. (The connect-state "hobs" call rejects extra fields.)
+     */
+    suspend fun reportPauseState(track: SpotifyTrack, positionMs: Long, paused: Boolean): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
+            val stateId = activeStateId
+            val smId = activeStateMachineId
+            if (smId.isNullOrEmpty() || stateId.isNullOrEmpty() || lastReportedTrackUri != track.uri) return@withContext false
+            val body = JSONObject().apply {
+                put("seq_num", ++stateSeqNum)
+                put("state_ref", JSONObject().apply {
+                    put("state_machine_id", smId)
+                    put("state_id", stateId)
+                    put("paused", paused)
+                })
+                put("sub_state", JSONObject().apply {
+                    put("playback_speed", if (paused) 0 else 1)
+                    put("position", positionMs)
+                    put("duration", if (track.durationMs > 0) track.durationMs else 208706L)
+                    put("media_type", "AUDIO")
+                    put("bitrate", 128000)
+                    put("audio_quality", "HIGH")
+                    put("format", 10)
+                    put("is_video_on", false)
+                })
+                put("previous_position", positionMs)
+                put("debug_source", if (paused) "pause" else "resume")
+            }
+            val conn = (URL("https://gae2-spclient.spotify.com/track-playback/v1/devices/${getDeviceId()}/state").openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                doOutput = true
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("authorization", "Bearer $token")
+                setRequestProperty("client-token", customClientToken ?: CLIENT_TOKEN)
+                setRequestProperty("content-type", "application/json")
+                setRequestProperty("app-platform", APP_PLATFORM)
+                setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+                setRequestProperty("origin", "https://open.spotify.com")
+                setRequestProperty("referer", "https://open.spotify.com/")
+                setRequestProperty("user-agent", USER_AGENT)
+            }
+            OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+            val code = conn.responseCode
+            conn.disconnect()
+            Log.d(TAG, "pause/resume state report (paused=$paused, pos=$positionMs): HTTP $code")
+            code in 200..299
+        } catch (e: Exception) {
+            Log.w(TAG, "Error reporting pause state", e)
+            false
+        }
+    }
 
     @Volatile
     var tokenRefreshHook: (suspend () -> Boolean)? = null
@@ -626,6 +686,7 @@ class SpotifyWebClient {
             if (upcoming.isNotEmpty()) {
                 stateMachineQueueTracks.clear()
                 stateMachineQueueTracks.addAll(upcoming)
+                stateMachineForUri = filterUri
                 Log.d(TAG, "Updated state_machine autoqueue with ${upcoming.size} tracks: ${upcoming.map { it.name }}")
             }
         } catch (e: Exception) {
@@ -2476,11 +2537,12 @@ class SpotifyWebClient {
             fun ok(t: SpotifyTrack) = t.uri != currentTrack.uri && t.uri !in excludeUris &&
                 !t.name.equals(currentTrack.name, ignoreCase = true)
 
-            // 1. Spotify's own autoplay list, but only when it was produced for this very track.
-            if (lastConnectPlayTrackUri == currentTrack.uri) {
-                val sm = stateMachineQueueTracks.toList().filter { ok(it) }
-                if (sm.isNotEmpty()) return@withContext sm
-                nextTrackFromStateMachine?.takeIf { ok(it) }?.let { return@withContext listOf(it) }
+            if (currentTrack.uri.startsWith("spotify:episode:")) return@withContext emptyList()
+
+            // 1. The list the web player shows: the track's autoplay "station" (about 50 songs, in Spotify's order).
+            if (currentTrack.uri.startsWith("spotify:track:")) {
+                val station = fetchAutoplayStation(currentTrack.uri).filter { ok(it) }.distinctBy { it.uri }
+                if (station.isNotEmpty()) return@withContext station.take(50)
             }
 
             if (currentTrack.uri.startsWith("spotify:episode:")) return@withContext emptyList()

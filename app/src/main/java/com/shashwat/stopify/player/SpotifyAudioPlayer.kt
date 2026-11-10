@@ -380,7 +380,9 @@ class SpotifyAudioPlayer private constructor(private val appContext: Context) {
 
     fun togglePlayPause() {
         val player = exoPlayer ?: return
-        if (player.isPlaying) {
+        // playWhenReady is the user's intent; isPlaying is false while buffering, which made a tap during
+        // loading "resume" an already-resuming player and look like a dead button.
+        if (player.playWhenReady) {
             Log.d(TAG, "Pausing ExoPlayer")
             player.pause()
         } else {
