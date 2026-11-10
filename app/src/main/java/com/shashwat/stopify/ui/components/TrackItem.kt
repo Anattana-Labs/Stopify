@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shashwat.stopify.ui.theme.SmallArtShape
 import coil.compose.AsyncImage
 import com.shashwat.stopify.ui.theme.spectrumRing
 import com.shashwat.stopify.data.SpotifyTrack
@@ -93,8 +94,8 @@ fun SimpTrackItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .then(if (isCurrentTrack) Modifier.spectrumRing(RoundedCornerShape(10.dp), 1.5.dp) else Modifier)
+                    .clip(SmallArtShape)
+                    .then(if (isCurrentTrack) Modifier.spectrumRing(SmallArtShape, 1.5.dp) else Modifier)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center
             ) {

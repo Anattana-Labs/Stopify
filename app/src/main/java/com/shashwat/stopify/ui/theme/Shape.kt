@@ -22,9 +22,9 @@ val ShapeFull = CircleShape
 /** A tile (settings pane inner rows, list highlights). */
 val TileShape = RoundedCornerShape(16.dp)
 /** An album, playlist or song cover on a shelf. */
-val CardShape = RoundedCornerShape(14.dp)
+val CardShape = RoundedCornerShape(8.dp)
 /** A song's cover inside a list row. */
-val SmallArtShape = RoundedCornerShape(10.dp)
+val SmallArtShape = RoundedCornerShape(6.dp)
 /** A pane of grouped content (settings groups, the resume card). */
 val PaneShape = RoundedCornerShape(22.dp)
 
@@ -36,4 +36,4 @@ val MiniPlayerShape = RoundedCornerShape(22.dp)
 val NavPillShape = RoundedCornerShape(28.dp)
 
 /** The big cover in the full player and on album / playlist / artist heroes. */
-val ArtworkShape = RoundedCornerShape(28.dp)
+val ArtworkShape = RoundedCornerShape(14.dp)

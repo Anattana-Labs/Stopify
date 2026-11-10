@@ -368,7 +368,7 @@ fun SimpLibraryScreen(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .clickable { showSortMenu = true }
                                 .padding(vertical = 4.dp, horizontal = 4.dp)
                         ) {
@@ -700,7 +700,7 @@ fun SimpLibraryScreen(
                         Box(
                             modifier = Modifier
                                 .size(56.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                             contentAlignment = Alignment.Center
                         ) {
@@ -747,7 +747,7 @@ fun SimpLibraryScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .clickable {
                                 onPlayCollection("spotify:playlist:${pl.id}", pl.name)
                                 selectedOptionPlaylist = null
@@ -774,7 +774,7 @@ fun SimpLibraryScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .clickable {
                                 playlistToDelete = pl
                                 selectedOptionPlaylist = null
@@ -871,7 +871,7 @@ fun PlaylistListItem(
     onClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
-    val artShape = if (playlist.kind == LibraryKind.ARTIST) CircleShape else RoundedCornerShape(14.dp)
+    val artShape = if (playlist.kind == LibraryKind.ARTIST) CircleShape else RoundedCornerShape(8.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -970,7 +970,7 @@ fun PlaylistGridCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {
@@ -1209,7 +1209,7 @@ fun DownloadJobRow(job: com.shashwat.stopify.data.DownloadJob, onCancel: () -> U
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {

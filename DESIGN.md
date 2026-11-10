@@ -9,7 +9,7 @@ Source of truth: `Yigder/Prism` (`ui/theme/Theme.kt`, `Tokens.kt`, `Spectrum.kt`
 - Ink: text 93 %, secondary 60 % (`ink2`), quiet 38 % (`ink3`), hairline 9 %.
 - Split light: `#FF4D5E #FF9F43 #FFD84D #3DDC97 #36B8FF #7C5CFF` (deeper set on light pages). Used for: mini-player progress, scrubber, current tab line, current song ring, selected chip ring, switch track, Liked tile, play ring.
 - Type: Outfit (variable, one file). Display 200, page titles 36/200, hero titles 28/300, section titles 22/300, rows 16/500, body 14.5/400, labels 11.5–14/500. Thin weights only from 21 sp up.
-- Shape: 8 / 12 / 16 / 22 / 28. Cover on shelf 14, cover in a row 10, pane 22, bars 28, buttons and chips are pills.
+- Shape: 6 / 8 / 12 / 14 / 22 / 28. Cover on shelf 8, cover in a row 6, pane 22, bars 28, hero cover 14, buttons and chips are pills.
 - Spacing: gutter 22, section gap 32, row art 48.
 - Motion: 120 / 240 / 380 ms, no bounce.
 
@@ -24,8 +24,8 @@ Source of truth: `Yigder/Prism` (`ui/theme/Theme.kt`, `Tokens.kt`, `Spectrum.kt`
 - Home: large light title with the greeting beneath, round glass actions, a "resume" pane, a recents ledger, shelves with a quiet strapline over a light title. Cards have no borders.
 - Library / Search: page header, glass search pill, chips (picked chip carries the split-light ring), Liked tile in split light.
 - Settings: sub-page header with glass back button, small-caps group labels over lifted panes, hairline row dividers, split-light switches, segmented glass capsule for display mode.
-- Full player: cover blurred into the ground, 28 dp cover lifted with a shadow, light 28 sp title with a glass heart, split-light scrubber, transport of glass prev/next discs round a wide ink play pill (ringed in split light while playing), a lyrics pane (line before, now, after), glass tool capsule (devices, save, queue).
-- Album / playlist / artist: sub-screens stack by opening order (an album opened from an artist covers it); glass back disc, 28 dp hero cover (artist: round portrait), every top-track row has a thumbnail, solid ink play pill.
+- Full player: cover blurred into the ground, 14 dp cover lifted with a shadow, light 28 sp title with a glass heart, split-light scrubber, transport of glass prev/next discs round a wide ink play pill (ringed in split light while playing), a lyrics pane (line before, now, after), glass tool capsule (devices, save, queue).
+- Album / playlist / artist: sub-screens stack by opening order (an album opened from an artist covers it); glass back disc, 14 dp hero cover (artist: round portrait), every top-track row has a thumbnail, solid ink play pill.
 
 ## Avoided
 Coral/teal "Oxide" palette, Bricolage/Hanken pair, hard 1 dp outlines on every card, bold headings, accent-filled primary buttons.

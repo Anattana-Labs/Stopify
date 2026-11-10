@@ -234,7 +234,7 @@ private fun ResumeSlab(track: SpotifyTrack, onClick: () -> Unit) {
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Cover(url = track.coverUrl, size = 84.dp, radius = 14.dp)
+        Cover(url = track.coverUrl, size = 84.dp, radius = 8.dp)
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -291,7 +291,7 @@ private fun LedgerRow(index: Int, track: SpotifyTrack, onClick: () -> Unit) {
             color = scheme.ink3,
             modifier = Modifier.width(28.dp)
         )
-        Cover(url = track.coverUrl, size = 48.dp, radius = 10.dp)
+        Cover(url = track.coverUrl, size = 48.dp, radius = 6.dp)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(

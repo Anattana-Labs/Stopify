@@ -139,12 +139,12 @@ fun QueueOverlayContent(
                                     contentDescription = currentTrack.name,
                                     modifier = Modifier
                                         .size(48.dp)
-                                        .clip(RoundedCornerShape(10.dp)),
+                                        .clip(RoundedCornerShape(6.dp)),
                                     contentScale = ContentScale.Crop
                                 )
                             } else {
                                 Surface(
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = RoundedCornerShape(6.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainer,
                                     modifier = Modifier.size(48.dp)
                                 ) {
