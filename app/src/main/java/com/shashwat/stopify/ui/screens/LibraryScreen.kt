@@ -430,8 +430,8 @@ fun SimpLibraryScreen(
                             Box(
                                 modifier = Modifier
                                     .size(62.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(spectrumBrush(0f, 220f)),
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Brush.linearGradient(listOf(Color(0xFF450AF5), Color(0xFF8E8EE5), Color(0xFFC4EFD9)))),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -880,11 +880,11 @@ fun PlaylistListItem(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Square Artwork with 8dp rounded corners (not over-rounded)
+        // Square art with 8dp corners; podcasts keep their wide 16:9 rectangle; artists are round
+        val wideArt = playlist.kind == LibraryKind.PODCAST
         Box(
             modifier = Modifier
-                .size(62.dp)
-                .shadow(4.dp, artShape, spotColor = Color.Black.copy(alpha = 0.2f))
+                .then(if (wideArt) Modifier.width(100.dp).height(56.dp) else Modifier.size(62.dp))
                 .clip(artShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center

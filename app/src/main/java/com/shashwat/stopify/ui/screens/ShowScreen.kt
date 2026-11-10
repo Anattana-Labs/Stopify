@@ -96,9 +96,10 @@ fun SimpShowScreen(
                 ) {
                     Box(
                         Modifier
-                            .size(196.dp)
-                            .shadow(24.dp, RoundedCornerShape(24.dp))
-                            .clip(RoundedCornerShape(24.dp))
+                            .fillMaxWidth(0.9f)
+                            .aspectRatio(16f / 9f)
+                            .shadow(16.dp, RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(scheme.surfaceContainerHighest)
                     ) {
                         if (!cover.isNullOrEmpty()) {

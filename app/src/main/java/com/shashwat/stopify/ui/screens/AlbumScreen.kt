@@ -137,12 +137,12 @@ fun SimpAlbumScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(400.dp)
+                    .height(520.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                dynamicTint.copy(alpha = 0.45f),
-                                dynamicTint.copy(alpha = 0.15f),
+                                dynamicTint.copy(alpha = 0.75f),
+                                dynamicTint.copy(alpha = 0.25f),
                                 MaterialTheme.colorScheme.background
                             )
                         )
@@ -192,9 +192,11 @@ fun SimpAlbumScreen(
                         Box(
                             modifier = Modifier
                                 .padding(vertical = 12.dp)
-                                .size(240.dp)
-                                .shadow(24.dp, ArtworkShape, spotColor = dynamicTint.copy(alpha = 0.45f))
-                                .clip(ArtworkShape)
+                                .fillMaxWidth(0.76f)
+                                .widthIn(max = 340.dp)
+                                .aspectRatio(1f)
+                                .shadow(16.dp, RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                         ) {
                             if (!album.coverUrl.isNullOrEmpty()) {
@@ -212,7 +214,7 @@ fun SimpAlbumScreen(
                         // Album Title
                         Text(
                             text = album.name,
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
@@ -245,77 +247,50 @@ fun SimpAlbumScreen(
 
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        // Apple Music / SimpMusic Action Row: [Shuffle Circle] [Play Pill] [Download Circle]
+                        // Immersive action row: Play and Shuffle pills side by side
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Shuffle Button
-                            Box(
+                            Row(
                                 modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                    .clickable {
-                                        onPlayContext(album.tracks, 0, true)
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Shuffle,
-                                    contentDescription = "Shuffle",
-                                    tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-
-                            // Play Pill Button
-                            Box(
-                                modifier = Modifier
+                                    .weight(1f)
                                     .height(48.dp)
-                                    .widthIn(min = 125.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.onSurface)
                                     .clickable {
                                         if (isThisPlaying) onTogglePlayback() else onPlayContext(album.tracks, 0, false)
-                                    }
-                                    .padding(horizontal = 24.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.surface,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = if (isThisPlaying) "Pause" else "Play",
-                                        color = MaterialTheme.colorScheme.surface,
-                                        style = MaterialTheme.typography.labelLarge,
-                                    )
-                                }
-                            }
-
-                            // Share / More Button
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                    .clickable {
-                                        // Optional action
                                     },
-                                contentAlignment = Alignment.Center
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.Share,
-                                    contentDescription = "Share",
-                                    tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(22.dp)
+                                    imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.size(24.dp)
                                 )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isThisPlaying) "Pause" else "Play",
+                                    color = MaterialTheme.colorScheme.surface,
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f))
+                                    .clickable { onPlayContext(album.tracks, 0, true) },
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Rounded.Shuffle, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Shuffle", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
                             }
                         }
 

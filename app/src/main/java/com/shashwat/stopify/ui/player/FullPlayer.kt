@@ -25,6 +25,8 @@ import com.shashwat.stopify.ui.theme.ArtworkShape
 import com.shashwat.stopify.ui.theme.PaneShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -144,13 +146,14 @@ fun SimpFullPlayer(
     val positionMs = if (isScrubbing) (scrubProgress * durationMs).toLong() else playbackState.currentPositionMs
     val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 
-    // The room takes a quiet tint from the track; text stays on the theme's own foreground for contrast.
+    // Immersive look: black room, the cover's colour drifting behind it, pale tint for secondary text.
     val dynamicOn = LocalDynamicColors.current
-    val tintBase = remember(colorLyrics, dynamicOn) { if (dynamicOn) colorLyrics?.let { argbToColor(it.backgroundColor) } else null } ?: scheme.primary
-    val ground by animateColorAsState(lerp(scheme.surface, tintBase, 0.22f), tween(500), label = "player_ground")
+    val tintBase = remember(colorLyrics, dynamicOn) { if (dynamicOn) colorLyrics?.let { argbToColor(it.backgroundColor) } else null } ?: Color(0xFF3A3A44)
+    val ground by animateColorAsState(tintBase, tween(900), label = "player_ground")
     val onVideo = activeCanvasUrl != null
-    val fg = if (onVideo) Color.White else scheme.onSurface
-    val fgMuted = if (onVideo) Color.White.copy(alpha = 0.78f) else scheme.onSurfaceVariant
+    val fg = Color.White
+    val tint = remember(tintBase) { lerp(Color.White, tintBase, 0.22f) }
+    val fgMuted = tint.copy(alpha = 0.62f)
     val isFav = isFavorite?.invoke(track) ?: isFavoriteTrack
 
     // Swipe down closes the player
@@ -166,45 +169,29 @@ fun SimpFullPlayer(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(ground)
-            // Swallow taps so nothing underneath can be pressed through the player
+            .background(Color.Black)
             .pointerInput(Unit) { detectTapGestures { } }
     ) {
         if (onVideo) {
             CanvasVideo(url = activeCanvasUrl!!, modifier = Modifier.fillMaxSize())
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(0.55f), Color.Black.copy(0.15f), Color.Black.copy(0.45f), Color.Black.copy(0.85f))
-                        )
-                    )
-            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+        } else {
+            // Backdrop: cover colours blown up and drifting, darkened toward the bottom
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(ground.copy(alpha = 0.85f), ground.copy(alpha = 0.35f), Color.Black))))
+            if (!track.coverUrl.isNullOrEmpty()) {
+                AsyncImage(
+                    model = track.coverUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().alpha(0.38f).blur(90.dp)
+                )
+            }
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)))))
         }
 
-        val gutter = 22.dp
-        val artSize = minOf(maxWidth - gutter * 2, maxHeight * 0.40f).coerceAtLeast(160.dp)
-
-        // Ambient: the cover, blown up and softened, lights the top of the room
-        if (!onVideo && dynamicOn && !track.coverUrl.isNullOrEmpty()) {
-            AsyncImage(
-                model = track.coverUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(maxHeight * 0.6f)
-                    .alpha(0.5f)
-                    .blur(70.dp)
-            )
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(maxHeight * 0.6f)
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, ground)))
-            )
-        }
+        val gutter = 30.dp
+        val contentWidth = minOf(maxWidth - gutter * 2, 560.dp)
+        val artSize = minOf(contentWidth, maxHeight * 0.42f).coerceAtLeast(160.dp)
 
         Column(
             modifier = Modifier
@@ -216,258 +203,180 @@ fun SimpFullPlayer(
                 .padding(bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header: glass chevron, where it is playing from, options
-            Row(
-                modifier = Modifier.fillMaxWidth().then(closeDrag).padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Handle: tap or drag to close
+            Box(
+                Modifier.fillMaxWidth().height(32.dp).then(closeDrag).clickable(onClickLabel = "Close player", onClick = onCollapse),
+                contentAlignment = Alignment.Center
             ) {
-                PlayerIconButton(Icons.Rounded.KeyboardArrowDown, "Close player", fg, onCollapse, size = 44.dp, glass = true)
-                Column(
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Box(Modifier.width(36.dp).height(5.dp).clip(CircleShape).background(tint.copy(alpha = 0.35f)))
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Cover: small corners, steps back on pause. Sideways swipe skips; swipe down closes.
+            var dragX by remember { mutableFloatStateOf(0f) }
+            val pauseScale by animateFloatAsState(if (playbackState.isPlaying) 1f else 0.86f, tween(380), label = "pause_scale")
+            Box(
+                modifier = Modifier
+                    .width(contentWidth)
+                    .height(artSize),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(artSize)
+                        .graphicsLayer { scaleX = pauseScale; scaleY = pauseScale; alpha = if (onVideo) 0f else 1f }
+                        .shadow(10.dp, RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.18f))
+                        .pointerInput(track.id) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { dragX = 0f },
+                                onDragEnd = { if (dragX < -120f) onNext() else if (dragX > 120f) onPrevious() },
+                                onHorizontalDrag = { _, dx -> dragX += dx }
+                            )
+                        }
+                        .then(closeDrag),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        if (deviceName != null) "Playing on $deviceName" else "Playing from",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (deviceName != null) scheme.primary else fgMuted,
-                        maxLines = 1
-                    )
-                    Text(
-                        track.album.ifBlank { "Stopify" },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = fg,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    if (!track.coverUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = track.coverUrl,
+                            contentDescription = "Cover of ${track.album.ifBlank { track.name }}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(Icons.Rounded.Album, null, tint = fgMuted, modifier = Modifier.size(72.dp))
+                    }
                 }
-                PlayerIconButton(Icons.Rounded.MoreVert, "Track options", fg, onClick = { showOptions = true }, size = 44.dp, glass = true)
             }
 
             Spacer(Modifier.height(20.dp))
 
-            // Cover: 28 dp corners, lifted. Sideways swipe skips; swipe down closes.
-            var dragX by remember { mutableFloatStateOf(0f) }
-            Box(
-                modifier = Modifier
-                    .size(artSize)
-                    .then(
-                        if (onVideo) Modifier else Modifier
-                            .shadow(32.dp, ArtworkShape, ambientColor = Color.Black.copy(alpha = 0.4f), spotColor = Color.Black.copy(alpha = 0.4f))
-                            .clip(ArtworkShape)
-                            .background(scheme.surfaceContainerHighest)
-                            .border(1.dp, glassEdge(), ArtworkShape)
-                    )
-                    .pointerInput(track.id) {
-                        detectHorizontalDragGestures(
-                            onDragStart = { dragX = 0f },
-                            onDragEnd = {
-                                if (dragX < -120f) onNext() else if (dragX > 120f) onPrevious()
-                            },
-                            onHorizontalDrag = { _, dx -> dragX += dx }
-                        )
-                    }
-                    .then(closeDrag),
-                contentAlignment = Alignment.Center
-            ) {
-                if (onVideo) {
-                    // Canvas video fills the screen; the artwork steps aside.
-                } else if (!track.coverUrl.isNullOrEmpty()) {
-                    AsyncImage(
-                        model = track.coverUrl,
-                        contentDescription = "Cover of ${track.album.ifBlank { track.name }}",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(Icons.Rounded.Album, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(72.dp))
-                }
-            }
-
-            Spacer(Modifier.height(26.dp))
-
-            // Title block: a light title, the artist beneath, the heart as a glass disc
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            // Credits: title and artist left, round glyphs right
+            Row(modifier = Modifier.width(contentWidth), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
                     Text(
                         track.name,
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold),
                         color = fg,
                         maxLines = 1,
                         modifier = Modifier.basicMarquee()
                     )
                     Text(
                         track.artist,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Medium),
                         color = fgMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
                             .clickable(onClickLabel = "Open artist") {
                                 val uri = track.artistUri ?: if (track.artist.isNotBlank()) "spotify:artist:${track.artist}" else null
                                 if (uri != null) onViewArtist(uri, track.artist)
                             }
-                            .padding(vertical = 6.dp)
                     )
                 }
-                PlayerIconButton(
+                ImmGlyph(
                     if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     if (isFav) "Remove from favourites" else "Add to favourites",
-                    if (isFav) scheme.primary else fg,
-                    onClick = { onToggleFavorite(track) },
-                    size = 48.dp,
-                    glass = true
+                    tint, active = isFav, onClick = { onToggleFavorite(track) }
                 )
+                Spacer(Modifier.width(8.dp))
+                ImmGlyph(Icons.Rounded.MoreVert, "Track options", tint, onClick = { showOptions = true })
             }
 
             if (playbackState.error != null) {
                 Row(
                     modifier = Modifier
                         .padding(top = 8.dp)
-                        .fillMaxWidth()
+                        .width(contentWidth)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable(onClickLabel = "Retry") { onTogglePlayPause() }
                         .heightIn(min = 44.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Rounded.ErrorOutline, null, tint = if (onVideo) Color.White else scheme.error, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.ErrorOutline, null, tint = Color.White, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        "Couldn't play this track. Tap to retry.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (onVideo) Color.White else scheme.error
-                    )
+                    Text("Couldn't play this track. Tap to retry.", style = MaterialTheme.typography.bodyMedium, color = Color.White)
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // Scrubber
-            PrismScrubber(
-                value = if (isScrubbing) scrubProgress else fraction,
-                onValueChange = { isScrubbing = true; scrubProgress = it },
-                onValueChangeFinished = {
-                    onSeekTo((scrubProgress * durationMs).toLong())
-                    isScrubbing = false
-                },
-                enabled = durationMs > 0,
-                trackColor = fg.copy(alpha = 0.20f),
-                description = "Seek, ${formatTimeMs(positionMs)} of ${formatTimeMs(durationMs)}"
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(formatTimeMs(positionMs), style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = fgMuted)
-                Text(
-                    if (playbackState.isBuffering) "Loading…" else "-" + formatTimeMs((durationMs - positionMs).coerceAtLeast(0L)),
-                    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                    color = fgMuted
+            Column(Modifier.width(contentWidth)) {
+                PrismScrubber(
+                    value = if (isScrubbing) scrubProgress else fraction,
+                    onValueChange = { isScrubbing = true; scrubProgress = it },
+                    onValueChangeFinished = {
+                        onSeekTo((scrubProgress * durationMs).toLong())
+                        isScrubbing = false
+                    },
+                    enabled = durationMs > 0,
+                    trackColor = Color.White.copy(alpha = 0.22f),
+                    description = "Seek, ${formatTimeMs(positionMs)} of ${formatTimeMs(durationMs)}"
                 )
-            }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(formatTimeMs(positionMs), style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = fgMuted)
+                    Text(
+                        if (playbackState.isBuffering) "Loading…" else "-" + formatTimeMs((durationMs - positionMs).coerceAtLeast(0L)),
+                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                        color = fgMuted
+                    )
+                }
 
-            Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(8.dp))
 
-            // Transport: shuffle and repeat small at the edges; previous and next as glass discs round a wide play pill
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                PlayerIconButton(
-                    Icons.Rounded.Shuffle, if (isShuffle) "Shuffle on" else "Shuffle off",
-                    if (isShuffle) scheme.primary else fgMuted, onToggleShuffle
-                )
-                PlayerIconButton(Icons.Rounded.SkipPrevious, "Previous", fg, onPrevious, size = 60.dp, iconSize = 30.dp, glass = true)
+                // Transport: bare white glyphs, no backgrounds
                 val label = when {
                     playbackState.error != null -> "Retry"
                     playbackState.isPlaying -> "Pause"
                     else -> "Play"
                 }
-                val pillShape = RoundedCornerShape(34.dp)
-                Box(
-                    modifier = Modifier
-                        .width(96.dp)
-                        .height(68.dp)
-                        .clip(pillShape)
-                        .background(if (onVideo) Color.White else scheme.onSurface)
-                        .then(if (playbackState.isPlaying) Modifier.spectrumRing(pillShape, 2.dp) else Modifier)
-                        .clickable(onClickLabel = label, role = Role.Button, onClick = onTogglePlayPause)
-                        .semantics { contentDescription = label },
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    when {
-                        playbackState.isBuffering -> CircularProgressIndicator(
-                            modifier = Modifier.size(28.dp), strokeWidth = 3.dp, color = scheme.surface
-                        )
-                        else -> Icon(
+                    ImmBare(Icons.Rounded.SkipPrevious, "Previous", 64.dp, 64.dp, onPrevious)
+                    if (playbackState.isBuffering) {
+                        Box(Modifier.size(92.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(38.dp), strokeWidth = 3.dp, color = Color.White)
+                        }
+                    } else {
+                        ImmBare(
                             when {
                                 playbackState.error != null -> Icons.Rounded.Refresh
                                 playbackState.isPlaying -> Icons.Rounded.Pause
                                 else -> Icons.Rounded.PlayArrow
                             },
-                            null, tint = if (onVideo) Color.Black else scheme.surface, modifier = Modifier.size(38.dp)
+                            label, 88.dp, 88.dp, onTogglePlayPause
                         )
                     }
+                    ImmBare(Icons.Rounded.SkipNext, "Next", 64.dp, 64.dp, onNext)
                 }
-                PlayerIconButton(Icons.Rounded.SkipNext, "Next", fg, onNext, size = 60.dp, iconSize = 30.dp, glass = true)
-                PlayerIconButton(
-                    Icons.Rounded.Repeat, if (isRepeat) "Repeat on" else "Repeat off",
-                    if (isRepeat) scheme.primary else fgMuted, onToggleRepeat
-                )
-            }
 
-            Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(12.dp))
 
-            // Lyrics pane: the line now singing between its neighbours. Tap to open the full view.
-            val lines = colorLyrics?.lines.orEmpty()
-            val activeIdx = remember(colorLyrics, positionMs / 500) { lines.indexOfLast { it.startTimeMs <= positionMs } }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(PaneShape)
-                    .background(if (onVideo) Color.White.copy(alpha = 0.14f) else glassFill(1.2f))
-                    .border(1.dp, glassEdge(), PaneShape)
-                    .clickable(onClickLabel = "Open lyrics") { showLyrics = true }
-                    .padding(horizontal = 18.dp, vertical = 14.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Lyrics, null, tint = fgMuted, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Lyrics", style = MaterialTheme.typography.labelLarge, color = fgMuted, modifier = Modifier.weight(1f))
-                    Icon(Icons.Rounded.OpenInFull, null, tint = fgMuted, modifier = Modifier.size(14.dp))
-                }
-                Spacer(Modifier.height(8.dp))
-                when {
-                    isLyricsLoading -> Text("Finding the words…", style = MaterialTheme.typography.bodyMedium, color = fgMuted)
-                    lines.isEmpty() -> Text("No lyrics for this track.", style = MaterialTheme.typography.bodyMedium, color = fgMuted)
-                    else -> {
-                        val at = activeIdx.coerceAtLeast(0)
-                        val prev = if (activeIdx > 0) lines[at - 1].words.takeIf { it.isNotBlank() } else null
-                        val cur = lines[at].words.takeIf { it.isNotBlank() } ?: "♪"
-                        val next = lines.getOrNull(at + 1)?.words?.takeIf { it.isNotBlank() }
-                        if (prev != null) Text(prev, style = MaterialTheme.typography.bodyMedium, color = fgMuted.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(cur, style = MaterialTheme.typography.titleLarge, color = fg, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(vertical = 2.dp))
-                        if (next != null) Text(next, style = MaterialTheme.typography.bodyMedium, color = fgMuted.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Bottom row: lyrics left, one capsule of shuffle / repeat / devices, queue right
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ImmBottom(Icons.Rounded.Lyrics, "Lyrics", tint, false) { showLyrics = true }
+                    Row(
+                        Modifier.height(44.dp).clip(CircleShape).background(tint.copy(alpha = 0.12f)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ImmSegment(Icons.Rounded.Shuffle, if (isShuffle) "Shuffle on" else "Shuffle off", tint, isShuffle, onToggleShuffle)
+                        Box(Modifier.width(1.dp).fillMaxHeight().background(tint.copy(alpha = 0.2f)))
+                        ImmSegment(Icons.Rounded.Repeat, if (isRepeat) "Repeat on" else "Repeat off", tint, isRepeat, onToggleRepeat)
+                        Box(Modifier.width(1.dp).fillMaxHeight().background(tint.copy(alpha = 0.2f)))
+                        ImmSegment(Icons.Rounded.Speaker, deviceName ?: "Devices", tint, deviceName != null, onOpenDevices)
                     }
+                    ImmBottom(Icons.Rounded.QueueMusic, "Queue", tint, showQueue) { showQueue = true }
                 }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // Tools: every one of these does something
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(CircleShape)
-                    .background(if (onVideo) Color.White.copy(alpha = 0.14f) else glassFill(1.3f))
-                    .border(1.dp, glassEdge(), CircleShape),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                PlayerTool(Icons.Rounded.Speaker, deviceName ?: "Devices", if (deviceName != null) scheme.primary else fg, Modifier.weight(1f)) { onOpenDevices() }
-                PlayerTool(Icons.Rounded.PlaylistAdd, "Save", fg, Modifier.weight(1f)) { onAddToPlaylist(track) }
-                PlayerTool(
-                    Icons.Rounded.QueueMusic,
-                    if (playbackQueue.isEmpty()) "Queue" else "Queue · ${playbackQueue.size}",
-                    fg, Modifier.weight(1f)
-                ) { showQueue = true }
             }
         }
 
@@ -534,6 +443,59 @@ fun SimpFullPlayer(
             }
         )
     }
+}
+
+@Composable
+private fun ImmGlyph(icon: ImageVector, description: String, tint: Color, active: Boolean = false, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(tint.copy(alpha = if (active) 0.34f else 0.18f)),
+            contentAlignment = Alignment.Center
+        ) { Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp)) }
+    }
+}
+
+@Composable
+private fun ImmBare(icon: ImageVector, description: String, iconSize: Dp, touch: Dp, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(touch + 4.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(iconSize)) }
+}
+
+@Composable
+private fun ImmBottom(icon: ImageVector, description: String, tint: Color, active: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(tint.copy(alpha = if (active) 0.28f else 0.12f))
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) { Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp)) }
+}
+
+@Composable
+private fun ImmSegment(icon: ImageVector, description: String, tint: Color, active: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .width(56.dp)
+            .fillMaxHeight()
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) { Icon(icon, null, tint = if (active) Color.White else tint.copy(alpha = 0.7f), modifier = Modifier.size(24.dp)) }
 }
 
 @Composable

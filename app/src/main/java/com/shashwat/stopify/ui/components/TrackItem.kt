@@ -93,7 +93,7 @@ fun SimpTrackItem(
         if (showCover) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .then(if (track.uri.contains(":episode:")) Modifier.width(85.dp).height(48.dp) else Modifier.size(48.dp))
                     .clip(SmallArtShape)
                     .then(if (isCurrentTrack) Modifier.spectrumRing(SmallArtShape, 1.5.dp) else Modifier)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
