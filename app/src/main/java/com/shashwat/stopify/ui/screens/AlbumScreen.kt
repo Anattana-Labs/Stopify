@@ -28,6 +28,7 @@ import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.platform.LocalContext
 import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import com.shashwat.stopify.ui.theme.LocalDynamicColors
 import com.shashwat.stopify.ui.theme.ArtworkShape
 import com.shashwat.stopify.ui.components.RoundAction
 import coil.imageLoader
@@ -99,7 +100,7 @@ fun SimpAlbumScreen(
         }
     }
 
-    val dynamicTint = coverTint ?: MaterialTheme.colorScheme.primary
+    val dynamicTint = if (LocalDynamicColors.current) (coverTint ?: MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.primary
     val isThisPlaying = albumDetail?.tracks?.any { it.uri == playbackState.currentTrack?.uri } == true && playbackState.isPlaying
 
     Box(

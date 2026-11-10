@@ -1,7 +1,17 @@
 package com.shashwat.stopify.ui.player
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.material3.ColorScheme
+import com.shashwat.stopify.ui.theme.LocalDynamicColors
+import com.shashwat.stopify.ui.theme.LocalIsDark
+import com.shashwat.stopify.ui.theme.hsl
+import com.shashwat.stopify.ui.theme.hueOf
+import com.shashwat.stopify.ui.theme.satOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,24 +39,41 @@ import androidx.compose.ui.unit.sp
 import com.shashwat.stopify.data.SpotifyColorLyrics
 import com.shashwat.stopify.data.SpotifyTrack
 
-/**
- * Blend base color with theme primary and surface to provide a gorgeous theme tint.
- */
-fun blendThemeTint(baseColor: Color, themePrimary: Color, themeSurface: Color, isDark: Boolean): Color {
-    val blendedR = (baseColor.red * 0.68f + themePrimary.red * 0.32f).coerceIn(0f, 1f)
-    val blendedG = (baseColor.green * 0.68f + themePrimary.green * 0.32f).coerceIn(0f, 1f)
-    val blendedB = (baseColor.blue * 0.68f + themePrimary.blue * 0.32f).coerceIn(0f, 1f)
-    val blended = Color(blendedR, blendedG, blendedB, 1f)
+internal data class LyricsPalette(
+    val top: Color, val bottom: Color,
+    val active: Color, val inactive: Color,
+    val title: Color, val subtitle: Color
+)
 
-    return if (!isDark) {
-        Color(
-            (blended.red * 0.35f + themeSurface.red * 0.65f).coerceIn(0f, 1f),
-            (blended.green * 0.35f + themeSurface.green * 0.65f).coerceIn(0f, 1f),
-            (blended.blue * 0.35f + themeSurface.blue * 0.65f).coerceIn(0f, 1f),
-            1f
+/**
+ * Turns Spotify's lyrics colour into a gradient that fits the app's mode: deep tones with light text in dark mode,
+ * pale tones with dark text in light mode. Without a seed (no colour, or Dynamic color off) the theme's own surfaces are used.
+ */
+internal fun lyricsPalette(seed: Color?, isDark: Boolean, scheme: ColorScheme): LyricsPalette {
+    if (seed == null) {
+        val ink = scheme.onSurface
+        return LyricsPalette(
+            top = scheme.surfaceContainerHigh, bottom = scheme.surface,
+            active = ink, inactive = ink.copy(alpha = if (isDark) 0.38f else 0.42f),
+            title = ink, subtitle = scheme.onSurfaceVariant
+        )
+    }
+    val h = hueOf(seed)
+    val s = satOf(seed).coerceIn(0.28f, 0.85f)
+    return if (isDark) {
+        val ink = hsl(h, (s * 0.45f).coerceAtMost(0.5f), 0.96f)
+        LyricsPalette(
+            top = hsl(h, s * 0.62f, 0.24f), bottom = hsl(h, s * 0.5f, 0.07f),
+            active = ink, inactive = ink.copy(alpha = 0.38f),
+            title = ink, subtitle = ink.copy(alpha = 0.72f)
         )
     } else {
-        blended
+        val ink = hsl(h, (s * 0.7f).coerceAtMost(0.6f), 0.10f)
+        LyricsPalette(
+            top = hsl(h, (s * 0.95f).coerceAtMost(0.9f), 0.84f), bottom = hsl(h, s * 0.75f, 0.96f),
+            active = ink, inactive = ink.copy(alpha = 0.42f),
+            title = ink, subtitle = ink.copy(alpha = 0.66f)
+        )
     }
 }
 
@@ -63,45 +90,27 @@ fun FullScreenLyricsViewer(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val themePrimary = MaterialTheme.colorScheme.primary
-    val themeSurface = MaterialTheme.colorScheme.surface
-    val defaultSurfaceFallback = MaterialTheme.colorScheme.surfaceContainerHighest
-    val isDark = (themeSurface.red * 0.299f + themeSurface.green * 0.587f + themeSurface.blue * 0.114f) < 0.52f
+    val scheme = MaterialTheme.colorScheme
+    val themePrimary = scheme.primary
+    val isDark = LocalIsDark.current
+    val dynamic = LocalDynamicColors.current
 
-    val defaultBgColor = if (isDark) Color(0xFF1E3264) else defaultSurfaceFallback
-    val rawBgColor = remember(lyrics?.backgroundColor, defaultBgColor) {
-        lyrics?.let { argbToColor(it.backgroundColor) } ?: defaultBgColor
+    // Spotify's lyrics colour is one mid-tone; it is turned into a dark gradient in dark mode and a light one in light mode.
+    val seed = remember(lyrics?.backgroundColor, dynamic) {
+        if (dynamic) lyrics?.let { argbToColor(it.backgroundColor) } else null
     }
-
-    val bgColor = remember(rawBgColor, themePrimary, themeSurface, isDark) {
-        blendThemeTint(rawBgColor, themePrimary, themeSurface, isDark)
+    val palette = remember(seed, isDark, scheme.surface, scheme.surfaceContainerHigh, scheme.onSurface) {
+        lyricsPalette(seed, isDark, scheme)
     }
+    val topColor by animateColorAsState(palette.top, tween(600), label = "lyricsTop")
+    val bottomColor by animateColorAsState(palette.bottom, tween(600), label = "lyricsBottom")
+    val isLightBg = !isDark
 
-    val isLightBg = (bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f) > 0.52f
-
-    val activeHighlightColor = remember(lyrics?.highlightTextColor, themePrimary, isLightBg) {
-        if (isLightBg) {
-            themePrimary
-        } else {
-            val rawHighlight = lyrics?.let { argbToColor(it.highlightTextColor) } ?: Color.White
-            Color(
-                (rawHighlight.red * 0.55f + themePrimary.red * 0.45f).coerceIn(0f, 1f),
-                (rawHighlight.green * 0.55f + themePrimary.green * 0.45f).coerceIn(0f, 1f),
-                (rawHighlight.blue * 0.55f + themePrimary.blue * 0.45f).coerceIn(0f, 1f),
-                1f
-            )
-        }
-    }
-
-    val inactiveTextColor = if (isLightBg) {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-    } else {
-        activeHighlightColor.copy(alpha = 0.40f)
-    }
-
-    val titleColor = if (isLightBg) MaterialTheme.colorScheme.onSurface else Color.White
-    val subtitleColor = if (isLightBg) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.75f)
-    val closeButtonTint = if (isLightBg) MaterialTheme.colorScheme.onSurface else Color.White
+    val activeHighlightColor = palette.active
+    val inactiveTextColor = palette.inactive
+    val titleColor = palette.title
+    val subtitleColor = palette.subtitle
+    val closeButtonTint = palette.title
 
     val activeIndex = remember(lyrics?.lines, currentPositionMs) {
         if (lyrics != null && lyrics.lines.isNotEmpty() && lyrics.syncType == "LINE_SYNCED") {
@@ -123,13 +132,7 @@ fun FullScreenLyricsViewer(
         modifier = modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        bgColor,
-                        bgColor,
-                        if (isDark) bgColor.copy(alpha = 0.94f) else bgColor
-                    )
-                )
+                Brush.verticalGradient(colors = listOf(topColor, bottomColor))
             )
             .statusBarsPadding()
             .navigationBarsPadding()
@@ -168,7 +171,7 @@ fun FullScreenLyricsViewer(
                         .size(44.dp)
                         .clip(CircleShape)
                         .background(if (isLightBg) Color.White.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.14f))
-                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                        .border(1.dp, titleColor.copy(alpha = 0.18f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.KeyboardArrowDown,
@@ -187,7 +190,7 @@ fun FullScreenLyricsViewer(
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(
-                            color = themePrimary,
+                            color = activeHighlightColor,
                             modifier = Modifier.size(38.dp),
                             strokeWidth = 3.dp
                         )
@@ -224,13 +227,14 @@ fun FullScreenLyricsViewer(
                             val text = line.words.ifEmpty { "♪" }
                             val isActive = index == activeIndex
                             val targetColor = when {
-                                !isSynced -> if (isLightBg) MaterialTheme.colorScheme.onSurface else Color.White.copy(alpha = 0.9f)
+                                !isSynced -> activeHighlightColor.copy(alpha = 0.9f)
                                 isActive -> activeHighlightColor
                                 else -> inactiveTextColor
                             }
                             val color by animateColorAsState(targetValue = targetColor, label = "lyricTextColor")
                             val scale by animateFloatAsState(
-                                targetValue = if (isActive && isSynced) 1.03f else 1.0f,
+                                targetValue = if (isActive && isSynced) 1.06f else 1.0f,
+                                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
                                 label = "lyricScale"
                             )
 
@@ -241,6 +245,7 @@ fun FullScreenLyricsViewer(
                                     .graphicsLayer {
                                         scaleX = scale
                                         scaleY = scale
+                                        transformOrigin = TransformOrigin(0f, 0.5f)
                                     }
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
@@ -254,8 +259,8 @@ fun FullScreenLyricsViewer(
                                 Text(
                                     text = text,
                                     color = color,
-                                    fontSize = if (isActive) 30.sp else 26.sp,
-                                    fontWeight = if (isActive) FontWeight.Normal else FontWeight.Light,
+                                    fontSize = 27.sp,
+                                    fontWeight = if (isActive) FontWeight.Medium else FontWeight.Light,
                                     lineHeight = 38.sp,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -266,7 +271,7 @@ fun FullScreenLyricsViewer(
                             Spacer(modifier = Modifier.height(28.dp))
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = themePrimary.copy(alpha = 0.08f),
+                                color = activeHighlightColor.copy(alpha = 0.08f),
                                 modifier = Modifier.padding(bottom = 16.dp)
                             ) {
                                 Text(

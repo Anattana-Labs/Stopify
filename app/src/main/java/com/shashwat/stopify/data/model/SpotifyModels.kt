@@ -47,7 +47,9 @@ data class SpotifyTrack(
     val durationMs: Long,
     val isPlayable: Boolean = true,
     val albumUri: String? = null,
-    val artistUri: String? = null
+    val artistUri: String? = null,
+    /** Epoch millis when this track was last played; 0 when unknown. */
+    val playedAt: Long = 0L
 )
 
 data class SpotifyAlbumDetails(

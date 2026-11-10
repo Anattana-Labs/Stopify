@@ -63,6 +63,8 @@ fun SimpSettingsScreen(
     onColorModeChange: (ThemeColorMode) -> Unit = {},
     currentGlassStyle: GlassStyle = GlassStyle.BLUR,
     onGlassStyleChange: (GlassStyle) -> Unit = {},
+    dynamicColorEnabled: Boolean = true,
+    onDynamicColorToggle: (Boolean) -> Unit = {},
     onOpenCookieManager: () -> Unit,
     onPlayTrack: (SpotifyTrack) -> Unit,
     onPlayNext: (SpotifyTrack) -> Unit = {},
@@ -434,6 +436,21 @@ fun SimpSettingsScreen(
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
                 )
+
+                ListItem(
+                    headlineContent = { Text("Dynamic color", style = MaterialTheme.typography.bodyLarge) },
+                    supportingContent = {
+                        Text(
+                            "Tint the app, player and lyrics with colors taken from the album art. Off keeps the standard palette everywhere.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingContent = { Icon(Icons.Rounded.Album, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    trailingContent = { PrismSwitch(checked = dynamicColorEnabled, onCheckedChange = onDynamicColorToggle) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+                Hairline(Modifier.padding(horizontal = 16.dp))
 
                 val colorModes = listOf(
                     "System" to ThemeColorMode.SYSTEM,

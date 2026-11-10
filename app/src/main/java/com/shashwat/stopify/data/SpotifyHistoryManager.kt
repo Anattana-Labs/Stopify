@@ -13,7 +13,7 @@ class SpotifyHistoryManager {
 
         /** Puts [track] at the front, removing any older entry of the same track. */
         fun withPlay(current: List<SpotifyTrack>, track: SpotifyTrack): List<SpotifyTrack> =
-            (listOf(track) + current.filter { it.uri != track.uri }).take(MAX)
+            (listOf(track.copy(playedAt = System.currentTimeMillis())) + current.filter { it.uri != track.uri }).take(MAX)
 
         /**
          * Local plays stay in front of Spotify's recents (they are newer than the last server sync);
@@ -35,6 +35,7 @@ class SpotifyHistoryManager {
                         put("artist", t.artist); put("album", t.album)
                         put("cover", t.coverUrl ?: ""); put("dur", t.durationMs)
                         put("albumUri", t.albumUri ?: ""); put("artistUri", t.artistUri ?: "")
+                        put("playedAt", t.playedAt)
                     })
                 }
                 prefs.edit().putString(KEY, arr.toString()).apply()
@@ -54,7 +55,8 @@ class SpotifyHistoryManager {
                         coverUrl = o.optString("cover").ifEmpty { null },
                         durationMs = o.optLong("dur"),
                         albumUri = o.optString("albumUri").ifEmpty { null },
-                        artistUri = o.optString("artistUri").ifEmpty { null }
+                        artistUri = o.optString("artistUri").ifEmpty { null },
+                        playedAt = o.optLong("playedAt", 0L)
                     )
                 }.filter { it.uri.isNotEmpty() }
             } catch (e: Exception) {
@@ -100,7 +102,7 @@ class SpotifyHistoryManager {
         // In-memory session tracking only, do not persist locally to disk
         synchronized(_playbackHistory) {
             _playbackHistory.removeAll { item: SpotifyTrack -> item.uri == track.uri }
-            _playbackHistory.add(0, track)
+            _playbackHistory.add(0, track.copy(playedAt = System.currentTimeMillis()))
             if (_playbackHistory.size > 100) {
                 _playbackHistory.removeAt(_playbackHistory.lastIndex)
             }
