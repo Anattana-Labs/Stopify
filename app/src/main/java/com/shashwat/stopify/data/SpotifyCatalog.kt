@@ -106,7 +106,9 @@ private fun mapTrack(t: JSONObject?, fallbackCover: String? = null): SpotifyTrac
         artist = artist.ifEmpty { "Artist" },
         album = album.s("name") ?: "",
         coverUrl = album.path("coverArt").a("sources").bestImage() ?: fallbackCover,
-        durationMs = t.path("duration").optLong("totalMilliseconds", t.path("trackDuration").optLong("totalMilliseconds", 0L)),
+        durationMs = t.path("duration")?.optLong("totalMilliseconds", 0L)?.takeIf { it > 0L }
+            ?: t.path("trackDuration")?.optLong("totalMilliseconds", 0L)
+            ?: 0L,
         isPlayable = t.path("playability")?.optBoolean("playable", true) ?: true,
         albumUri = album.s("uri"),
         artistUri = artistUri
@@ -302,7 +304,7 @@ suspend fun SpotifyWebClient.fetchShowEpisodes(showUri: String, showName: String
             artist = showName,
             album = showName,
             coverUrl = d.path("coverArt").a("sources").bestImage() ?: showCover,
-            durationMs = d.path("duration").optLong("totalMilliseconds", 0L),
+            durationMs = d.path("duration")?.optLong("totalMilliseconds", 0L) ?: 0L,
             isPlayable = d.path("playability")?.optBoolean("playable", true) ?: true,
             albumUri = showUri
         )

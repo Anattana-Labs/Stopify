@@ -308,7 +308,7 @@ fun SimpSettingsScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(if (isRefreshingToken) "Refreshing…" else "Refresh Token")
+                        Text(if (isRefreshingToken) "Refreshing…" else "Refresh")
                     }
 
                     PrismOutlinedButton(
@@ -446,8 +446,19 @@ fun SimpSettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     },
-                    leadingContent = { Icon(Icons.Rounded.Album, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                    trailingContent = { PrismSwitch(checked = dynamicColorEnabled, onCheckedChange = onDynamicColorToggle) },
+                    leadingContent = {
+                        Icon(
+                            Icons.Rounded.Album,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        PrismSwitch(
+                            checked = dynamicColorEnabled,
+                            onCheckedChange = onDynamicColorToggle
+                        )
+                    },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
                 Hairline(Modifier.padding(horizontal = 16.dp))
@@ -639,7 +650,7 @@ fun SimpSettingsScreen(
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier
                                                 .size(40.dp)
-                                                .clip(RoundedCornerShape(8.dp))
+                                                .clip(RoundedCornerShape(6.dp))
                                         )
                                     },
                                     trailingContent = {
