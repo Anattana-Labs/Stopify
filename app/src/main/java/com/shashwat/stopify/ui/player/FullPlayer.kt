@@ -60,6 +60,16 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
+import com.shashwat.stopify.ui.look.MeshGradientBackground
+import com.shashwat.stopify.ui.look.ThinSlider
+import com.shashwat.stopify.ui.look.playerTintOf
+import com.shashwat.stopify.ui.look.rememberArtworkColors
+import com.shashwat.stopify.ui.look.rememberPauseScale
 import com.shashwat.stopify.data.SpotifyColorLyrics
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
@@ -146,15 +156,23 @@ fun SimpFullPlayer(
     val positionMs = if (isScrubbing) (scrubProgress * durationMs).toLong() else playbackState.currentPositionMs
     val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 
-    // Immersive look: black room, the cover's colour drifting behind it, pale tint for secondary text.
-    val dynamicOn = LocalDynamicColors.current
-    val tintBase = remember(colorLyrics, dynamicOn) { if (dynamicOn) colorLyrics?.let { argbToColor(it.backgroundColor) } else null } ?: Color(0xFF3A3A44)
-    val ground by animateColorAsState(tintBase, tween(900), label = "player_ground")
+    // Immersive look, ported from myspoti: mesh of the cover's colours behind a black room,
+    // a pale tint for secondary text, the cover collapsing into a header when a panel opens.
+    val palette = rememberArtworkColors(track.coverUrl)
+    val tint = remember(palette) { playerTintOf(palette) }
     val onVideo = activeCanvasUrl != null
     val fg = Color.White
-    val tint = remember(tintBase) { lerp(Color.White, tintBase, 0.22f) }
-    val fgMuted = tint.copy(alpha = 0.62f)
+    val fgMuted = tint.copy(alpha = 0.55f)
     val isFav = isFavorite?.invoke(track) ?: isFavoriteTrack
+
+    var panel by rememberSaveable { mutableIntStateOf(0) } // 0 none, 1 lyrics, 2 queue
+    val collapse by animateFloatAsState(
+        targetValue = if (panel == 0) 0f else 1f,
+        animationSpec = tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "playerCollapse"
+    )
+    val pauseScale by rememberPauseScale(playbackState.isPlaying)
+    BackHandler(enabled = panel != 0) { panel = 0 }
 
     // Swipe down closes the player
     val closeDrag = Modifier.pointerInput(Unit) {
@@ -174,33 +192,21 @@ fun SimpFullPlayer(
     ) {
         if (onVideo) {
             CanvasVideo(url = activeCanvasUrl!!, modifier = Modifier.fillMaxSize())
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f + 0.2f * collapse)))
         } else {
-            // Backdrop: cover colours blown up and drifting, darkened toward the bottom
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(ground.copy(alpha = 0.85f), ground.copy(alpha = 0.35f), Color.Black))))
-            if (!track.coverUrl.isNullOrEmpty()) {
-                AsyncImage(
-                    model = track.coverUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().alpha(0.38f).blur(90.dp)
-                )
-            }
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)))))
+            MeshGradientBackground(palette = palette, trackKey = track.id)
         }
 
         val gutter = 30.dp
         val contentWidth = minOf(maxWidth - gutter * 2, 560.dp)
-        val artSize = minOf(contentWidth, maxHeight * 0.42f).coerceAtLeast(160.dp)
+        val thumb = 54.dp
+        val headerH = 60.dp
+        val topPad = 8.dp
+        val gap = 20.dp
+        var dragX by remember { mutableFloatStateOf(0f) }
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = gutter)
-                .padding(bottom = 16.dp),
+            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Handle: tap or drag to close
@@ -211,32 +217,67 @@ fun SimpFullPlayer(
                 Box(Modifier.width(36.dp).height(5.dp).clip(CircleShape).background(tint.copy(alpha = 0.35f)))
             }
 
-            Spacer(Modifier.height(8.dp))
+            // Everything that changes between the full player and the panels lives in this one
+            // weighted box, so the controls below it never move.
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val left = (maxWidth - contentWidth) / 2
+                val fullArt = minOf(contentWidth, maxHeight - topPad - gap - headerH - 16.dp).coerceAtLeast(thumb)
+                val spare = (maxHeight - topPad - fullArt - gap - headerH - 16.dp).coerceAtLeast(0.dp)
+                val groupTop = spare / 2
+                fun p() = collapse
+                fun artSize(): Dp = androidx.compose.ui.unit.lerp(fullArt, thumb, p())
+                fun artTop(): Dp = topPad + androidx.compose.ui.unit.lerp(groupTop, 0.dp, p())
+                fun artStart(): Dp = left + androidx.compose.ui.unit.lerp((contentWidth - fullArt) / 2, 0.dp, p())
+                fun titleTop(): Dp = topPad + androidx.compose.ui.unit.lerp(groupTop + fullArt + gap, 0.dp, p())
+                fun titleStart(): Dp = androidx.compose.ui.unit.lerp(0.dp, thumb + 12.dp, p())
 
-            // Cover: small corners, steps back on pause. Sideways swipe skips; swipe down closes.
-            var dragX by remember { mutableFloatStateOf(0f) }
-            val pauseScale by animateFloatAsState(if (playbackState.isPlaying) 1f else 0.86f, tween(380), label = "pause_scale")
-            Box(
-                modifier = Modifier
-                    .width(contentWidth)
-                    .height(artSize),
-                contentAlignment = Alignment.Center
-            ) {
+                // ---- Panel, under the header ----
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = topPad + headerH, start = left, end = left)
+                        .graphicsLayer { alpha = ((p() - 0.6f) / 0.4f).coerceIn(0f, 1f) }
+                ) {
+                    when (panel) {
+                        1 -> ImmLyricsPanel(colorLyrics?.lines.orEmpty(), isLyricsLoading, positionMs, onSeekTo, Modifier.fillMaxSize())
+                        2 -> ImmQueuePanel(
+                            playbackQueue, tint,
+                            onPlay = onPlayTrackFromQueue, onRemove = onRemoveFromQueue, onClear = onClearQueue,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                // ---- Cover: the whole sleeve, then the header's thumbnail ----
                 Box(
                     modifier = Modifier
-                        .size(artSize)
-                        .graphicsLayer { scaleX = pauseScale; scaleY = pauseScale; alpha = if (onVideo) 0f else 1f }
-                        .shadow(10.dp, RoundedCornerShape(8.dp))
-                        .clip(RoundedCornerShape(8.dp))
+                        .offset { IntOffset(artStart().roundToPx(), artTop().roundToPx()) }
+                        .layout { measurable, _ ->
+                            val side = artSize().roundToPx()
+                            val placeable = measurable.measure(Constraints.fixed(side, side))
+                            layout(side, side) { placeable.place(0, 0) }
+                        }
+                        .graphicsLayer {
+                            val s = pauseScale + (1f - pauseScale) * p()
+                            scaleX = s
+                            scaleY = s
+                            alpha = if (onVideo && panel == 0) 0f else 1f
+                            shadowElevation = 10.dp.toPx() * (1f - p())
+                            shape = RoundedCornerShape(8.dp)
+                            clip = true
+                        }
                         .background(Color.Black.copy(alpha = 0.18f))
-                        .pointerInput(track.id) {
-                            detectHorizontalDragGestures(
+                        .pointerInput(track.id, panel) {
+                            if (panel == 0) detectHorizontalDragGestures(
                                 onDragStart = { dragX = 0f },
                                 onDragEnd = { if (dragX < -120f) onNext() else if (dragX > 120f) onPrevious() },
                                 onHorizontalDrag = { _, dx -> dragX += dx }
                             )
                         }
-                        .then(closeDrag),
+                        .then(closeDrag)
+                        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
+                            if (panel != 0) panel = 0
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     if (!track.coverUrl.isNullOrEmpty()) {
@@ -247,53 +288,59 @@ fun SimpFullPlayer(
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        Icon(Icons.Rounded.Album, null, tint = fgMuted, modifier = Modifier.size(72.dp))
+                        Icon(Icons.Rounded.Album, null, tint = fgMuted, modifier = Modifier.size(40.dp))
                     }
                 }
-            }
 
-            Spacer(Modifier.height(20.dp))
-
-            // Credits: title and artist left, round glyphs right
-            Row(modifier = Modifier.width(contentWidth), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
-                    Text(
-                        track.name,
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold),
-                        color = fg,
-                        maxLines = 1,
-                        modifier = Modifier.basicMarquee()
-                    )
-                    Text(
-                        track.artist,
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Medium),
-                        color = fgMuted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .clickable(onClickLabel = "Open artist") {
+                // ---- Credits + round glyphs ----
+                Row(
+                    modifier = Modifier
+                        .offset { IntOffset((left + titleStart()).roundToPx(), titleTop().roundToPx()) }
+                        .layout { measurable, _ ->
+                            val w = (contentWidth - titleStart()).roundToPx()
+                            val h = headerH.roundToPx()
+                            val placeable = measurable.measure(Constraints.fixed(w, h))
+                            layout(w, h) { placeable.place(0, 0) }
+                        },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            track.name,
+                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold),
+                            color = fg,
+                            maxLines = 1,
+                            modifier = Modifier.basicMarquee()
+                        )
+                        Text(
+                            track.artist,
+                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
+                            color = fgMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable(onClickLabel = "Open artist") {
                                 val uri = track.artistUri ?: if (track.artist.isNotBlank()) "spotify:artist:${track.artist}" else null
                                 if (uri != null) onViewArtist(uri, track.artist)
                             }
+                        )
+                    }
+                    ImmGlyph(
+                        if (isFav) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        if (isFav) "Remove from favourites" else "Add to favourites",
+                        tint, active = isFav, onClick = { onToggleFavorite(track) }
                     )
+                    Spacer(Modifier.width(4.dp))
+                    ImmGlyph(Icons.Rounded.MoreHoriz, "Track options", tint, onClick = { showOptions = true })
                 }
-                ImmGlyph(
-                    if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    if (isFav) "Remove from favourites" else "Add to favourites",
-                    tint, active = isFav, onClick = { onToggleFavorite(track) }
-                )
-                Spacer(Modifier.width(8.dp))
-                ImmGlyph(Icons.Rounded.MoreVert, "Track options", tint, onClick = { showOptions = true })
             }
 
             if (playbackState.error != null) {
                 Row(
                     modifier = Modifier
-                        .padding(top = 8.dp)
                         .width(contentWidth)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable(onClickLabel = "Retry") { onTogglePlayPause() }
-                        .heightIn(min = 44.dp),
+                        .heightIn(min = 40.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Rounded.ErrorOutline, null, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -302,32 +349,26 @@ fun SimpFullPlayer(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-
-            Column(Modifier.width(contentWidth)) {
-                PrismScrubber(
+            // ---- Controls: scrubber, transport, bottom row ----
+            Column(Modifier.width(contentWidth).padding(bottom = 18.dp)) {
+                ThinSlider(
                     value = if (isScrubbing) scrubProgress else fraction,
                     onValueChange = { isScrubbing = true; scrubProgress = it },
                     onValueChangeFinished = {
                         onSeekTo((scrubProgress * durationMs).toLong())
                         isScrubbing = false
                     },
-                    enabled = durationMs > 0,
-                    trackColor = Color.White.copy(alpha = 0.22f),
-                    description = "Seek, ${formatTimeMs(positionMs)} of ${formatTimeMs(durationMs)}"
+                    loading = playbackState.isBuffering && !isScrubbing,
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(formatTimeMs(positionMs), style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = fgMuted)
+                Row(Modifier.fillMaxWidth().offset(y = (-9).dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(formatTimeMs(positionMs), style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"), color = fgMuted)
                     Text(
-                        if (playbackState.isBuffering) "Loading…" else "-" + formatTimeMs((durationMs - positionMs).coerceAtLeast(0L)),
-                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                        "-" + formatTimeMs((durationMs - positionMs).coerceAtLeast(0L)),
+                        style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
                         color = fgMuted
                     )
                 }
 
-                Spacer(Modifier.height(8.dp))
-
-                // Transport: bare white glyphs, no backgrounds
                 val label = when {
                     playbackState.error != null -> "Retry"
                     playbackState.isPlaying -> "Pause"
@@ -356,15 +397,14 @@ fun SimpFullPlayer(
                     ImmBare(Icons.Rounded.SkipNext, "Next", 64.dp, 64.dp, onNext)
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
 
-                // Bottom row: lyrics left, one capsule of shuffle / repeat / devices, queue right
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ImmBottom(Icons.Rounded.Lyrics, "Lyrics", tint, false) { showLyrics = true }
+                    ImmBottom(Icons.Rounded.Lyrics, "Lyrics", tint, panel == 1) { panel = if (panel == 1) 0 else 1 }
                     Row(
                         Modifier.height(44.dp).clip(CircleShape).background(tint.copy(alpha = 0.12f)),
                         verticalAlignment = Alignment.CenterVertically
@@ -375,51 +415,9 @@ fun SimpFullPlayer(
                         Box(Modifier.width(1.dp).fillMaxHeight().background(tint.copy(alpha = 0.2f)))
                         ImmSegment(Icons.Rounded.Speaker, deviceName ?: "Devices", tint, deviceName != null, onOpenDevices)
                     }
-                    ImmBottom(Icons.Rounded.QueueMusic, "Queue", tint, showQueue) { showQueue = true }
+                    ImmBottom(Icons.Rounded.QueueMusic, "Queue", tint, panel == 2) { panel = if (panel == 2) 0 else 2 }
                 }
             }
-        }
-
-        BackHandler(enabled = showLyrics) { showLyrics = false }
-        AnimatedVisibility(
-            visible = showLyrics,
-            modifier = Modifier.fillMaxSize(),
-            enter = slideInVertically(tween(420, easing = EmphasizedDecelerate)) { it / 3 } +
-                fadeIn(tween(300)) + scaleIn(tween(420, easing = EmphasizedDecelerate), initialScale = 0.94f),
-            exit = slideOutVertically(tween(300, easing = EmphasizedAccelerate)) { it / 2 } +
-                fadeOut(tween(240)) + scaleOut(tween(300), targetScale = 0.96f)
-        ) {
-            FullScreenLyricsViewer(
-                track = track,
-                lyrics = colorLyrics,
-                isLoading = isLyricsLoading,
-                currentPositionMs = positionMs,
-                onSeekTo = onSeekTo,
-                onClose = { showLyrics = false }
-            )
-        }
-
-        BackHandler(enabled = showQueue) { showQueue = false }
-        AnimatedVisibility(
-            visible = showQueue,
-            modifier = Modifier.fillMaxSize(),
-            enter = slideInVertically(tween(400, easing = EmphasizedDecelerate)) { it } + fadeIn(tween(240)),
-            exit = slideOutVertically(tween(300, easing = EmphasizedAccelerate)) { it } + fadeOut(tween(220))
-        ) {
-            QueueOverlayContent(
-                currentTrack = track,
-                playbackQueue = playbackQueue,
-                onClose = { showQueue = false },
-                onClearQueue = onClearQueue,
-                onPlayTrackFromQueue = onPlayTrackFromQueue,
-                onMoveQueueItem = onMoveQueueItem,
-                onRemoveFromQueue = onRemoveFromQueue,
-                onAddToPlaylist = onAddToPlaylist,
-                onViewAlbum = onViewAlbum,
-                onViewArtist = onViewArtist,
-                onToggleFavorite = { onToggleFavorite(it) },
-                isFavorite = { isFavorite?.invoke(it) ?: (it.id == track.id && isFavoriteTrack) }
-            )
         }
 
         TrackOptionsMenu(

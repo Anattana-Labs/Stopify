@@ -599,6 +599,25 @@ fun SimpMusicApp(
         onDispose { }
     }
 
+    // Auto queue (Spotify's song radio): whenever a track is playing and fewer than 3 are lined up,
+    // top the queue up from the radio seeded on the current track, so the queue is never empty.
+    val autoTrack = playbackState.currentTrack
+    LaunchedEffect(autoTrack?.uri, playbackQueue.size, isAutoQueueEnabled) {
+        val cur = autoTrack ?: return@LaunchedEffect
+        if (!isAutoQueueEnabled || playbackQueue.size >= 3) return@LaunchedEffect
+        if (cur.uri.startsWith("spotify:episode:")) return@LaunchedEffect
+        kotlinx.coroutines.delay(1200)
+        if (playbackQueue.size >= 3) return@LaunchedEffect
+        val auto = try {
+            client.fetchAutoplayQueue(cur, (playbackHistory.take(30) + previousTracks.takeLast(20)).map { it.uri }.toSet())
+        } catch (e: Exception) { emptyList() }
+        val fresh = auto.filter { a -> a.uri != cur.uri && playbackQueue.none { q -> q.uri == a.uri } }
+        if (fresh.isNotEmpty()) {
+            playbackQueue.addAll(fresh)
+            client.preResolveTrack(playbackQueue.first().uri)
+        }
+    }
+
     /**
      * Plays a list (album, playlist, artist top songs, podcast episodes) from [startIndex]: the songs after it
      * become the queue in order (shuffled when asked), so the rest of the context plays before autoplay takes over.
