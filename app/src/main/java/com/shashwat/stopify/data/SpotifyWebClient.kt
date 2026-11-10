@@ -299,6 +299,8 @@ class SpotifyWebClient {
     var nextTrackFromStateMachine: SpotifyTrack? = null
         internal set
     val stateMachineQueueTracks = CopyOnWriteArrayList<SpotifyTrack>()
+    /** The track the current [stateMachineQueueTracks] were produced for (Spotify answers this on the playback report). */
+    @Volatile var stateMachineForUri: String? = null
     @Volatile
     private var stateSeqNum: Int = 2
     @Volatile
@@ -626,6 +628,7 @@ class SpotifyWebClient {
             if (upcoming.isNotEmpty()) {
                 stateMachineQueueTracks.clear()
                 stateMachineQueueTracks.addAll(upcoming)
+                stateMachineForUri = filterUri
                 Log.d(TAG, "Updated state_machine autoqueue with ${upcoming.size} tracks: ${upcoming.map { it.name }}")
             }
         } catch (e: Exception) {
@@ -2476,8 +2479,13 @@ class SpotifyWebClient {
             fun ok(t: SpotifyTrack) = t.uri != currentTrack.uri && t.uri !in excludeUris &&
                 !t.name.equals(currentTrack.name, ignoreCase = true)
 
-            // 1. Spotify's own autoplay list, but only when it was produced for this very track.
-            if (lastConnectPlayTrackUri == currentTrack.uri) {
+            // 1. Spotify's own autoplay list (the one the web player shows): it arrives with the answer to
+            //    the playback report for this track, so wait for it before guessing anything else.
+            if (!currentTrack.uri.startsWith("spotify:episode:")) {
+                val deadline = System.currentTimeMillis() + 8000
+                while (System.currentTimeMillis() < deadline && stateMachineForUri != currentTrack.uri) delay(250)
+            }
+            if (stateMachineForUri == currentTrack.uri) {
                 val sm = stateMachineQueueTracks.toList().filter { ok(it) }
                 if (sm.isNotEmpty()) return@withContext sm
                 nextTrackFromStateMachine?.takeIf { ok(it) }?.let { return@withContext listOf(it) }

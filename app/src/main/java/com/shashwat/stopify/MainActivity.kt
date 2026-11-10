@@ -484,16 +484,6 @@ fun SimpMusicApp(
             }
             playbackQueue.firstOrNull()?.let { nextQ -> launch { client.preResolveTrack(nextQ.uri) } }
 
-            if (isAutoQueueEnabled && playbackQueue.size < 3) {
-                launch {
-                    val autoTracks = client.fetchAutoplayQueue(track, (playbackHistory.take(30) + previousTracks.takeLast(20)).map { it.uri }.toSet())
-                    val filtered = autoTracks.filter { it.uri != track.uri && playbackQueue.none { q -> q.uri == it.uri } }
-                    if (filtered.isNotEmpty()) {
-                        playbackQueue.addAll(filtered)
-                        client.preResolveTrack(filtered.first().uri)
-                    }
-                }
-            }
         }
     }
 
@@ -589,30 +579,34 @@ fun SimpMusicApp(
             coroutineScope.launch {
                 client.reportPlaybackToApi(finished, finished.durationMs, prefs, isFinished = true)
                 client.reportPlaybackToApi(started, 0L, prefs)
-                if (isAutoQueueEnabled && playbackQueue.size < 3) {
-                    val auto = client.fetchAutoplayQueue(started, (playbackHistory.take(30) + previousTracks.takeLast(20)).map { it.uri }.toSet())
-                    playbackQueue.addAll(auto.filter { a -> a.uri != started.uri && playbackQueue.none { q -> q.uri == a.uri } })
-                }
             }
         }
         // Callbacks stay registered when the activity goes away: playback must keep advancing with the screen off.
         onDispose { }
     }
 
-    // Auto queue (Spotify's song radio): whenever a track is playing and fewer than 3 are lined up,
-    // top the queue up from the radio seeded on the current track, so the queue is never empty.
+    // Auto queue: the list Spotify's own player shows after the playing track. It is read from the
+    // playback report's answer; on every new track the earlier auto picks are replaced by it, anything
+    // the user queued stays.
+    val autoAdded = remember { mutableSetOf<String>() }
+    var autoSeed by remember { mutableStateOf<String?>(null) }
     val autoTrack = playbackState.currentTrack
     LaunchedEffect(autoTrack?.uri, playbackQueue.size, isAutoQueueEnabled) {
         val cur = autoTrack ?: return@LaunchedEffect
-        if (!isAutoQueueEnabled || playbackQueue.size >= 3) return@LaunchedEffect
-        if (cur.uri.startsWith("spotify:episode:")) return@LaunchedEffect
-        kotlinx.coroutines.delay(1200)
-        if (playbackQueue.size >= 3) return@LaunchedEffect
+        if (!isAutoQueueEnabled || cur.uri.startsWith("spotify:episode:")) return@LaunchedEffect
+        val newSeed = autoSeed != cur.uri
+        if (!newSeed && playbackQueue.size >= 3) return@LaunchedEffect
         val auto = try {
             client.fetchAutoplayQueue(cur, (playbackHistory.take(30) + previousTracks.takeLast(20)).map { it.uri }.toSet())
         } catch (e: Exception) { emptyList() }
+        autoSeed = cur.uri
+        if (newSeed && auto.isNotEmpty()) {
+            playbackQueue.removeAll { it.uri in autoAdded }
+            autoAdded.clear()
+        }
         val fresh = auto.filter { a -> a.uri != cur.uri && playbackQueue.none { q -> q.uri == a.uri } }
         if (fresh.isNotEmpty()) {
+            autoAdded.addAll(fresh.map { it.uri })
             playbackQueue.addAll(fresh)
             client.preResolveTrack(playbackQueue.first().uri)
         }
