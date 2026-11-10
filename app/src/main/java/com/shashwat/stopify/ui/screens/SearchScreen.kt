@@ -42,7 +42,8 @@ enum class SearchFilter(val label: String) {
     SONGS("Songs"),
     ALBUMS("Albums"),
     ARTISTS("Artists"),
-    PLAYLISTS("Playlists")
+    PLAYLISTS("Playlists"),
+    PODCASTS("Podcasts")
 }
 
 data class BrowseCategory(val title: String, val gradientColors: List<Color>)
@@ -81,6 +82,17 @@ fun SimpSearchScreen(
     var selectedOptionTrack by remember { mutableStateOf<SpotifyTrack?>(null) }
     var selectedFilter by remember { mutableStateOf(SearchFilter.ALL) }
 
+    // Debounced search as you type; clearing the field clears the results too.
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isBlank()) onSearch("")
+        else if (searchQuery.length >= 2) {
+            kotlinx.coroutines.delay(350)
+            onSearch(searchQuery)
+        }
+    }
+
+    val podcasts = remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.PODCAST } }
+    val episodes = remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.EPISODE } }
     val artists = remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.ARTIST } }
     val albums = remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.ALBUM } }
     val playlists = remember(searchResults) { searchResults.filter { it.type == SpotifyItemType.PLAYLIST } }
@@ -106,7 +118,6 @@ fun SimpSearchScreen(
                 value = searchQuery,
                 onValueChange = {
                     onQueryChange(it)
-                    if (it.length >= 2) onSearch(it)
                 },
                 placeholder = {
                     Text(
@@ -255,6 +266,44 @@ fun SimpSearchScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 180.dp)
                 ) {
+                    // Top result
+                    if (selectedFilter == SearchFilter.ALL && searchResults.isNotEmpty()) {
+                        item {
+                            val top = searchResults.first()
+                            Text("Top result", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(glassFill(1.4f))
+                                    .clickable { onMediaItemClick(top) }
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                coil.compose.AsyncImage(
+                                    model = top.coverUrl,
+                                    contentDescription = null,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(76.dp)
+                                        .clip(if (top.type == SpotifyItemType.ARTIST) CircleShape else RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                )
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(top.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 2)
+                                    Text(
+                                        listOf(top.type.name.lowercase().replaceFirstChar { it.uppercase() }, top.subtitle.takeIf { it.isNotBlank() && it != "Artist" }).filterNotNull().joinToString(" · "),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // 1. Artists Section
                     if ((selectedFilter == SearchFilter.ALL || selectedFilter == SearchFilter.ARTISTS) && artists.isNotEmpty()) {
                         item {
@@ -315,7 +364,34 @@ fun SimpSearchScreen(
                         }
                     }
 
-                    // 4. Songs Section
+                    // 4. Podcasts and episodes
+                    if ((selectedFilter == SearchFilter.ALL || selectedFilter == SearchFilter.PODCASTS) && podcasts.isNotEmpty()) {
+                        item {
+                            Text("Podcasts", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                items(podcasts) { show -> SimpSquareCard(item = show, onClick = { onMediaItemClick(show) }) }
+                            }
+                        }
+                    }
+                    if ((selectedFilter == SearchFilter.ALL || selectedFilter == SearchFilter.PODCASTS) && episodes.isNotEmpty()) {
+                        item {
+                            Text("Episodes", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                        }
+                        items(episodes) { ep ->
+                            val track = ep.toTrack().copy(artist = ep.subtitle, album = ep.subtitle)
+                            val isCurrent = playbackState.currentTrack?.uri == track.uri
+                            SimpTrackItem(
+                                track = track,
+                                isPlaying = isCurrent && playbackState.isPlaying,
+                                isCurrentTrack = isCurrent,
+                                onClick = { onPlayTrack(track) },
+                                onMoreClick = { selectedOptionTrack = track }
+                            )
+                        }
+                    }
+
+                    // 5. Songs Section
                     if ((selectedFilter == SearchFilter.ALL || selectedFilter == SearchFilter.SONGS) && songs.isNotEmpty()) {
                         item {
                             Text(

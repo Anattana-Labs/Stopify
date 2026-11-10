@@ -43,6 +43,9 @@ import com.shashwat.stopify.data.SpotifyItemType
 import com.shashwat.stopify.data.SpotifyMediaItem
 import com.shashwat.stopify.data.SpotifyTrack
 import com.shashwat.stopify.data.SpotifyWebClient
+import com.shashwat.stopify.data.SpotifyArtistPage
+import com.shashwat.stopify.data.fetchArtistPage
+import com.shashwat.stopify.ui.components.SimpArtistCircleCard
 import com.shashwat.stopify.player.PlaybackState
 import com.shashwat.stopify.ui.components.M3ExpressiveShimmerTrack
 import com.shashwat.stopify.ui.components.SimpSquareCard
@@ -58,290 +61,334 @@ fun SimpArtistScreen(
     playbackState: PlaybackState,
     onBack: () -> Unit,
     onPlayTrack: (SpotifyTrack) -> Unit,
+    onPlayContext: (tracks: List<SpotifyTrack>, startIndex: Int, shuffle: Boolean) -> Unit = { l, i, _ -> l.getOrNull(i)?.let(onPlayTrack) },
+    onTogglePlayback: () -> Unit = {},
     onPlayNext: (SpotifyTrack) -> Unit,
     onAddToQueue: (SpotifyTrack) -> Unit,
     onAddToPlaylist: (SpotifyTrack) -> Unit,
     onViewAlbum: (String) -> Unit,
+    onViewArtist: (artistUri: String, artistName: String) -> Unit = { _, _ -> },
     onToggleFavorite: (SpotifyTrack) -> Unit = {},
     isFavorite: (SpotifyTrack) -> Boolean = { false },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var topTracks by remember { mutableStateOf<List<SpotifyTrack>>(emptyList()) }
-    var albums by remember { mutableStateOf<List<SpotifyMediaItem>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    val scheme = MaterialTheme.colorScheme
+    var page by remember(artistUri) { mutableStateOf<SpotifyArtistPage?>(null) }
+    var isLoading by remember(artistUri) { mutableStateOf(true) }
+    var failed by remember(artistUri) { mutableStateOf(false) }
+    var reloadKey by remember(artistUri) { mutableIntStateOf(0) }
+    var showAllTracks by remember(artistUri) { mutableStateOf(false) }
+    var releaseFilter by remember(artistUri) { mutableStateOf("All") }
     var selectedOptionTrack by remember { mutableStateOf<SpotifyTrack?>(null) }
-    var currentCoverUrl by remember(artistUri, artistCoverUrl) { mutableStateOf(artistCoverUrl) }
     var coverTint by remember(artistUri) { mutableStateOf<Color?>(null) }
 
-    LaunchedEffect(artistUri, artistName) {
+    LaunchedEffect(artistUri, reloadKey) {
         isLoading = true
-        // 1. Fetch avatar if not provided
-        if (currentCoverUrl.isNullOrEmpty()) {
-            val avatarRes = client.fetchArtistAvatar(artistUri, artistName)
-            if (avatarRes.isSuccess && !avatarRes.getOrNull().isNullOrEmpty()) {
-                currentCoverUrl = avatarRes.getOrNull()
-            }
-        }
-
-        // 2. Fetch popular tracks
-        val tracksRes = client.fetchArtistTopTracks(artistUri, artistName)
-        if (tracksRes.isSuccess) {
-            topTracks = tracksRes.getOrThrow()
-            if (currentCoverUrl.isNullOrEmpty() && topTracks.isNotEmpty()) {
-                currentCoverUrl = topTracks.firstOrNull()?.coverUrl
-            }
-        }
-
-        // 3. Fetch albums
-        val albumsRes = client.searchMulti(artistName, SpotifyItemType.ALBUM)
-        if (albumsRes.isSuccess) {
-            val all = albumsRes.getOrThrow().filter { it.type == SpotifyItemType.ALBUM }
-            val mine = all.filter { it.subtitle.contains(artistName.trim(), ignoreCase = true) }
-            albums = if (mine.isNotEmpty()) mine else all
-        }
+        failed = false
+        val res = client.fetchArtistPage(artistUri)
+        if (res.isSuccess) page = res.getOrThrow() else failed = page == null
         isLoading = false
     }
 
-    // Palette extraction for tint
-    LaunchedEffect(currentCoverUrl) {
-        if (!currentCoverUrl.isNullOrEmpty()) {
+    val avatar = page?.avatarUrl ?: artistCoverUrl
+    val name = page?.name ?: artistName
+    val topTracks = page?.topTracks.orEmpty()
+
+    LaunchedEffect(avatar) {
+        if (!avatar.isNullOrEmpty()) {
             try {
-                val req = ImageRequest.Builder(context)
-                    .data(currentCoverUrl)
-                    .allowHardware(false)
-                    .build()
+                val req = ImageRequest.Builder(context).data(avatar).allowHardware(false).build()
                 val result = context.imageLoader.execute(req)
                 if (result is SuccessResult) {
                     val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
                     if (bitmap != null) {
                         val palette = Palette.from(bitmap).generate()
-                        val rgb = palette.vibrantSwatch?.rgb
-                            ?: palette.dominantSwatch?.rgb
-                            ?: palette.mutedSwatch?.rgb
-                        if (rgb != null) {
-                            coverTint = Color(rgb)
-                        }
+                        val rgb = palette.vibrantSwatch?.rgb ?: palette.dominantSwatch?.rgb ?: palette.mutedSwatch?.rgb
+                        if (rgb != null) coverTint = Color(rgb)
                     }
                 }
-            } catch (e: Exception) {
-                // Fallback to theme primary
-            }
+            } catch (e: Exception) { }
         }
     }
 
-    val dynamicTint = if (LocalDynamicColors.current) (coverTint ?: MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.primary
+    val tint = if (LocalDynamicColors.current) (coverTint ?: scheme.primary) else scheme.primary
     val isThisPlaying = topTracks.any { it.uri == playbackState.currentTrack?.uri } && playbackState.isPlaying
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
+            .background(scheme.background)
     ) {
-        // Ambient background glow using cover tint
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(400.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            dynamicTint.copy(alpha = 0.45f),
-                            dynamicTint.copy(alpha = 0.15f),
-                            MaterialTheme.colorScheme.background
+        // Header image (or tinted wash) fading into the page
+        Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
+            val hero = page?.headerUrl
+            if (!hero.isNullOrEmpty()) {
+                AsyncImage(model = hero, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                tint.copy(alpha = if (hero.isNullOrEmpty()) 0.50f else 0.18f),
+                                scheme.background.copy(alpha = 0.55f),
+                                scheme.background
+                            )
                         )
                     )
-                )
-        )
+            )
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 180.dp)
+            contentPadding = PaddingValues(bottom = 200.dp)
         ) {
-            // Top App Bar
             item {
-                Box(Modifier.padding(horizontal = PrismTokens.Space.gutter, vertical = 10.dp)) {
+                Box(Modifier.statusBarsPadding().padding(horizontal = PrismTokens.Space.gutter, vertical = 10.dp)) {
                     RoundAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
                 }
             }
 
-            // Hero Circular Avatar & Info Header
+            // Identity
             item {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Circular portrait, lifted off the tinted ground
                     Box(
                         modifier = Modifier
                             .padding(vertical = 8.dp)
-                            .size(168.dp)
-                            .shadow(24.dp, CircleShape, spotColor = dynamicTint.copy(alpha = 0.45f))
+                            .size(176.dp)
+                            .shadow(24.dp, CircleShape, spotColor = tint.copy(alpha = 0.5f))
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            .background(scheme.surfaceContainerHighest)
                     ) {
-                        if (!currentCoverUrl.isNullOrEmpty()) {
-                            AsyncImage(
-                                model = currentCoverUrl,
-                                contentDescription = artistName,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                        if (!avatar.isNullOrEmpty()) {
+                            AsyncImage(model = avatar, contentDescription = name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                         } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .align(Alignment.Center)
-                            )
+                            Icon(Icons.Rounded.Person, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(80.dp).align(Alignment.Center))
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
+                    Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "Artist",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        if (page?.verified == true) "Verified artist" else "Artist",
+                        style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant
                     )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = artistName,
+                        text = name,
                         style = MaterialTheme.typography.headlineLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = scheme.onSurface,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // SimpMusic Action Row: [Shuffle Circle] [Play Pill]
+                    page?.monthlyListeners?.let {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "${"%,d".format(it)} monthly listeners",
+                            style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.height(20.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Shuffle Button
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(glassFill(1.6f))
-                                .border(1.dp, glassEdge(), CircleShape)
-                                .clickable(role = Role.Button, onClickLabel = "Shuffle") {
-                                    topTracks.shuffled().firstOrNull()?.let { onPlayTrack(it) }
+                                .size(48.dp).clip(CircleShape)
+                                .background(glassFill(1.6f)).border(1.dp, glassEdge(), CircleShape)
+                                .clickable(enabled = topTracks.isNotEmpty(), role = Role.Button, onClickLabel = "Shuffle") {
+                                    onPlayContext(topTracks, 0, true)
                                 },
                             contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Shuffle,
-                                contentDescription = "Shuffle",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        // Play Pill Button
+                        ) { Icon(Icons.Rounded.Shuffle, "Shuffle", tint = scheme.onSurface, modifier = Modifier.size(22.dp)) }
                         Box(
                             modifier = Modifier
-                                 .height(48.dp)
-                                 .widthIn(min = 130.dp)
-                                 .clip(CircleShape)
-                                 .background(MaterialTheme.colorScheme.onSurface)
-                                 .clickable {
-                                     topTracks.firstOrNull()?.let { onPlayTrack(it) }
-                                 }
-                                 .padding(horizontal = 24.dp),
+                                .height(48.dp).widthIn(min = 130.dp).clip(CircleShape)
+                                .background(scheme.onSurface)
+                                .clickable(enabled = topTracks.isNotEmpty()) {
+                                    if (isThisPlaying) onTogglePlayback() else onPlayContext(topTracks, 0, false)
+                                }
+                                .padding(horizontal = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (isThisPlaying) "Pause" else "Play",
-                                    color = MaterialTheme.colorScheme.surface,
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
+                                Icon(if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = scheme.surface, modifier = Modifier.size(24.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (isThisPlaying) "Pause" else "Play", color = scheme.surface, style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(28.dp))
+                    Spacer(Modifier.height(28.dp))
                 }
             }
 
-            // Popular Tracks Header
-            item {
-                Text(
-                    text = "Popular Tracks",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = PrismTokens.Space.gutter, vertical = 8.dp)
-                )
-            }
-
-            if (isLoading) {
-                items(5) {
-                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        M3ExpressiveShimmerTrack()
+            if (failed) {
+                item {
+                    Column(
+                        Modifier.fillMaxWidth().padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Couldn't load this artist", style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
+                        Spacer(Modifier.height(12.dp))
+                        Box(
+                            Modifier.height(44.dp).clip(CircleShape).background(scheme.onSurface)
+                                .clickable { reloadKey++ }.padding(horizontal = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) { Text("Retry", color = scheme.surface, style = MaterialTheme.typography.labelLarge) }
                     }
                 }
-            } else {
-                val fallbackCover = topTracks.firstOrNull { !it.coverUrl.isNullOrEmpty() }?.coverUrl ?: currentCoverUrl
-                itemsIndexed(topTracks) { _, rawTrack ->
-                    // A song without its own artwork borrows the artist's, so every row has a thumbnail
-                    val track = if (rawTrack.coverUrl.isNullOrEmpty()) rawTrack.copy(coverUrl = fallbackCover) else rawTrack
+            }
+
+            if (isLoading && page == null) {
+                items(5) { Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { M3ExpressiveShimmerTrack() } }
+            }
+
+            // Popular
+            if (topTracks.isNotEmpty()) {
+                item {
+                    Text(
+                        "Popular", style = MaterialTheme.typography.titleLarge, color = scheme.onSurface,
+                        modifier = Modifier.padding(horizontal = PrismTokens.Space.gutter, vertical = 8.dp)
+                    )
+                }
+                val shown = if (showAllTracks) topTracks else topTracks.take(5)
+                itemsIndexed(shown) { index, track ->
                     val isCurrent = playbackState.currentTrack?.uri == track.uri
                     SimpTrackItem(
                         track = track,
+                        index = index + 1,
+                        showCover = true,
                         isPlaying = isCurrent && playbackState.isPlaying,
                         isCurrentTrack = isCurrent,
-                        onClick = { onPlayTrack(track) },
+                        onClick = { onPlayContext(topTracks, index, false) },
                         onMoreClick = { selectedOptionTrack = track }
                     )
                 }
-
-                // Albums & Discography
-                if (albums.isNotEmpty()) {
+                if (topTracks.size > 5) {
                     item {
-                        Spacer(modifier = Modifier.height(20.dp))
                         Text(
-                            text = "Albums & Singles",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                            if (showAllTracks) "Show less" else "Show more",
+                            style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(horizontal = PrismTokens.Space.gutter, vertical = 6.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { showAllTracks = !showAllTracks }
+                                .padding(horizontal = 8.dp, vertical = 8.dp)
                         )
+                    }
+                }
+            }
 
+            // Discography
+            val releases = page?.releases.orEmpty()
+            if (releases.isNotEmpty()) {
+                val kinds = listOf("Album", "Single", "Ep", "Compilation").filter { f ->
+                    releases.any { it.subtitle.contains(f, ignoreCase = true) }
+                }
+                val filters = listOf("All") + kinds
+                item {
+                    Spacer(Modifier.height(20.dp))
+                    Text(
+                        "Discography", style = MaterialTheme.typography.titleLarge, color = scheme.onSurface,
+                        modifier = Modifier.padding(horizontal = PrismTokens.Space.gutter, vertical = 8.dp)
+                    )
+                    if (kinds.size > 1) {
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             contentPadding = PaddingValues(horizontal = PrismTokens.Space.gutter)
                         ) {
-                            items(albums) { album ->
-                                SimpSquareCard(
-                                    item = album,
-                                    onClick = { onViewAlbum(album.uri) }
-                                )
+                            items(filters) { f ->
+                                val sel = f == releaseFilter
+                                Box(
+                                    Modifier.height(36.dp).clip(CircleShape)
+                                        .background(if (sel) scheme.onSurface else glassFill(1.6f))
+                                        .clickable { releaseFilter = f }
+                                        .padding(horizontal = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        if (f == "All") f else f + "s", style = MaterialTheme.typography.labelLarge,
+                                        color = if (sel) scheme.surface else scheme.onSurface
+                                    )
+                                }
                             }
                         }
+                        Spacer(Modifier.height(12.dp))
                     }
+                }
+                item {
+                    val list = if (releaseFilter == "All") releases else releases.filter { it.subtitle.contains(releaseFilter, ignoreCase = true) }
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(horizontal = PrismTokens.Space.gutter)
+                    ) {
+                        items(list, key = { it.uri }) { album -> SimpSquareCard(item = album, onClick = { onViewAlbum(album.uri) }) }
+                    }
+                }
+            }
+
+            val appearsOn = page?.appearsOn.orEmpty()
+            if (appearsOn.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        "Appears on", style = MaterialTheme.typography.titleLarge, color = scheme.onSurface,
+                        modifier = Modifier.padding(horizontal = PrismTokens.Space.gutter, vertical = 8.dp)
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(horizontal = PrismTokens.Space.gutter)
+                    ) {
+                        items(appearsOn, key = { it.uri }) { album -> SimpSquareCard(item = album, onClick = { onViewAlbum(album.uri) }) }
+                    }
+                }
+            }
+
+            val related = page?.relatedArtists.orEmpty()
+            if (related.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        "Fans also like", style = MaterialTheme.typography.titleLarge, color = scheme.onSurface,
+                        modifier = Modifier.padding(horizontal = PrismTokens.Space.gutter, vertical = 8.dp)
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(horizontal = PrismTokens.Space.gutter)
+                    ) {
+                        items(related, key = { it.uri }) { a -> SimpArtistCircleCard(item = a, onClick = { onViewArtist(a.uri, a.name) }) }
+                    }
+                }
+            }
+
+            page?.biography?.let { bio ->
+                item {
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        "About", style = MaterialTheme.typography.titleLarge, color = scheme.onSurface,
+                        modifier = Modifier.padding(horizontal = PrismTokens.Space.gutter, vertical = 8.dp)
+                    )
+                    var expanded by remember(artistUri) { mutableStateOf(false) }
+                    Text(
+                        bio,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = if (expanded) Int.MAX_VALUE else 5,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(horizontal = PrismTokens.Space.gutter)
+                            .clickable { expanded = !expanded }
+                    )
                 }
             }
         }
 
-        // 3-dot Options Menu
         selectedOptionTrack?.let { optTrack ->
             TrackOptionsMenu(
                 expanded = true,
@@ -350,10 +397,7 @@ fun SimpArtistScreen(
                 onPlayNext = { onPlayNext(optTrack) },
                 onAddToQueue = { onAddToQueue(optTrack) },
                 onAddToPlaylist = { onAddToPlaylist(optTrack) },
-                onViewAlbum = {
-                    val alb = optTrack.albumUri ?: if (optTrack.album.isNotBlank()) "spotify:album:${optTrack.id}" else null
-                    if (alb != null) onViewAlbum(alb)
-                },
+                onViewAlbum = { optTrack.albumUri?.let { onViewAlbum(it) } },
                 onToggleFavorite = { onToggleFavorite(optTrack) },
                 isFavorite = isFavorite(optTrack)
             )

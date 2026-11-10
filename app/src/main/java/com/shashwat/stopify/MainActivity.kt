@@ -273,6 +273,9 @@ fun SimpMusicApp(
     var viewingArtistUri by remember { mutableStateOf<String?>(null) }
     var viewingArtistName by remember { mutableStateOf<String?>(null) }
     var viewingArtistCover by remember { mutableStateOf<String?>(null) }
+    var viewingShowUri by remember { mutableStateOf<String?>(null) }
+    var viewingShowName by remember { mutableStateOf<String?>(null) }
+    var viewingShowCover by remember { mutableStateOf<String?>(null) }
     var viewingSettings by remember { mutableStateOf(false) }
     var viewingRecents by remember { mutableStateOf(false) }
     var trackToAddToPlaylist by remember { mutableStateOf<SpotifyTrack?>(null) }
@@ -597,12 +600,43 @@ fun SimpMusicApp(
     }
 
     /**
+     * Plays a list (album, playlist, artist top songs, podcast episodes) from [startIndex]: the songs after it
+     * become the queue in order (shuffled when asked), so the rest of the context plays before autoplay takes over.
+     */
+    fun playContext(tracks: List<SpotifyTrack>, startIndex: Int, shuffle: Boolean) {
+        val playable = tracks.filter { it.isPlayable }
+        if (playable.isEmpty()) return
+        val start = tracks.getOrNull(startIndex)?.takeIf { it.isPlayable }
+            ?: playable.first()
+        val rest = playable.filter { it.uri != start.uri }
+        val ordered = if (shuffle) rest.shuffled() else {
+            val at = playable.indexOfFirst { it.uri == start.uri }
+            playable.drop(at + 1)
+        }
+        val first = if (shuffle) playable.random() else start
+        val queueRest = if (shuffle) playable.filter { it.uri != first.uri }.shuffled() else ordered
+        playbackQueue.clear()
+        playbackQueue.addAll(queueRest)
+        playTrackInternal(first)
+    }
+
+    /**
      * Resolves and plays or opens any media item.
      * Songs and albums clicked on Home play immediately!
      */
     fun playMediaItem(item: SpotifyMediaItem, autoPlayAlbums: Boolean = false) {
         if (item.uri.contains(":track:") || item.type == SpotifyItemType.TRACK) {
             playTrackInternal(item.toTrack())
+            return
+        }
+        if (item.uri.contains(":episode:") || item.type == SpotifyItemType.EPISODE) {
+            playTrackInternal(item.toTrack().copy(artist = item.subtitle, album = item.subtitle))
+            return
+        }
+        if (item.uri.contains(":show:") || item.type == SpotifyItemType.PODCAST) {
+            viewingShowUri = item.uri
+            viewingShowName = item.name
+            viewingShowCover = item.coverUrl
             return
         }
         if (item.uri.contains(":artist:") || item.type == SpotifyItemType.ARTIST) {
@@ -777,11 +811,13 @@ fun SimpMusicApp(
     val playlistZ = remember(viewingPlaylistUri) { if (viewingPlaylistUri != null) ++zCounter[0] else 0 }
     val artistZ = remember(viewingArtistUri) { if (viewingArtistUri != null) ++zCounter[0] else 0 }
     val recentsZ = remember(viewingRecents) { if (viewingRecents) ++zCounter[0] else 0 }
+    val showZ = remember(viewingShowUri) { if (viewingShowUri != null) ++zCounter[0] else 0 }
 
     // Back handling
-    BackHandler(enabled = viewingRecents || viewingSettings || viewingAlbumUri != null || viewingPlaylistUri != null || viewingArtistUri != null) {
-        val top = maxOf(maxOf(settingsZ, albumZ), maxOf(maxOf(playlistZ, artistZ), recentsZ))
+    BackHandler(enabled = viewingShowUri != null || viewingRecents || viewingSettings || viewingAlbumUri != null || viewingPlaylistUri != null || viewingArtistUri != null) {
+        val top = maxOf(maxOf(settingsZ, albumZ), maxOf(maxOf(playlistZ, artistZ), maxOf(recentsZ, showZ)))
         when (top) {
+            showZ -> viewingShowUri = null
             recentsZ -> viewingRecents = false
             settingsZ -> viewingSettings = false
             albumZ -> viewingAlbumUri = null
@@ -931,6 +967,7 @@ fun SimpMusicApp(
                     onViewArtist = { artistUri, artistName ->
                         viewingArtistUri = artistUri
                         viewingArtistName = artistName
+                        viewingArtistCover = null
                     },
                     onToggleFavorite = onToggleFavoriteLambda,
                     isFavorite = { favoriteTrackIds.contains(it.id) }
@@ -962,8 +999,12 @@ fun SimpMusicApp(
                             viewingArtistUri = uri
                             viewingArtistName = name
                             viewingArtistCover = null
-                        } else if (uri.contains(":show:") || uri.contains(":audiobook:")) {
-                            statusLog = "Podcasts and audiobooks aren't playable here yet"
+                        } else if (uri.contains(":show:")) {
+                            viewingShowUri = uri
+                            viewingShowName = name
+                            viewingShowCover = null
+                        } else if (uri.contains(":audiobook:")) {
+                            statusLog = "Audiobooks aren't playable here yet"
                         } else {
                             viewingPlaylistUri = uri
                         }
@@ -981,6 +1022,7 @@ fun SimpMusicApp(
                     onViewArtist = { artistUri, artistName ->
                         viewingArtistUri = artistUri
                         viewingArtistName = artistName
+                        viewingArtistCover = null
                     },
                     onToggleFavorite = onToggleFavoriteLambda,
                     isFavorite = { favoriteTrackIds.contains(it.id) },
@@ -1004,6 +1046,8 @@ fun SimpMusicApp(
                     playbackState = playbackState,
                     onBack = { viewingAlbumUri = null },
                     onPlayTrack = { playTrackInternal(it) },
+                    onPlayContext = { l, i, sh -> playContext(l, i, sh) },
+                    onTogglePlayback = { player.togglePlayPause() },
                     onPlayNext = { track ->
                         playbackQueue.add(0, track)
                         statusLog = "'${track.name}' will play next"
@@ -1016,6 +1060,7 @@ fun SimpMusicApp(
                     onViewArtist = { artistUri, artistName ->
                         viewingArtistUri = artistUri
                         viewingArtistName = artistName
+                        viewingArtistCover = null
                     },
                     onToggleFavorite = onToggleFavoriteLambda,
                     isFavorite = { favoriteTrackIds.contains(it.id) }
@@ -1036,6 +1081,8 @@ fun SimpMusicApp(
                     playbackState = playbackState,
                     onBack = { viewingPlaylistUri = null },
                     onPlayTrack = { playTrackInternal(it) },
+                    onPlayContext = { l, i, sh -> playContext(l, i, sh) },
+                    onTogglePlayback = { player.togglePlayPause() },
                     onPlayNext = { track ->
                         playbackQueue.add(0, track)
                         statusLog = "'${track.name}' will play next"
@@ -1049,6 +1096,7 @@ fun SimpMusicApp(
                     onViewArtist = { artistUri, artistName ->
                         viewingArtistUri = artistUri
                         viewingArtistName = artistName
+                        viewingArtistCover = null
                     },
                     onToggleFavorite = onToggleFavoriteLambda,
                     isFavorite = { favoriteTrackIds.contains(it.id) }
@@ -1071,6 +1119,9 @@ fun SimpMusicApp(
                     playbackState = playbackState,
                     onBack = { viewingArtistUri = null },
                     onPlayTrack = { playTrackInternal(it) },
+                    onPlayContext = { l, i, sh -> playContext(l, i, sh) },
+                    onTogglePlayback = { player.togglePlayPause() },
+                    onViewArtist = { u, n -> viewingArtistUri = u; viewingArtistName = n; viewingArtistCover = null },
                     onPlayNext = { track ->
                         playbackQueue.add(0, track)
                         statusLog = "'${track.name}' will play next"
@@ -1083,6 +1134,34 @@ fun SimpMusicApp(
                     onViewAlbum = { viewingAlbumUri = it },
                     onToggleFavorite = onToggleFavoriteLambda,
                     isFavorite = { favoriteTrackIds.contains(it.id) }
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = viewingShowUri != null,
+            modifier = Modifier.fillMaxSize().zIndex(showZ.toFloat()),
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+        ) {
+            viewingShowUri?.let { shUri ->
+                SimpShowScreen(
+                    showUri = shUri,
+                    showName = viewingShowName ?: "Podcast",
+                    showCoverUrl = viewingShowCover,
+                    client = client,
+                    playbackState = playbackState,
+                    onBack = { viewingShowUri = null },
+                    onPlayContext = { l, i, sh -> playContext(l, i, sh) },
+                    onTogglePlayback = { player.togglePlayPause() },
+                    onPlayNext = { track ->
+                        playbackQueue.add(0, track)
+                        statusLog = "'${track.name}' will play next"
+                    },
+                    onAddToQueue = { track ->
+                        playbackQueue.add(track)
+                        statusLog = "Added '${track.name}' to queue"
+                    }
                 )
             }
         }
@@ -1118,6 +1197,7 @@ fun SimpMusicApp(
                 onViewArtist = { artistUri, artistName ->
                     viewingArtistUri = artistUri
                     viewingArtistName = artistName
+                        viewingArtistCover = null
                 },
                 onToggleFavorite = onToggleFavoriteLambda,
                 isFavorite = { favoriteTrackIds.contains(it.id) }
@@ -1156,6 +1236,7 @@ fun SimpMusicApp(
                 onViewArtist = { artistUri, artistName ->
                     viewingArtistUri = artistUri
                     viewingArtistName = artistName
+                        viewingArtistCover = null
                 },
                 onToggleFavorite = onToggleFavoriteLambda,
                 isFavorite = { favoriteTrackIds.contains(it.id) },
@@ -1305,6 +1386,7 @@ fun SimpMusicApp(
                         showFullPlayer = false
                         viewingArtistUri = artistUri
                         viewingArtistName = artistName
+                        viewingArtistCover = null
                         viewingArtistCover = playbackState.currentTrack?.coverUrl
                     },
                     onToggleFavorite = onToggleFavoriteLambda,

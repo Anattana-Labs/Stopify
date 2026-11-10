@@ -27,6 +27,7 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.Role
 import com.shashwat.stopify.ui.components.RoundAction
+import com.shashwat.stopify.ui.components.PrismChip
 import com.shashwat.stopify.ui.components.ScreenHeader
 import com.shashwat.stopify.ui.components.SectionHeader
 import com.shashwat.stopify.ui.components.SpectrumLine
@@ -72,6 +73,21 @@ fun SimpHomeScreen(
         }
     }
     val firstName = userProfile?.displayName?.trim()?.substringBefore(' ').orEmpty()
+    var homeFilter by remember { mutableStateOf("All") }
+    fun isPodcast(i: SpotifyMediaItem) = i.type == SpotifyItemType.PODCAST || i.type == SpotifyItemType.EPISODE
+    val sections = remember(homeData, homeFilter) {
+        val all = homeData?.sections.orEmpty()
+        when (homeFilter) {
+            "Podcasts" -> all.mapNotNull { sec -> sec.items.filter { isPodcast(it) }.takeIf { it.isNotEmpty() }?.let { sec.copy(items = it) } }
+            "Music" -> all.mapNotNull { sec -> sec.items.filter { !isPodcast(it) }.takeIf { it.isNotEmpty() }?.let { sec.copy(items = it) } }
+            else -> all
+        }
+    }
+    val quickPicks = remember(homeData) {
+        homeData?.sections.orEmpty().flatMap { it.items }
+            .filter { it.type != SpotifyItemType.ARTIST && !it.coverUrl.isNullOrEmpty() }
+            .distinctBy { it.uri }.take(6)
+    }
 
     LazyColumn(
         state = listState,
@@ -117,6 +133,29 @@ fun SimpHomeScreen(
             }
         }
 
+        // Filter chips: music / podcasts
+        item(key = "filters") {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(listOf("All", "Music", "Podcasts")) { f ->
+                    PrismChip(selected = homeFilter == f, label = f, onClick = { homeFilter = f })
+                }
+            }
+        }
+
+        // Quick picks: compact two-column tiles
+        if (homeFilter == "All" && quickPicks.size >= 4) {
+            item(key = "quick") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    quickPicks.chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            pair.forEach { q -> QuickTile(q, Modifier.weight(1f)) { onMediaItemClick(q) } }
+                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+
         // Resume slab: the last thing you played
         recentlyPlayed.firstOrNull()?.let { last ->
             item(key = "resume") {
@@ -138,8 +177,8 @@ fun SimpHomeScreen(
         }
 
         // Shelves
-        if (homeData != null && homeData.sections.isNotEmpty()) {
-            items(homeData.sections) { section ->
+        if (homeData != null && sections.isNotEmpty()) {
+            items(sections) { section ->
                 val isArtistShelf = section.items.isNotEmpty() &&
                         section.items.all { it.type == SpotifyItemType.ARTIST || it.uri.contains(":artist:") }
                 Column {
@@ -293,5 +332,28 @@ private fun Cover(url: String?, size: androidx.compose.ui.unit.Dp, radius: andro
         } else {
             Icon(Icons.Rounded.Album, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(size / 2))
         }
+    }
+}
+
+@Composable
+private fun QuickTile(item: SpotifyMediaItem, modifier: Modifier, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .height(56.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(scheme.surfaceContainerHigh)
+            .clickable(onClickLabel = "Open ${item.name}") { onClick() },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Cover(url = item.coverUrl, size = 56.dp, radius = 0.dp)
+        Text(
+            text = item.name,
+            style = MaterialTheme.typography.labelLarge,
+            color = scheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 10.dp)
+        )
     }
 }
