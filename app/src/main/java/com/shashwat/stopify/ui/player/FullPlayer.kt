@@ -61,6 +61,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
@@ -198,7 +200,10 @@ fun SimpFullPlayer(
         }
 
         val gutter = 30.dp
-        val contentWidth = minOf(maxWidth - gutter * 2, 560.dp)
+        // One width for cover, credits and controls so every edge lines up: as wide as the
+        // screen allows, but no wider than the cover that fits above the controls.
+        val coverBudget = maxHeight - 32.dp - 320.dp
+        val contentWidth = minOf(maxWidth - gutter * 2, 560.dp, maxOf(coverBudget, 220.dp))
         val thumb = 54.dp
         val headerH = 60.dp
         val topPad = 8.dp
@@ -397,7 +402,37 @@ fun SimpFullPlayer(
                     ImmBare(Icons.Rounded.SkipNext, "Next", 64.dp, 64.dp, onNext)
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(2.dp))
+                val audioCtx = androidx.compose.ui.platform.LocalContext.current
+                val audio = remember { audioCtx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager }
+                val maxVol = remember { audio.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+                var volume by remember { mutableFloatStateOf(audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / maxVol) }
+                var volDragging by remember { mutableStateOf(false) }
+                LaunchedEffect(volDragging) {
+                    while (!volDragging) {
+                        volume = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / maxVol
+                        kotlinx.coroutines.delay(500)
+                    }
+                }
+                Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume down", tint = tint.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(10.dp))
+                    ThinSlider(
+                        value = volume,
+                        onValueChange = {
+                            volDragging = true
+                            volume = it
+                            audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (it * maxVol).roundToInt(), 0)
+                        },
+                        onValueChangeFinished = { volDragging = false },
+                        idleHeight = 6.dp,
+                        activeHeight = 10.dp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume up", tint = tint.copy(alpha = 0.5f), modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.height(4.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
