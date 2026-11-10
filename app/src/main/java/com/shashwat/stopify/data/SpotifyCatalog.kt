@@ -320,6 +320,32 @@ suspend fun SpotifyWebClient.fetchShowEpisodes(showUri: String, showName: String
  * Spotify's "song radio" for a track: the web player asks the inspiredby-mix service for a
  * playlist seeded on the track, which is what its autoplay is made from.
  */
+/**
+ * What open.spotify.com queues after a song played on its own: the context "spotify:station:track:<id>",
+ * resolved by the context-resolve service (about 50 track URIs), then decorated in one pathfinder call.
+ */
+suspend fun SpotifyWebClient.fetchAutoplayStation(trackUri: String): List<SpotifyTrack> {
+    val trackRe = Regex("spotify:track:[A-Za-z0-9]{22}")
+    val id = trackUri.substringAfterLast(":")
+    val sources = listOf(
+        "https://spclient.wg.spotify.com/context-resolve/v1/spotify:station:track:$id",
+        "https://spclient.wg.spotify.com/radio-apollo/v3/stations/$trackUri?autoplay=true"
+    )
+    for (src in sources) {
+        val raw = spGetRaw(src) ?: continue
+        val uris = trackRe.findAll(raw).map { it.value }.distinct().filter { it != trackUri }.take(50).toList()
+        if (uris.isEmpty()) continue
+        val tracks = decorateContextTracks(uris)
+        Log.d(CATALOG_TAG, "Autoplay station for $trackUri: ${uris.size} uris, ${tracks.size} decorated")
+        if (tracks.isNotEmpty()) {
+            // keep Spotify's order
+            val order = uris.withIndex().associate { it.value to it.index }
+            return tracks.sortedBy { order[it.uri] ?: Int.MAX_VALUE }
+        }
+    }
+    return emptyList()
+}
+
 suspend fun SpotifyWebClient.fetchSongRadio(seedUri: String): List<SpotifyTrack> {
     val trackRe = Regex("spotify:track:[A-Za-z0-9]{22}")
     fun urisIn(text: String?): List<String> = text?.let { trackRe.findAll(it).map { m -> m.value }.distinct().toList() }.orEmpty()

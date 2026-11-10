@@ -771,16 +771,17 @@ fun SimpMusicApp(
         }
     }
 
-    // Proactively sync live playback state back to Spotify Connect cluster so browser UI updates
-    LaunchedEffect(playbackState.isPlaying, playbackState.currentTrack?.uri) {
-        val currentTrack = playbackState.currentTrack
-        if (currentTrack != null && !client.connectCluster.value.playingElsewhere) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-            client.connectService.updateConnectClusterState(
-                track = currentTrack,
-                isPlaying = playbackState.isPlaying,
-                positionMs = playbackState.currentPositionMs,
-                deviceId = SpotifyWebClient.getDeviceId(prefs)
-            )
+    // Tell Spotify when playback is paused or resumed (what other devices show). Spotify's own player does
+    // this with the same state report as its progress updates; the first start is reported on load.
+    var lastReportedPlaying by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(playbackState.isPlaying, playbackState.currentTrack?.uri, playbackState.isBuffering) {
+        val t = playbackState.currentTrack ?: return@LaunchedEffect
+        if (client.connectCluster.value.playingElsewhere || playbackState.isBuffering) return@LaunchedEffect
+        val prev = lastReportedPlaying
+        lastReportedPlaying = playbackState.isPlaying
+        if (prev == null || prev == playbackState.isPlaying) return@LaunchedEffect
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            client.reportPauseState(t, player.playbackState.value.currentPositionMs, paused = !playbackState.isPlaying)
         }
     }
 
