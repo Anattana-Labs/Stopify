@@ -264,6 +264,10 @@ fun SimpMusicApp(
     val previousTracks = remember { PlaybackQueueStore.previous }
     val playbackHistory = remember { mutableStateListOf<SpotifyTrack>() }
     var isAutoQueueEnabled by remember { mutableStateOf(true) }
+    // Auto queue bookkeeping: which queue entries were picked by autoplay, and whether the song now
+    // playing was chosen by the user (then autoplay starts fresh for it, unless it came from a group).
+    val autoAdded = remember { mutableSetOf<String>() }
+    var needFreshAuto by remember { mutableStateOf(true) }
     var isShuffle by remember { mutableStateOf(false) }
     var isRepeat by remember { mutableStateOf(false) }
 
@@ -439,7 +443,13 @@ fun SimpMusicApp(
         return true
     }
 
-    fun playTrackInternal(track: SpotifyTrack, addToHistory: Boolean = true, addToPrevious: Boolean = true) {
+    fun playTrackInternal(track: SpotifyTrack, addToHistory: Boolean = true, addToPrevious: Boolean = true, userChosen: Boolean = true) {
+        if (userChosen) {
+            // A song the user picked: the earlier autoplay picks are dropped and a fresh set is made for it.
+            playbackQueue.removeAll { it.uri in autoAdded }
+            autoAdded.clear()
+            needFreshAuto = true
+        }
         if (addToHistory) recordLocalPlay(track)
         // Instantly notify player of loading state so buffering spinners show immediately
         player.notifyLoading(track)
@@ -490,7 +500,7 @@ fun SimpMusicApp(
     fun playNextTrack() {
         if (playbackQueue.isNotEmpty()) {
             val next = playbackQueue.removeAt(if (isShuffle) playbackQueue.indices.random() else 0)
-            playTrackInternal(next)
+            playTrackInternal(next, userChosen = false)
             // Pre-resolve subsequent track
             playbackQueue.firstOrNull()?.let { nextNext ->
                 coroutineScope.launch { client.preResolveTrack(nextNext.uri) }
@@ -508,7 +518,7 @@ fun SimpMusicApp(
                             playbackQueue.addAll(filtered.drop(1))
                             playbackQueue.firstOrNull()?.let { client.preResolveTrack(it.uri) }
                         }
-                        playTrackInternal(next)
+                        playTrackInternal(next, userChosen = false)
                     }
                 }
             }
@@ -520,7 +530,7 @@ fun SimpMusicApp(
             player.seekTo(0L)
         } else if (previousTracks.isNotEmpty()) {
             val prev = previousTracks.removeAt(previousTracks.lastIndex)
-            playTrackInternal(prev, addToPrevious = false)
+            playTrackInternal(prev, addToPrevious = false, userChosen = false)
         } else {
             player.seekTo(0L)
         }
@@ -531,7 +541,7 @@ fun SimpMusicApp(
         player.onTrackCompleted = { completedTrack ->
             coroutineScope.launch {
                 if (isRepeat) {
-                    playTrackInternal(completedTrack, addToHistory = false, addToPrevious = false)
+                    playTrackInternal(completedTrack, addToHistory = false, addToPrevious = false, userChosen = false)
                     return@launch
                 }
                 launch {
@@ -588,22 +598,19 @@ fun SimpMusicApp(
     // Auto queue: the list Spotify's own player shows after the playing track. It is read from the
     // playback report's answer; on every new track the earlier auto picks are replaced by it, anything
     // the user queued stays.
-    val autoAdded = remember { mutableSetOf<String>() }
-    var autoSeed by remember { mutableStateOf<String?>(null) }
     val autoTrack = playbackState.currentTrack
     LaunchedEffect(autoTrack?.uri, playbackQueue.size, isAutoQueueEnabled) {
         val cur = autoTrack ?: return@LaunchedEffect
         if (!isAutoQueueEnabled || cur.uri.startsWith("spotify:episode:")) return@LaunchedEffect
-        val newSeed = autoSeed != cur.uri
-        if (!newSeed && playbackQueue.size >= 3) return@LaunchedEffect
+        if (needFreshAuto) {
+            // Chosen by the user. From a group (album, playlist, own queue): keep that group's order,
+            // autoplay only takes over once it runs out. Alone: make a fresh set for this song.
+            if (playbackQueue.any { it.uri !in autoAdded }) { needFreshAuto = false; return@LaunchedEffect }
+        } else if (playbackQueue.size >= 3) return@LaunchedEffect
         val auto = try {
             client.fetchAutoplayQueue(cur, (playbackHistory.take(30) + previousTracks.takeLast(20)).map { it.uri }.toSet())
         } catch (e: Exception) { emptyList() }
-        autoSeed = cur.uri
-        if (newSeed && auto.isNotEmpty()) {
-            playbackQueue.removeAll { it.uri in autoAdded }
-            autoAdded.clear()
-        }
+        needFreshAuto = false
         val fresh = auto.filter { a -> a.uri != cur.uri && playbackQueue.none { q -> q.uri == a.uri } }
         if (fresh.isNotEmpty()) {
             autoAdded.addAll(fresh.map { it.uri })
@@ -688,6 +695,15 @@ fun SimpMusicApp(
         statusLog = "Selected: ${item.name}"
     }
 
+    // Seeking right after a stream is started is lost; wait until the track is loaded first.
+    suspend fun seekWhenReady(trackId: String, ms: Long) {
+        if (ms <= 0L) return
+        kotlinx.coroutines.withTimeoutOrNull(20_000L) {
+            player.playbackState.first { it.currentTrack?.id == trackId && !it.isBuffering && it.durationMs > 0 && it.error == null }
+        }
+        player.seekTo(ms)
+    }
+
     // Spotify Connect Remote Control sync (handles play/pause/seek/skip from browser, desktop, phone)
     DisposableEffect(client, player) {
         client.onRemoteCommandListener = object : SpotifyRemoteCommandListener {
@@ -706,8 +722,9 @@ fun SimpMusicApp(
                                 durationMs = 0L,
                                 isPlayable = true
                             )
+                            client.invalidateConnectPlay()
                             playTrackInternal(remoteTrack)
-                            seekToMs?.let { if (it > 0) player.seekTo(it) }
+                            seekToMs?.let { seekWhenReady(remoteTrack.id, it) }
                         } else {
                             playMediaItem(SpotifyMediaItem(
                                 id = target.substringAfterLast(":"),
@@ -757,7 +774,7 @@ fun SimpMusicApp(
     // Proactively sync live playback state back to Spotify Connect cluster so browser UI updates
     LaunchedEffect(playbackState.isPlaying, playbackState.currentTrack?.uri) {
         val currentTrack = playbackState.currentTrack
-        if (currentTrack != null) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        if (currentTrack != null && !client.connectCluster.value.playingElsewhere) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
             client.connectService.updateConnectClusterState(
                 track = currentTrack,
                 isPlaying = playbackState.isPlaying,
@@ -915,13 +932,16 @@ fun SimpMusicApp(
                 val wasPlaying = remoteNow?.isPlaying == true
                 remoteId?.let { client.connectControl.pause(it) }
                 if (rt != null) {
-                    playTrackInternal(rt, addToHistory = false, addToPrevious = false)
-                    if (pos > 0) player.seekTo(pos)
+                    // Forget the earlier "play" command for this song, so Spotify makes this device the active one again.
+                    client.invalidateConnectPlay()
+                    playTrackInternal(rt, addToHistory = false, addToPrevious = false, userChosen = false)
+                    seekWhenReady(rt.id, pos)
                     if (!wasPlaying) player.pause()
                 }
             } else {
                 val ok = client.connectControl.transfer(d.id, playbackState.isPlaying)
                 if (ok) {
+                    client.invalidateConnectPlay()
                     if (playbackState.isPlaying) player.pause()
                     statusLog = "Playing on ${d.name}"
                 } else statusLog = "Could not reach ${d.name}"
@@ -1288,8 +1308,8 @@ fun SimpMusicApp(
                     backdrop = backdrop,
                     onTogglePlayPause = {
                         if (remoteNow != null) remote { if (remoteNow.isPlaying) client.connectControl.pause(it) else client.connectControl.resume(it) }
-                        else if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false)
-                        else if (playbackState.isPlaying) player.pause() else player.resume()
+                        else if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false, userChosen = false)
+                        else player.togglePlayPause()
                     },
                     onNextTrack = { if (remoteNow != null) remote { client.connectControl.skipNext(it) } else playNextTrack() },
                     onPreviousTrack = { if (remoteNow != null) remote { client.connectControl.skipPrev(it) } else playPreviousTrack() },
@@ -1342,8 +1362,8 @@ fun SimpMusicApp(
                     onOpenDevices = { showDevices = true },
                     onTogglePlayPause = {
                         if (remoteNow != null) remote { if (remoteNow.isPlaying) client.connectControl.pause(it) else client.connectControl.resume(it) }
-                        else if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false)
-                        else if (playbackState.isPlaying) player.pause() else player.resume()
+                        else if (playbackState.error != null) playTrackInternal(currentTrack, addToHistory = false, addToPrevious = false, userChosen = false)
+                        else player.togglePlayPause()
                     },
                     isShuffle = remoteNow?.shuffle ?: isShuffle,
                     isRepeat = remoteNow?.let { it.repeatContext || it.repeatTrack } ?: isRepeat,
@@ -1368,7 +1388,7 @@ fun SimpMusicApp(
                     onPlayTrackFromQueue = { index ->
                         if (index in playbackQueue.indices) {
                             val target = playbackQueue.removeAt(index)
-                            playTrackInternal(target)
+                            playTrackInternal(target, userChosen = false)
                         }
                     },
                     onMoveQueueItem = { from, to ->

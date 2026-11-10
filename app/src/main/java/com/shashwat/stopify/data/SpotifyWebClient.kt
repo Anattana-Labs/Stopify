@@ -311,6 +311,8 @@ class SpotifyWebClient {
     private var lastReportedPositionMs: Long = 0L
     @Volatile
     private var lastConnectPlayTrackUri: String? = null
+    /** Forget which song Spotify was last told to play here, so the next start sends the "play" command again. */
+    fun invalidateConnectPlay() { lastConnectPlayTrackUri = null }
 
     @Volatile
     var tokenRefreshHook: (suspend () -> Boolean)? = null
