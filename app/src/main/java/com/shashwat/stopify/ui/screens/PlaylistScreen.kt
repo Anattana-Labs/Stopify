@@ -53,6 +53,8 @@ fun SimpPlaylistScreen(
     playbackState: PlaybackState,
     onBack: () -> Unit,
     onPlayTrack: (SpotifyTrack) -> Unit,
+    onPlayContext: (tracks: List<SpotifyTrack>, startIndex: Int, shuffle: Boolean) -> Unit = { l, i, _ -> l.getOrNull(i)?.let(onPlayTrack) },
+    onTogglePlayback: () -> Unit = {},
     onPlayNext: (SpotifyTrack) -> Unit,
     onAddToQueue: (SpotifyTrack) -> Unit,
     onAddToPlaylist: (SpotifyTrack) -> Unit,
@@ -292,7 +294,7 @@ fun SimpPlaylistScreen(
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                                     .clickable {
-                                        playlist.tracks.shuffled().firstOrNull()?.let { onPlayTrack(it) }
+                                        onPlayContext(playlist.tracks, 0, true)
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -312,7 +314,7 @@ fun SimpPlaylistScreen(
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.onSurface)
                                     .clickable {
-                                        playlist.tracks.firstOrNull()?.let { onPlayTrack(it) }
+                                        if (isThisPlaying) onTogglePlayback() else onPlayContext(playlist.tracks, 0, false)
                                     }
                                     .padding(horizontal = 24.dp),
                                 contentAlignment = Alignment.Center
@@ -387,7 +389,7 @@ fun SimpPlaylistScreen(
                             index = index + 1,
                             isPlaying = isCurrent && playbackState.isPlaying,
                             isCurrentTrack = isCurrent,
-                            onClick = { onPlayTrack(track) },
+                            onClick = { onPlayContext(playlist.tracks, index, false) },
                             onMoreClick = { selectedOptionTrack = track }
                         )
                     }

@@ -2483,21 +2483,28 @@ class SpotifyWebClient {
                 nextTrackFromStateMachine?.takeIf { ok(it) }?.let { return@withContext listOf(it) }
             }
 
-            // 2. Related songs: the album, the artist, and other artists found around the same title.
+            if (currentTrack.uri.startsWith("spotify:episode:")) return@withContext emptyList()
+
+            // 2. Spotify's song radio for this track (what its own autoplay is built from), in its order.
+            if (currentTrack.uri.startsWith("spotify:track:")) {
+                val radio = fetchSongRadio(currentTrack.uri).filter { ok(it) }.distinctBy { it.uri }
+                if (radio.isNotEmpty()) return@withContext radio.take(30)
+            }
+
+            // 3. Offline-ish fallback: related songs from the album, the artist and the title, interleaved
+            //    in relevance order (no shuffling), at most 3 songs per artist.
             val pools = mutableListOf<List<SpotifyTrack>>()
             currentTrack.albumUri?.let { pools.add(fetchAlbumTracks(it).getOrDefault(emptyList())) }
             if (currentTrack.artist.isNotBlank()) {
                 pools.add(searchTracks("artist:\"${currentTrack.artist.substringBefore(',').trim()}\"").getOrDefault(emptyList()))
             }
             pools.add(searchTracks("${currentTrack.name} ${currentTrack.artist.substringBefore(',')}").getOrDefault(emptyList()))
-            pools.add(searchTracks(currentTrack.album.ifBlank { currentTrack.name }).getOrDefault(emptyList()))
 
-            // Interleave the pools, at most 3 songs per artist, no repeats of anything played lately.
             val perArtist = HashMap<String, Int>()
             val seen = HashSet<String>()
             val out = mutableListOf<SpotifyTrack>()
             var i = 0
-            while (out.size < 15 && pools.any { i < it.size }) {
+            while (out.size < 20 && pools.any { i < it.size }) {
                 for (pool in pools) {
                     val t = pool.getOrNull(i) ?: continue
                     if (!ok(t) || !seen.add(t.uri)) continue
@@ -2508,7 +2515,7 @@ class SpotifyWebClient {
                 }
                 i++
             }
-            out.shuffled().sortedBy { if (it.artist == currentTrack.artist) 1 else 0 }
+            out
         } catch (e: Exception) {
             Log.w(TAG, "Error fetching autoplay queue", e)
             emptyList()
@@ -3021,6 +3028,38 @@ class SpotifyWebClient {
         }
     }
 
+    /** Generic shelf card from any entity `data` object (artist, show, episode, audiobook, ...). */
+    private fun homeCardFromData(d: JSONObject): SpotifyMediaItem? {
+        val uri = d.optString("uri", "").ifEmpty { return null }
+        val type = when {
+            uri.contains(":track:") -> SpotifyItemType.TRACK
+            uri.contains(":album:") -> SpotifyItemType.ALBUM
+            uri.contains(":artist:") -> SpotifyItemType.ARTIST
+            uri.contains(":show:") || uri.contains(":audiobook:") -> SpotifyItemType.PODCAST
+            uri.contains(":episode:") || uri.contains(":chapter:") -> SpotifyItemType.EPISODE
+            else -> SpotifyItemType.PLAYLIST
+        }
+        val name = d.optString("name", "").ifEmpty { d.optJSONObject("profile")?.optString("name", "") ?: "" }
+        if (name.isEmpty()) return null
+        val cover = d.optJSONObject("coverArt")?.optJSONArray("sources").bestImage()
+            ?: d.optJSONObject("visuals")?.optJSONObject("avatarImage")?.optJSONArray("sources").bestImage()
+            ?: d.optJSONObject("images")?.optJSONArray("items")?.optJSONObject(0)?.optJSONArray("sources").bestImage()
+            ?: d.optJSONObject("albumOfTrack")?.optJSONObject("coverArt")?.optJSONArray("sources").bestImage()
+        val sub = when (type) {
+            SpotifyItemType.ARTIST -> "Artist"
+            SpotifyItemType.PODCAST -> d.optJSONObject("publisher")?.optString("name", "")?.ifEmpty { null }
+                ?: d.optJSONArray("authorsV2")?.optJSONObject(0)?.optString("name", "")?.ifEmpty { null } ?: "Podcast"
+            SpotifyItemType.EPISODE -> d.optJSONObject("podcastV2")?.optJSONObject("data")?.optString("name", "")?.ifEmpty { null } ?: "Episode"
+            else -> d.optString("description", "").ifEmpty { "" }
+        }
+        val dur = d.optJSONObject("duration")?.optLong("totalMilliseconds", 0L) ?: 0L
+        return SpotifyMediaItem(
+            id = uri.substringAfterLast(":"), uri = uri, name = name, subtitle = sub,
+            coverUrl = cover ?: d.optJSONObject("podcastV2")?.optJSONObject("data")?.optJSONObject("coverArt")?.optJSONArray("sources").bestImage(),
+            type = type, durationMs = dur
+        )
+    }
+
     suspend fun fetchHomeSections(): Result<SpotifyHomeData> = withContext(Dispatchers.IO) {
         val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
@@ -3196,7 +3235,9 @@ class SpotifyWebClient {
                                                 uri.contains(":album:") || rawType?.contains("ALBUM") == true -> SpotifyItemType.ALBUM
                                                 uri.contains(":artist:") || rawType?.contains("ARTIST") == true -> SpotifyItemType.ARTIST
                                                 uri.contains(":playlist:") || uri.contains(":user:") -> SpotifyItemType.PLAYLIST
-                                                rawType?.contains("PODCAST") == true || rawType?.contains("EPISODE") == true -> SpotifyItemType.PODCAST
+                                                uri.contains(":episode:") -> SpotifyItemType.EPISODE
+                                                uri.contains(":show:") || rawType?.contains("PODCAST") == true -> SpotifyItemType.PODCAST
+                                                rawType?.contains("EPISODE") == true -> SpotifyItemType.EPISODE
                                                 else -> SpotifyItemType.PLAYLIST
                                             }
                                             if (uri.isNotEmpty()) {
@@ -3211,6 +3252,10 @@ class SpotifyWebClient {
                                             }
                                         }
                                     }
+                                }
+                                else -> {
+                                    // Artists, podcasts (shows), episodes, audiobooks and anything newer.
+                                    itemData?.let { homeCardFromData(it) }?.let { mediaItems.add(it) }
                                 }
                             }
                         }
@@ -3395,8 +3440,10 @@ class SpotifyWebClient {
                             "EpisodeResponseWrapper", "EpisodeOrChapterResponseWrapper" -> {
                                 val uri = data.optString("uri", "")
                                 val name = data.optString("name", "Episode")
-                                val showName = data.optJSONObject("show")?.optString("name", "Podcast") ?: "Podcast"
-                                val coverUrl = data.optJSONObject("coverArt")?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")
+                                val showData = data.optJSONObject("podcastV2")?.optJSONObject("data") ?: data.optJSONObject("show")
+                                val showName = showData?.optString("name", "")?.ifEmpty { null } ?: "Podcast"
+                                val coverUrl = data.optJSONObject("coverArt")?.optJSONArray("sources").bestImage()
+                                    ?: showData?.optJSONObject("coverArt")?.optJSONArray("sources").bestImage()
 
                                 itemsList.add(
                                     SpotifyMediaItem(
@@ -3405,6 +3452,7 @@ class SpotifyWebClient {
                                         name = name,
                                         subtitle = showName,
                                         coverUrl = coverUrl,
+                                        durationMs = data.optJSONObject("duration")?.optLong("totalMilliseconds", 0L) ?: 0L,
                                         type = SpotifyItemType.EPISODE
                                     )
                                 )
@@ -3523,40 +3571,7 @@ class SpotifyWebClient {
                     val item = items.getJSONObject(i)
                     val itemV2 = item.optJSONObject("itemV2") ?: continue
                     val tData = itemV2.optJSONObject("data") ?: continue
-                    val uri = tData.optString("uri", "")
-                    val name = tData.optString("name", "Unknown Track")
-                    val durationMs = tData.optJSONObject("trackDuration")?.optLong("totalMilliseconds", 0L) ?: 0L
-                    val isPlayable = tData.optJSONObject("playability")?.optBoolean("playable", true) ?: true
-
-                    val artistsArray = tData.optJSONObject("artists")?.optJSONArray("items")
-                    val artistNames = mutableListOf<String>()
-                    if (artistsArray != null) {
-                        for (j in 0 until artistsArray.length()) {
-                            val aName = artistsArray.getJSONObject(j).optJSONObject("profile")?.optString("name")
-                            if (!aName.isNullOrEmpty()) artistNames.add(aName)
-                        }
-                    }
-                    val artist = artistNames.joinToString(", ").ifEmpty { "Artist" }
-
-                    val albumObj = tData.optJSONObject("albumOfTrack")
-                    val albumName = albumObj?.optString("name", "Album") ?: "Album"
-                    val coverSources = albumObj?.optJSONObject("coverArt")?.optJSONArray("sources")
-                    val coverUrl = coverSources?.optJSONObject(0)?.optString("url")
-
-                    if (uri.isNotEmpty()) {
-                        trackList.add(
-                            SpotifyTrack(
-                                id = uri.substringAfterLast(":"),
-                                uri = uri,
-                                name = name,
-                                artist = artist,
-                                album = albumName,
-                                coverUrl = coverUrl,
-                                durationMs = durationMs,
-                                isPlayable = isPlayable
-                            )
-                        )
-                    }
+                    parsePlaylistItem(tData, null)?.let { trackList.add(it) }
                 }
 
                 if (items.length() < pageLimit) break
@@ -3671,10 +3686,20 @@ class SpotifyWebClient {
                 val coverSources = albumUnion.optJSONObject("coverArt")?.optJSONArray("sources")
                 val coverUrl = coverSources?.optJSONObject(0)?.optString("url")
 
-                val tracksArray = albumUnion.optJSONObject("tracksV2")?.optJSONArray("items")
+                val tracksArray = JSONArray().also { merged ->
+                    val first = albumUnion.optJSONObject("tracksV2")
+                    first?.optJSONArray("items")?.let { for (n in 0 until it.length()) merged.put(it.get(n)) }
+                    val total = first?.optInt("totalCount", merged.length()) ?: merged.length()
+                    // Albums longer than one page: keep asking for the next 50 until all tracks are in.
+                    while (merged.length() < total && merged.length() < 500) {
+                        val more = fetchAlbumPage(albumUri, merged.length(), 50) ?: break
+                        if (more.length() == 0) break
+                        for (n in 0 until more.length()) merged.put(more.get(n))
+                    }
+                }
                 val trackList = mutableListOf<SpotifyTrack>()
 
-                if (tracksArray != null) {
+                run {
                     for (i in 0 until tracksArray.length()) {
                         val tObj = tracksArray.getJSONObject(i).optJSONObject("track") ?: continue
                         val uri = tObj.optString("uri", "")
@@ -3717,6 +3742,70 @@ class SpotifyWebClient {
             Result.failure(e)
         }
     }
+
+    /** One playlist row (`itemV2.data`): a song or a podcast episode. */
+    private fun parsePlaylistItem(d: JSONObject, fallbackCover: String?): SpotifyTrack? {
+        val uri = d.optString("uri", "")
+        if (uri.isEmpty() || uri.startsWith("spotify:local:")) return null
+        val isEpisode = uri.startsWith("spotify:episode:")
+        val durationMs = d.optJSONObject("trackDuration")?.optLong("totalMilliseconds", 0L)
+            ?: d.optJSONObject("duration")?.optLong("totalMilliseconds", 0L) ?: 0L
+        val playable = d.optJSONObject("playability")?.optBoolean("playable", true) ?: true
+        if (isEpisode) {
+            val show = d.optJSONObject("podcastV2")?.optJSONObject("data")
+            val showName = show?.optString("name", "") ?: ""
+            return SpotifyTrack(
+                id = uri.substringAfterLast(":"), uri = uri,
+                name = d.optString("name", "Episode"),
+                artist = showName.ifEmpty { "Podcast" }, album = showName,
+                coverUrl = d.optJSONObject("coverArt")?.optJSONArray("sources").bestImage()
+                    ?: show?.optJSONObject("coverArt")?.optJSONArray("sources").bestImage() ?: fallbackCover,
+                durationMs = durationMs, isPlayable = playable,
+                albumUri = show?.optString("uri", "")?.ifEmpty { null }
+            )
+        }
+        val artistItems = d.optJSONObject("artists")?.optJSONArray("items")
+        val names = mutableListOf<String>()
+        if (artistItems != null) for (j in 0 until artistItems.length()) {
+            artistItems.optJSONObject(j)?.optJSONObject("profile")?.optString("name")?.takeIf { it.isNotEmpty() }?.let { names.add(it) }
+        }
+        val albumObj = d.optJSONObject("albumOfTrack")
+        return SpotifyTrack(
+            id = uri.substringAfterLast(":"), uri = uri,
+            name = d.optString("name", "Unknown Track"),
+            artist = names.joinToString(", ").ifEmpty { "Artist" },
+            album = albumObj?.optString("name", "") ?: "",
+            coverUrl = albumObj?.optJSONObject("coverArt")?.optJSONArray("sources").bestImage() ?: fallbackCover,
+            durationMs = durationMs, isPlayable = playable,
+            albumUri = albumObj?.optString("uri", "")?.ifEmpty { null },
+            artistUri = artistItems?.optJSONObject(0)?.optString("uri", "")?.ifEmpty { null }
+        )
+    }
+
+    private suspend fun fetchAlbumPage(albumUri: String, offset: Int, limit: Int): JSONArray? = try {
+        val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
+        val payload = JSONObject().apply {
+            put("variables", JSONObject().put("uri", albumUri).put("locale", "").put("offset", offset).put("limit", limit))
+            put("operationName", "getAlbum")
+            put("extensions", JSONObject().put("persistedQuery", JSONObject().put("version", 1).put("sha256Hash", GET_ALBUM_HASH)))
+        }
+        val conn = (URL("https://api-partner.spotify.com/pathfinder/v2/query").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; doOutput = true; connectTimeout = 15000; readTimeout = 15000
+            setRequestProperty("authorization", "Bearer $token")
+            setRequestProperty("client-token", customClientToken ?: CLIENT_TOKEN)
+            setRequestProperty("content-type", "application/json;charset=UTF-8")
+            setRequestProperty("app-platform", APP_PLATFORM)
+            setRequestProperty("spotify-app-version", SPOTIFY_APP_VERSION)
+            setRequestProperty("origin", "https://open.spotify.com")
+            setRequestProperty("referer", "https://open.spotify.com/")
+            setRequestProperty("user-agent", USER_AGENT)
+        }
+        OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+        val code = conn.responseCode
+        val body = BufferedReader(InputStreamReader(if (code in 200..299) conn.inputStream else conn.errorStream)).readText()
+        conn.disconnect()
+        if (code in 200..299) JSONObject(body).getJSONObject("data").getJSONObject("albumUnion").optJSONObject("tracksV2")?.optJSONArray("items") else null
+    } catch (e: Exception) { null }
 
     suspend fun fetchAlbumDetails(albumUri: String): Result<SpotifyAlbumDetails> = withContext(Dispatchers.IO) {
         val token = getAccessToken().getOrElse { FALLBACK_BEARER_TOKEN }
@@ -3766,8 +3855,9 @@ class SpotifyWebClient {
                 val albumUnion = json.getJSONObject("data").getJSONObject("albumUnion")
                 val albumName = albumUnion.optString("name", "Album")
                 val coverSources = albumUnion.optJSONObject("coverArt")?.optJSONArray("sources")
-                val coverUrl = coverSources?.optJSONObject(0)?.optString("url")
-                val year = albumUnion.optJSONObject("date")?.optInt("year")?.toString()
+                val coverUrl = coverSources.bestImage()
+                val year = albumUnion.optJSONObject("date")?.optInt("year")?.takeIf { it > 0 }?.toString()
+                val albumArtistUri = albumUnion.optJSONObject("artists")?.optJSONArray("items")?.optJSONObject(0)?.optString("uri")?.ifEmpty { null }
 
                 val artistsArray = albumUnion.optJSONObject("artists")?.optJSONArray("items")
                 val artistNames = mutableListOf<String>()
@@ -3810,7 +3900,9 @@ class SpotifyWebClient {
                                     album = albumName,
                                     coverUrl = coverUrl,
                                     durationMs = durationMs,
-                                    isPlayable = isPlayable
+                                    isPlayable = isPlayable,
+                                    albumUri = albumUri,
+                                    artistUri = tArtistsArray?.optJSONObject(0)?.optString("uri")?.ifEmpty { null } ?: albumArtistUri
                                 )
                             )
                         }
@@ -3979,7 +4071,7 @@ class SpotifyWebClient {
                     pName = playlistV2.optString("name", "Playlist")
                     pOwner = playlistV2.optJSONObject("ownerV2")?.optJSONObject("data")?.optString("name") ?: "Spotify"
                     pDesc = playlistV2.optString("description", "")
-                    pCover = playlistV2.optJSONObject("images")?.optJSONArray("items")?.optJSONObject(0)?.optJSONArray("sources")?.optJSONObject(0)?.optString("url")
+                    pCover = playlistV2.optJSONObject("images")?.optJSONArray("items")?.optJSONObject(0)?.optJSONArray("sources").bestImage()
                     headerCaptured = true
                 }
 
@@ -3989,40 +4081,7 @@ class SpotifyWebClient {
                     val item = items.getJSONObject(i)
                     val itemV2 = item.optJSONObject("itemV2") ?: continue
                     val tData = itemV2.optJSONObject("data") ?: continue
-                    val uri = tData.optString("uri", "")
-                    val name = tData.optString("name", "Unknown Track")
-                    val durationMs = tData.optJSONObject("trackDuration")?.optLong("totalMilliseconds", 0L) ?: 0L
-                    val isPlayable = tData.optJSONObject("playability")?.optBoolean("playable", true) ?: true
-
-                    val artistsArray = tData.optJSONObject("artists")?.optJSONArray("items")
-                    val artistNames = mutableListOf<String>()
-                    if (artistsArray != null) {
-                        for (j in 0 until artistsArray.length()) {
-                            val aName = artistsArray.getJSONObject(j).optJSONObject("profile")?.optString("name")
-                            if (!aName.isNullOrEmpty()) artistNames.add(aName)
-                        }
-                    }
-                    val artist = artistNames.joinToString(", ").ifEmpty { "Artist" }
-
-                    val albumObj = tData.optJSONObject("albumOfTrack")
-                    val albumName = albumObj?.optString("name", "Album") ?: "Album"
-                    val coverSources = albumObj?.optJSONObject("coverArt")?.optJSONArray("sources")
-                    val coverUrl = coverSources?.optJSONObject(0)?.optString("url") ?: pCover
-
-                    if (uri.isNotEmpty()) {
-                        trackList.add(
-                            SpotifyTrack(
-                                id = uri.substringAfterLast(":"),
-                                uri = uri,
-                                name = name,
-                                artist = artist,
-                                album = albumName,
-                                coverUrl = coverUrl,
-                                durationMs = durationMs,
-                                isPlayable = isPlayable
-                            )
-                        )
-                    }
+                    parsePlaylistItem(tData, pCover)?.let { trackList.add(it) }
                 }
 
                 if (items.length() < pageLimit) break
@@ -4187,7 +4246,7 @@ class SpotifyWebClient {
     }
 
     suspend fun resolveTrackAudioStream(trackUriOrId: String): Result<String> = withContext(Dispatchers.IO) {
-        val trackUri = if (trackUriOrId.startsWith("spotify:track:")) trackUriOrId else "spotify:track:$trackUriOrId"
+        val trackUri = if (trackUriOrId.startsWith("spotify:")) trackUriOrId else "spotify:track:$trackUriOrId"
         Log.d(TAG, "Resolving audio stream for: $trackUri")
 
         // 1. Check if audio file ID is already known
@@ -4319,7 +4378,7 @@ class SpotifyWebClient {
 
     suspend fun preResolveTrack(trackUriOrId: String) = withContext(Dispatchers.IO) {
         try {
-            val trackUri = if (trackUriOrId.startsWith("spotify:track:")) trackUriOrId else "spotify:track:$trackUriOrId"
+            val trackUri = if (trackUriOrId.startsWith("spotify:")) trackUriOrId else "spotify:track:$trackUriOrId"
             if (audioFileMap.containsKey(trackUri)) return@withContext
             resolveTrackAudioStream(trackUri)
         } catch (e: Exception) {

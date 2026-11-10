@@ -38,7 +38,9 @@ fun SimpSquareCard(
         SpotifyItemType.ALBUM -> "Album"
         SpotifyItemType.PLAYLIST -> "Playlist"
         SpotifyItemType.TRACK -> "Song"
-        SpotifyItemType.PODCAST, SpotifyItemType.EPISODE -> "Podcast"
+        SpotifyItemType.PODCAST -> "Podcast"
+        SpotifyItemType.EPISODE -> "Episode"
+        SpotifyItemType.ARTIST -> "Artist"
         else -> ""
     }
     Column(
@@ -78,11 +80,11 @@ fun SimpSquareCard(
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = if (kind.isNotEmpty() && item.subtitle.isNotBlank()) "$kind · ${item.subtitle}"
+            text = if (kind.isNotEmpty() && item.subtitle.isNotBlank() && item.subtitle != kind) "$kind · ${item.subtitle}"
             else kind.ifEmpty { item.subtitle },
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
     }

@@ -49,6 +49,8 @@ fun SimpAlbumScreen(
     playbackState: PlaybackState,
     onBack: () -> Unit,
     onPlayTrack: (SpotifyTrack) -> Unit,
+    onPlayContext: (tracks: List<SpotifyTrack>, startIndex: Int, shuffle: Boolean) -> Unit = { l, i, _ -> l.getOrNull(i)?.let(onPlayTrack) },
+    onTogglePlayback: () -> Unit = {},
     onPlayNext: (SpotifyTrack) -> Unit,
     onAddToQueue: (SpotifyTrack) -> Unit,
     onAddToPlaylist: (SpotifyTrack) -> Unit,
@@ -256,7 +258,7 @@ fun SimpAlbumScreen(
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                                     .clickable {
-                                        album.tracks.shuffled().firstOrNull()?.let { onPlayTrack(it) }
+                                        onPlayContext(album.tracks, 0, true)
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -276,7 +278,7 @@ fun SimpAlbumScreen(
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.onSurface)
                                     .clickable {
-                                        album.tracks.firstOrNull()?.let { onPlayTrack(it) }
+                                        if (isThisPlaying) onTogglePlayback() else onPlayContext(album.tracks, 0, false)
                                     }
                                     .padding(horizontal = 24.dp),
                                 contentAlignment = Alignment.Center
@@ -329,7 +331,7 @@ fun SimpAlbumScreen(
                         index = index + 1,
                         isPlaying = isCurrent && playbackState.isPlaying,
                         isCurrentTrack = isCurrent,
-                        onClick = { onPlayTrack(track) },
+                        onClick = { onPlayContext(album.tracks, index, false) },
                         onMoreClick = { selectedOptionTrack = track }
                     )
                 }

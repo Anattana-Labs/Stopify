@@ -142,3 +142,6 @@ This project is licensed under the [MIT License](LICENSE).
 <p align="center">
   Developed by <strong>Shashwat</strong> • Educational Research Project
 </p>
+
+## Credits
+Catalog request shapes for artist, podcast and song-radio features were studied from [kota-zo/myspoti](https://github.com/kota-zo/myspoti) (GPL-3.0) and re-implemented natively.
