@@ -32,6 +32,7 @@ import coil.compose.AsyncImage
 import com.shashwat.stopify.ui.components.RoundAction
 import androidx.compose.foundation.border
 import androidx.compose.ui.semantics.Role
+import com.shashwat.stopify.ui.theme.LocalDynamicColors
 import com.shashwat.stopify.ui.theme.PrismTokens
 import com.shashwat.stopify.ui.theme.glassEdge
 import com.shashwat.stopify.ui.theme.glassFill
@@ -129,7 +130,7 @@ fun SimpArtistScreen(
         }
     }
 
-    val dynamicTint = coverTint ?: MaterialTheme.colorScheme.primary
+    val dynamicTint = if (LocalDynamicColors.current) (coverTint ?: MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.primary
     val isThisPlaying = topTracks.any { it.uri == playbackState.currentTrack?.uri } && playbackState.isPlaying
 
     Box(

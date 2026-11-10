@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shashwat.stopify.ui.theme.LocalDynamicColors
 import com.shashwat.stopify.ui.theme.ArtworkShape
 import com.shashwat.stopify.ui.components.PrismButton
 import coil.compose.AsyncImage
@@ -119,7 +120,7 @@ fun SimpPlaylistScreen(
         }
     }
 
-    val dynamicTint = coverTint ?: MaterialTheme.colorScheme.primary
+    val dynamicTint = if (LocalDynamicColors.current) (coverTint ?: MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.primary
     val isThisPlaying = playlistDetail?.tracks?.any { it.uri == playbackState.currentTrack?.uri } == true && playbackState.isPlaying
 
     Box(

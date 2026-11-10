@@ -10,6 +10,8 @@ import androidx.compose.ui.zIndex
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -128,6 +130,8 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            var dynamicColorEnabled by remember { mutableStateOf(prefs.getBoolean("pref_dynamic_color", true)) }
+
             val savedGlassStr = prefs.getString("stopify_glass_style", GlassStyle.BLUR.name) ?: GlassStyle.BLUR.name
             var currentGlassStyle by remember {
                 mutableStateOf(
@@ -136,9 +140,9 @@ class MainActivity : ComponentActivity() {
             }
 
             // Dynamic color extraction from active track artwork
-            LaunchedEffect(playbackState.currentTrack?.coverUrl) {
+            LaunchedEffect(playbackState.currentTrack?.coverUrl, dynamicColorEnabled) {
                 val coverUrl = playbackState.currentTrack?.coverUrl
-                if (!coverUrl.isNullOrEmpty()) {
+                if (dynamicColorEnabled && !coverUrl.isNullOrEmpty()) {
                     withContext(Dispatchers.IO) {
                         try {
                             val req = ImageRequest.Builder(context)
@@ -170,7 +174,8 @@ class MainActivity : ComponentActivity() {
             StopifyTheme(
                 themeMode = currentThemeMode,
                 colorMode = currentColorMode,
-                seedColor = artworkSeedColor
+                seedColor = artworkSeedColor,
+                dynamicColors = dynamicColorEnabled
             ) {
                 CompositionLocalProvider(LocalGlassStyle provides currentGlassStyle) {
                 Box(
@@ -190,6 +195,11 @@ class MainActivity : ComponentActivity() {
                         onColorModeChange = { newColorMode ->
                             currentColorMode = newColorMode
                             prefs.edit().putString("stopify_color_mode", newColorMode.name).apply()
+                        },
+                        dynamicColorEnabled = dynamicColorEnabled,
+                        onDynamicColorToggle = { on ->
+                            dynamicColorEnabled = on
+                            prefs.edit().putBoolean("pref_dynamic_color", on).apply()
                         },
                         glassStyle = currentGlassStyle,
                         onGlassStyleChange = { g ->
@@ -225,6 +235,8 @@ fun SimpMusicApp(
     onThemeChange: (AppThemeMode) -> Unit = {},
     colorMode: ThemeColorMode = ThemeColorMode.SYSTEM,
     onColorModeChange: (ThemeColorMode) -> Unit = {},
+    dynamicColorEnabled: Boolean = true,
+    onDynamicColorToggle: (Boolean) -> Unit = {},
     glassStyle: GlassStyle = GlassStyle.BLUR,
     onGlassStyleChange: (GlassStyle) -> Unit = {},
     prefs: android.content.SharedPreferences? = null
@@ -1126,6 +1138,8 @@ fun SimpMusicApp(
                 onColorModeChange = onColorModeChange,
                 currentGlassStyle = glassStyle,
                 onGlassStyleChange = onGlassStyleChange,
+                dynamicColorEnabled = dynamicColorEnabled,
+                onDynamicColorToggle = onDynamicColorToggle,
                 onOpenCookieManager = { showCookieDialog = true },
                 onPlayTrack = { playTrackInternal(it) },
                 onPlayNext = { track ->
@@ -1189,7 +1203,7 @@ fun SimpMusicApp(
                     onExpand = { showFullPlayer = true },
                     isFavorite = favoriteTrackIds.contains(currentTrack.id),
                     onToggleFavorite = { onToggleFavoriteLambda(currentTrack) },
-                    backgroundColor = currentTrackLyricsColor,
+                    backgroundColor = if (dynamicColorEnabled) currentTrackLyricsColor else null,
                     deviceName = remoteDeviceName
                 )
             }
@@ -1215,8 +1229,10 @@ fun SimpMusicApp(
                 .zIndex(2000f)
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            enter = slideInVertically(tween(480, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f))) { it } +
+                fadeIn(tween(320)) + scaleIn(tween(480, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)), initialScale = 0.96f),
+            exit = slideOutVertically(tween(340, easing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f))) { it } +
+                fadeOut(tween(260)) + scaleOut(tween(340), targetScale = 0.96f)
         ) {
             uiTrack?.let { currentTrack ->
                 val fullBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)

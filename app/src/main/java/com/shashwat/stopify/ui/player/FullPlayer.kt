@@ -35,7 +35,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import com.shashwat.stopify.ui.theme.LocalDynamicColors
+import com.shashwat.stopify.ui.theme.LocalIsDark
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -135,7 +145,8 @@ fun SimpFullPlayer(
     val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 
     // The room takes a quiet tint from the track; text stays on the theme's own foreground for contrast.
-    val tintBase = remember(colorLyrics) { colorLyrics?.let { argbToColor(it.backgroundColor) } } ?: scheme.primary
+    val dynamicOn = LocalDynamicColors.current
+    val tintBase = remember(colorLyrics, dynamicOn) { if (dynamicOn) colorLyrics?.let { argbToColor(it.backgroundColor) } else null } ?: scheme.primary
     val ground by animateColorAsState(lerp(scheme.surface, tintBase, 0.22f), tween(500), label = "player_ground")
     val onVideo = activeCanvasUrl != null
     val fg = if (onVideo) Color.White else scheme.onSurface
@@ -176,7 +187,7 @@ fun SimpFullPlayer(
         val artSize = minOf(maxWidth - gutter * 2, maxHeight * 0.40f).coerceAtLeast(160.dp)
 
         // Ambient: the cover, blown up and softened, lights the top of the room
-        if (!onVideo && !track.coverUrl.isNullOrEmpty()) {
+        if (!onVideo && dynamicOn && !track.coverUrl.isNullOrEmpty()) {
             AsyncImage(
                 model = track.coverUrl,
                 contentDescription = null,
@@ -239,10 +250,13 @@ fun SimpFullPlayer(
             Box(
                 modifier = Modifier
                     .size(artSize)
-                    .shadow(32.dp, ArtworkShape, ambientColor = Color.Black.copy(alpha = 0.4f), spotColor = Color.Black.copy(alpha = 0.4f))
-                    .clip(ArtworkShape)
-                    .background(scheme.surfaceContainerHighest)
-                    .border(1.dp, glassEdge(), ArtworkShape)
+                    .then(
+                        if (onVideo) Modifier else Modifier
+                            .shadow(32.dp, ArtworkShape, ambientColor = Color.Black.copy(alpha = 0.4f), spotColor = Color.Black.copy(alpha = 0.4f))
+                            .clip(ArtworkShape)
+                            .background(scheme.surfaceContainerHighest)
+                            .border(1.dp, glassEdge(), ArtworkShape)
+                    )
                     .pointerInput(track.id) {
                         detectHorizontalDragGestures(
                             onDragStart = { dragX = 0f },
@@ -255,7 +269,9 @@ fun SimpFullPlayer(
                     .then(closeDrag),
                 contentAlignment = Alignment.Center
             ) {
-                if (!track.coverUrl.isNullOrEmpty()) {
+                if (onVideo) {
+                    // Canvas video fills the screen; the artwork steps aside.
+                } else if (!track.coverUrl.isNullOrEmpty()) {
                     AsyncImage(
                         model = track.coverUrl,
                         contentDescription = "Cover of ${track.album.ifBlank { track.name }}",
@@ -455,8 +471,15 @@ fun SimpFullPlayer(
             }
         }
 
-        if (showLyrics) {
-            BackHandler { showLyrics = false }
+        BackHandler(enabled = showLyrics) { showLyrics = false }
+        AnimatedVisibility(
+            visible = showLyrics,
+            modifier = Modifier.fillMaxSize(),
+            enter = slideInVertically(tween(420, easing = EmphasizedDecelerate)) { it / 3 } +
+                fadeIn(tween(300)) + scaleIn(tween(420, easing = EmphasizedDecelerate), initialScale = 0.94f),
+            exit = slideOutVertically(tween(300, easing = EmphasizedAccelerate)) { it / 2 } +
+                fadeOut(tween(240)) + scaleOut(tween(300), targetScale = 0.96f)
+        ) {
             FullScreenLyricsViewer(
                 track = track,
                 lyrics = colorLyrics,
@@ -467,8 +490,13 @@ fun SimpFullPlayer(
             )
         }
 
-        if (showQueue) {
-            BackHandler { showQueue = false }
+        BackHandler(enabled = showQueue) { showQueue = false }
+        AnimatedVisibility(
+            visible = showQueue,
+            modifier = Modifier.fillMaxSize(),
+            enter = slideInVertically(tween(400, easing = EmphasizedDecelerate)) { it } + fadeIn(tween(240)),
+            exit = slideOutVertically(tween(300, easing = EmphasizedAccelerate)) { it } + fadeOut(tween(220))
+        ) {
             QueueOverlayContent(
                 currentTrack = track,
                 playbackQueue = playbackQueue,
@@ -547,6 +575,9 @@ private fun PlayerTool(icon: ImageVector, label: String, tint: Color, modifier: 
     }
 }
 
+private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+
 @Composable
 fun SpotifyColorLyricsCard(
     lyrics: SpotifyColorLyrics,
@@ -555,20 +586,15 @@ fun SpotifyColorLyricsCard(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val themePrimary = MaterialTheme.colorScheme.primary
-    val themeSurface = MaterialTheme.colorScheme.surface
-    val isDark = isSystemInDarkTheme()
-
-    val bgColor = remember(lyrics.backgroundColor, themePrimary, themeSurface, isDark) {
-        val raw = argbToColor(lyrics.backgroundColor)
-        blendThemeTint(raw, themePrimary, themeSurface, isDark)
+    val isDark = LocalIsDark.current
+    val cardScheme = MaterialTheme.colorScheme
+    val dynamicOn = LocalDynamicColors.current
+    val pal = remember(lyrics.backgroundColor, isDark, dynamicOn, cardScheme) {
+        lyricsPalette(if (dynamicOn) argbToColor(lyrics.backgroundColor) else null, isDark, cardScheme)
     }
-
-    val lum = 0.299f * bgColor.red + 0.587f * bgColor.green + 0.114f * bgColor.blue
-    val isLightBg = lum > 0.5f
-
-    val highlightColor = if (isLightBg) Color(0xFF191C1E) else Color.White
-    val normalTextColor = if (isLightBg) Color(0xFF43474E).copy(alpha = 0.65f) else Color.White.copy(alpha = 0.45f)
+    val bgColor = pal.top
+    val highlightColor = pal.active
+    val normalTextColor = pal.inactive
 
     val activeIndex = remember(lyrics.lines, currentPositionMs) {
         lyrics.lines.indexOfLast { it.startTimeMs <= currentPositionMs }

@@ -1145,6 +1145,15 @@ class SpotifyWebClient {
         }
     }
 
+    private fun parseIsoMillis(iso: String?): Long {
+        if (iso.isNullOrBlank()) return 0L
+        return try {
+            java.time.Instant.parse(iso).toEpochMilli()
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
     suspend fun fetchSpotifyRecentlyPlayed(prefs: android.content.SharedPreferences? = null): Result<List<SpotifyTrack>> = withContext(Dispatchers.IO) {
         val token = getAccessToken().getOrElse { customAccessToken ?: cachedAccessToken ?: FALLBACK_BEARER_TOKEN }
         val clientToken = customClientToken ?: CLIENT_TOKEN
@@ -1247,6 +1256,11 @@ class SpotifyWebClient {
                                     ?.optLong("seconds", 0L) ?: 0L
                                 val durationMs = durationSec * 1000L
 
+                                val playedAtMs = parseIsoMillis(
+                                    itemObj.optJSONObject("playedAt")?.optString("isoString")
+                                        ?: itemObj.optString("playedAt", "").ifEmpty { null }
+                                        ?: itemObj.optJSONObject("addedAt")?.optString("isoString")
+                                )
                                 val track = SpotifyTrack(
                                     id = trackId,
                                     name = name,
@@ -1254,7 +1268,8 @@ class SpotifyWebClient {
                                     album = albumName,
                                     coverUrl = coverUrl,
                                     durationMs = durationMs,
-                                    uri = uri
+                                    uri = uri,
+                                    playedAt = playedAtMs
                                 )
                                 if (pathfinderTracks.none { it.uri == uri }) {
                                     pathfinderTracks.add(track)
@@ -1310,7 +1325,8 @@ class SpotifyWebClient {
                                 album = albumName,
                                 coverUrl = coverUrl,
                                 durationMs = durationMs,
-                                uri = uri
+                                uri = uri,
+                                playedAt = parseIsoMillis(items.optJSONObject(i)?.optString("played_at"))
                             )
                             if (pathfinderTracks.none { it.uri == uri }) {
                                 pathfinderTracks.add(track)
@@ -1321,6 +1337,37 @@ class SpotifyWebClient {
                 apiConn.disconnect()
             } catch (e: Exception) {
                 Log.w(TAG, "Error fetching Web API recently-played fallback", e)
+            }
+        }
+
+        // Pathfinder may not say when a track was played; ask the Web API for timestamps to group by day.
+        if (pathfinderTracks.any { it.playedAt == 0L }) {
+            try {
+                val tsConn = (URL("https://api.spotify.com/v1/me/player/recently-played?limit=50").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 6000
+                    readTimeout = 6000
+                    setRequestProperty("Authorization", "Bearer $token")
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", USER_AGENT)
+                }
+                if (tsConn.responseCode in 200..299) {
+                    val arr = JSONObject(tsConn.inputStream.bufferedReader().readText()).optJSONArray("items")
+                    val stamps = mutableMapOf<String, Long>()
+                    if (arr != null) for (i in 0 until arr.length()) {
+                        val o = arr.optJSONObject(i) ?: continue
+                        val u = o.optJSONObject("track")?.optString("uri").orEmpty()
+                        val ms = parseIsoMillis(o.optString("played_at"))
+                        if (u.isNotEmpty() && ms > 0 && u !in stamps) stamps[u] = ms
+                    }
+                    for (i in pathfinderTracks.indices) {
+                        val t = pathfinderTracks[i]
+                        if (t.playedAt == 0L) stamps[t.uri]?.let { pathfinderTracks[i] = t.copy(playedAt = it) }
+                    }
+                }
+                tsConn.disconnect()
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not fetch recents timestamps", e)
             }
         }
 

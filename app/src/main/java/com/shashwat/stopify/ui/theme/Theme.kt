@@ -29,6 +29,9 @@ enum class ThemeColorMode(val label: String) {
 /** Whether the app is drawing its dark scheme (not necessarily the phone's). */
 val LocalIsDark = staticCompositionLocalOf { true }
 
+/** False when the user turned off "Dynamic color": nothing may take a tint from the artwork. */
+val LocalDynamicColors = staticCompositionLocalOf { true }
+
 /** Kept for older call sites: the accent a screen may use as "the brand". */
 val PremiumOrange = PrismViolet
 
@@ -142,8 +145,10 @@ fun StopifyTheme(
     themeMode: AppThemeMode = AppThemeMode.DYNAMIC,
     colorMode: ThemeColorMode = ThemeColorMode.SYSTEM,
     seedColor: Color? = null,
+    dynamicColors: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val seedColor = if (dynamicColors) seedColor else null
     val isSystemDark = isSystemInDarkTheme()
     val isDark = when (colorMode) {
         ThemeColorMode.SYSTEM -> isSystemDark
@@ -158,7 +163,7 @@ fun StopifyTheme(
     }
     val dark = isDark || themeMode == AppThemeMode.AMOLED
 
-    CompositionLocalProvider(LocalIsDark provides dark, LocalContentColor provides colorScheme.onBackground) {
+    CompositionLocalProvider(LocalIsDark provides dark, LocalDynamicColors provides dynamicColors, LocalContentColor provides colorScheme.onBackground) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
